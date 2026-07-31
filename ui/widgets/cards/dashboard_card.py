@@ -1,39 +1,66 @@
-from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout
+from PySide6.QtWidgets import (
+    QFrame,
+    QLabel,
+    QVBoxLayout,
+)
+
+from PySide6.QtCore import Qt
 
 
 class DashboardCard(QFrame):
 
     def __init__(self, title, value):
+
         super().__init__()
 
-        self.setMinimumSize(220, 120)
+        self.setFixedSize(260,130)
 
         self.setStyleSheet("""
-            QFrame{
-                background:#1E293B;
-                border-radius:15px;
-                border:1px solid #334155;
-            }
 
-            QLabel{
-                color:white;
-            }
+        QFrame{
+
+            background:#182338;
+
+            border:1px solid #2B3A55;
+
+            border-radius:15px;
+
+        }
+
         """)
 
-        layout = QVBoxLayout(self)
+        layout=QVBoxLayout(self)
 
-        title_label = QLabel(title)
-        title_label.setStyleSheet("""
-            font-size:14px;
-            color:#94A3B8;
+        layout.setContentsMargins(20,15,20,15)
+
+        layout.setSpacing(10)
+
+        titleLabel=QLabel(title)
+
+        titleLabel.setStyleSheet("""
+
+            color:#8FA2C5;
+
+            font-size:13px;
+
         """)
 
-        value_label = QLabel(value)
-        value_label.setStyleSheet("""
+        valueLabel=QLabel(value)
+
+        valueLabel.setAlignment(Qt.AlignLeft)
+
+        valueLabel.setStyleSheet("""
+
+            color:white;
+
             font-size:28px;
+
             font-weight:bold;
+
         """)
 
-        layout.addWidget(title_label)
-        layout.addWidget(value_label)
+        layout.addWidget(titleLabel)
+
+        layout.addWidget(valueLabel)
+
         layout.addStretch()

@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QPushButton
 
 
-class SideBar(QFrame):
+class Sidebar(QFrame):
 
     def __init__(self):
         super().__init__()
@@ -13,14 +13,18 @@ class SideBar(QFrame):
 
         buttons = [
             "🏠 Dashboard",
+            "📈 Live Market",
             "📒 Trade Journal",
             "✅ Checklist",
+            "🧠 AI Analysis",
             "🛡 Risk Manager",
             "📊 Reports",
             "⚙ Settings"
         ]
 
         for text in buttons:
-            layout.addWidget(QPushButton(text))
+            btn = QPushButton(text)
+            btn.setObjectName("menuButton")
+            layout.addWidget(btn)
 
         layout.addStretch()

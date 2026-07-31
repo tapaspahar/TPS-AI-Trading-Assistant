@@ -1,7 +1,13 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel
+from PySide6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QGridLayout
+)
 
-from ui.widgets.sidebar import SideBar
 from ui.widgets.header import Header
+from ui.widgets.navigation.sidebar import Sidebar
+from ui.widgets.cards.dashboard_card import DashboardCard
 
 
 class DashboardScreen(QWidget):
@@ -9,19 +15,35 @@ class DashboardScreen(QWidget):
     def __init__(self):
         super().__init__()
 
-        main_layout = QHBoxLayout(self)
+        mainLayout = QVBoxLayout(self)
 
-        sidebar = SideBar()
+        # Header
+        mainLayout.addWidget(Header())
 
-        right_layout = QVBoxLayout()
+        # Body Layout
+        bodyLayout = QHBoxLayout()
 
-        header = Header()
+        # Sidebar
+        bodyLayout.addWidget(Sidebar())
 
-        content = QLabel("📈 Dashboard Area")
-        content.setStyleSheet("font-size:24px;")
+        # Dashboard Area
+        dashboardLayout = QVBoxLayout()
 
-        right_layout.addWidget(header)
-        right_layout.addWidget(content)
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(20)
+        grid.setVerticalSpacing(20)
 
-        main_layout.addWidget(sidebar)
-        main_layout.addLayout(right_layout)
+        grid.addWidget(DashboardCard("📈 Market Trend", "Waiting..."), 0, 0)
+        grid.addWidget(DashboardCard("💰 Today's P&L", "₹0"), 0, 1)
+        grid.addWidget(DashboardCard("🎯 AI Confidence", "-- %"), 0, 2)
+
+        grid.addWidget(DashboardCard("❤️ Psychology", "Ready"), 1, 0)
+        grid.addWidget(DashboardCard("🛡 Risk Score", "Safe"), 1, 1)
+        grid.addWidget(DashboardCard("📊 Today's Trades", "0"), 1, 2)
+
+        dashboardLayout.addLayout(grid)
+        dashboardLayout.addStretch()
+
+        bodyLayout.addLayout(dashboardLayout)
+
+        mainLayout.addLayout(bodyLayout)
