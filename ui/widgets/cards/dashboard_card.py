@@ -1,9 +1,4 @@
-from PySide6.QtWidgets import (
-    QFrame,
-    QLabel,
-    QVBoxLayout,
-)
-
+from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout
 from PySide6.QtCore import Qt
 
 
@@ -13,54 +8,18 @@ class DashboardCard(QFrame):
 
         super().__init__()
 
-        self.setFixedSize(260,130)
+        self.setObjectName("dashboardCard")
 
-        self.setStyleSheet("""
+        layout = QVBoxLayout(self)
 
-        QFrame{
+        titleLabel = QLabel(title)
+        titleLabel.setObjectName("cardTitle")
 
-            background:#182338;
+        valueLabel = QLabel(value)
+        valueLabel.setObjectName("cardValue")
 
-            border:1px solid #2B3A55;
-
-            border-radius:15px;
-
-        }
-
-        """)
-
-        layout=QVBoxLayout(self)
-
-        layout.setContentsMargins(20,15,20,15)
-
-        layout.setSpacing(10)
-
-        titleLabel=QLabel(title)
-
-        titleLabel.setStyleSheet("""
-
-            color:#8FA2C5;
-
-            font-size:13px;
-
-        """)
-
-        valueLabel=QLabel(value)
-
-        valueLabel.setAlignment(Qt.AlignLeft)
-
-        valueLabel.setStyleSheet("""
-
-            color:white;
-
-            font-size:28px;
-
-            font-weight:bold;
-
-        """)
+        valueLabel.setAlignment(Qt.AlignCenter)
 
         layout.addWidget(titleLabel)
-
-        layout.addWidget(valueLabel)
-
         layout.addStretch()
+        layout.addWidget(valueLabel)
