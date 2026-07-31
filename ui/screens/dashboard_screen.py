@@ -1,13 +1,12 @@
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
-    QHBoxLayout,
-    QGridLayout
+    QHBoxLayout
 )
 
 from ui.widgets.header import Header
 from ui.widgets.navigation.sidebar import Sidebar
-from ui.widgets.cards.dashboard_card import DashboardCard
+from ui.pages.dashboard_page import DashboardPage
 
 
 class DashboardScreen(QWidget):
@@ -20,30 +19,15 @@ class DashboardScreen(QWidget):
         # Header
         mainLayout.addWidget(Header())
 
-        # Body Layout
+        # Body
         bodyLayout = QHBoxLayout()
 
         # Sidebar
-        bodyLayout.addWidget(Sidebar())
+        sidebar = Sidebar()
+        bodyLayout.addWidget(sidebar)
 
-        # Dashboard Area
-        dashboardLayout = QVBoxLayout()
-
-        grid = QGridLayout()
-        grid.setHorizontalSpacing(20)
-        grid.setVerticalSpacing(20)
-
-        grid.addWidget(DashboardCard("📈 Market Trend", "Waiting..."), 0, 0)
-        grid.addWidget(DashboardCard("💰 Today's P&L", "₹0"), 0, 1)
-        grid.addWidget(DashboardCard("🎯 AI Confidence", "-- %"), 0, 2)
-
-        grid.addWidget(DashboardCard("❤️ Psychology", "Ready"), 1, 0)
-        grid.addWidget(DashboardCard("🛡 Risk Score", "Safe"), 1, 1)
-        grid.addWidget(DashboardCard("📊 Today's Trades", "0"), 1, 2)
-
-        dashboardLayout.addLayout(grid)
-        dashboardLayout.addStretch()
-
-        bodyLayout.addLayout(dashboardLayout)
+        # Dashboard Page
+        dashboard = DashboardPage()
+        bodyLayout.addWidget(dashboard, 1)
 
         mainLayout.addLayout(bodyLayout)
