@@ -27,6 +27,7 @@ class JournalPage(QWidget):
         layout = QVBoxLayout(self)
 
         title = QLabel("📒 Trade Journal")
+        layout.addWidget(title)
 
         form = QFormLayout()
 
@@ -63,19 +64,39 @@ class JournalPage(QWidget):
         form.addRow("Quantity", self.quantityInput)
         form.addRow("Psychology", self.psychologyInput)
 
+        layout.addLayout(form)
+
         self.saveButton = QPushButton("💾 Save Trade")
         self.saveButton.clicked.connect(self.save_trade)
 
-        self.table = QTableWidget()
-
-        layout.addWidget(title)
-        layout.addLayout(form)
         layout.addWidget(self.saveButton)
+
+        self.table = QTableWidget()
         layout.addWidget(self.table)
 
         self.load_trades()
 
     def save_trade(self):
+
+        if self.symbolInput.text().strip() == "":
+            QMessageBox.warning(self, "Warning", "Please enter Symbol.")
+            return
+
+        if self.strikeInput.text().strip() == "":
+            QMessageBox.warning(self, "Warning", "Please enter Strike.")
+            return
+
+        if self.entryInput.text().strip() == "":
+            QMessageBox.warning(self, "Warning", "Please enter Entry Price.")
+            return
+
+        if self.exitInput.text().strip() == "":
+            QMessageBox.warning(self, "Warning", "Please enter Exit Price.")
+            return
+
+        if self.quantityInput.text().strip() == "":
+            QMessageBox.warning(self, "Warning", "Please enter Quantity.")
+            return
 
         try:
 
@@ -85,17 +106,17 @@ class JournalPage(QWidget):
 
                 self.timeInput.text(),
 
-                self.symbolInput.text(),
+                self.symbolInput.text().upper(),
 
                 self.strikeInput.text(),
 
                 self.optionInput.currentText(),
 
-                self.entryInput.text(),
+                float(self.entryInput.text()),
 
-                self.exitInput.text(),
+                float(self.exitInput.text()),
 
-                self.quantityInput.text(),
+                int(self.quantityInput.text()),
 
                 self.psychologyInput.currentText()
 
@@ -107,7 +128,29 @@ class JournalPage(QWidget):
                 "Trade Saved Successfully."
             )
 
+            self.symbolInput.clear()
+            self.strikeInput.clear()
+            self.entryInput.clear()
+            self.exitInput.clear()
+            self.quantityInput.clear()
+
+            self.dateInput.setText(
+                datetime.now().strftime("%d-%m-%Y")
+            )
+
+            self.timeInput.setText(
+                datetime.now().strftime("%H:%M:%S")
+            )
+
             self.load_trades()
+
+        except ValueError:
+
+            QMessageBox.warning(
+                self,
+                "Invalid Input",
+                "Entry, Exit and Quantity should be numeric."
+            )
 
         except Exception as e:
 

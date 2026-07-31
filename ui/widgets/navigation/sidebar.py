@@ -11,20 +11,28 @@ class Sidebar(QFrame):
 
         layout = QVBoxLayout(self)
 
+        self.dashboardButton = QPushButton("🏠 Dashboard")
+        self.liveMarketButton = QPushButton("📈 Live Market")
+        self.journalButton = QPushButton("📒 Trade Journal")
+        self.checklistButton = QPushButton("✅ Checklist")
+        self.aiButton = QPushButton("🧠 AI Analysis")
+        self.riskButton = QPushButton("🛡 Risk Manager")
+        self.reportButton = QPushButton("📊 Reports")
+        self.settingsButton = QPushButton("⚙ Settings")
+
         buttons = [
-            "🏠 Dashboard",
-            "📈 Live Market",
-            "📒 Trade Journal",
-            "✅ Checklist",
-            "🧠 AI Analysis",
-            "🛡 Risk Manager",
-            "📊 Reports",
-            "⚙ Settings"
+            self.dashboardButton,
+            self.liveMarketButton,
+            self.journalButton,
+            self.checklistButton,
+            self.aiButton,
+            self.riskButton,
+            self.reportButton,
+            self.settingsButton
         ]
 
-        for text in buttons:
-            btn = QPushButton(text)
-            btn.setObjectName("menuButton")
-            layout.addWidget(btn)
+        for button in buttons:
+            button.setObjectName("menuButton")
+            layout.addWidget(button)
 
         layout.addStretch()

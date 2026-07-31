@@ -1,11 +1,11 @@
 from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout
 
 
-class SettingsPage(QWidget):
+class ChecklistPage(QWidget):
 
     def __init__(self):
         super().__init__()
 
         layout = QVBoxLayout(self)
 
-        layout.addWidget(QLabel("⚙ Settings"))
+        layout.addWidget(QLabel("✅ Trading Checklist"))
