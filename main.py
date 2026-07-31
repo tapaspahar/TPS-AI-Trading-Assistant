@@ -1,5 +1,5 @@
 import sys
-
+from core.database_manager import Database
 from PySide6.QtWidgets import QApplication
 
 from ui.screens.dashboard_screen import DashboardScreen
@@ -7,7 +7,7 @@ from ui.themes.dark_theme import get_dark_theme
 
 
 app = QApplication(sys.argv)
-
+db = Database()
 app.setStyleSheet(get_dark_theme())
 
 window = DashboardScreen()
