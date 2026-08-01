@@ -18,3 +18,8 @@ class ChartCaptureTests(unittest.TestCase):
         self.assertEqual(result["symbol"], "NIFTY")
         self.assertEqual(result["timeframe"], "15m")
         self.assertEqual(result["close"], "")
+
+    def test_parser_handles_common_ocr_zero_for_open(self):
+        result = ChartCaptureService().parse_text("SENSEX BSE 078087.97 H78097.60 L78008.58 C78034.57")
+        self.assertEqual(result["open"], "78087.97")
+        self.assertEqual(result["close"], "78034.57")
