@@ -108,6 +108,9 @@ class JournalPage(QWidget):
         elif summary["pnl"] <= -loss_limit:
             QMessageBox.warning(self, "Daily loss warning", "Today's recorded loss exceeds your configured daily-loss limit.")
 
+    def set_symbol_from_capture(self, symbol: str) -> None:
+        self.symbol_input.setText(symbol)
+
     def load_trades(self) -> None:
         headers = ["ID", "Date", "Time", "Symbol", "Option", "Entry", "Exit", "Qty", "P&L", "R:R", "Psychology", "AI", "Decision"]
         data = self.db.get_journal_rows()

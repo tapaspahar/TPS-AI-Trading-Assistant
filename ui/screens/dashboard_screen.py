@@ -1,15 +1,10 @@
-from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QStackedWidget
-)
+from PySide6.QtWidgets import QHBoxLayout, QStackedWidget, QVBoxLayout, QWidget
 
 from ui.widgets.header import Header
 from ui.widgets.navigation.sidebar import Sidebar
-
 from ui.pages.dashboard_page import DashboardPage
 from ui.pages.live_market_page import LiveMarketPage
+from ui.pages.chart_capture_page import ChartCapturePage
 from ui.pages.journal_page import JournalPage
 from ui.pages.checklist_page import ChecklistPage
 from ui.pages.ai_page import AIPage
@@ -19,77 +14,41 @@ from ui.pages.settings_page import SettingsPage
 
 
 class DashboardScreen(QWidget):
-
     def __init__(self):
-
         super().__init__()
-
-        mainLayout = QVBoxLayout(self)
-
-        header = Header()
-        mainLayout.addWidget(header)
-
-        bodyLayout = QHBoxLayout()
-
+        main_layout = QVBoxLayout(self)
+        main_layout.addWidget(Header())
+        body_layout = QHBoxLayout()
         self.sidebar = Sidebar()
-
-        bodyLayout.addWidget(self.sidebar)
-
+        body_layout.addWidget(self.sidebar)
         self.stack = QStackedWidget()
-
         self.dashboardPage = DashboardPage()
         self.liveMarketPage = LiveMarketPage()
+        self.chartCapturePage = ChartCapturePage()
         self.journalPage = JournalPage()
         self.checklistPage = ChecklistPage()
         self.aiPage = AIPage()
         self.riskPage = RiskPage()
         self.reportsPage = ReportsPage()
         self.settingsPage = SettingsPage()
-
-        self.stack.addWidget(self.dashboardPage)
-        self.stack.addWidget(self.liveMarketPage)
-        self.stack.addWidget(self.journalPage)
-        self.stack.addWidget(self.checklistPage)
-        self.stack.addWidget(self.aiPage)
-        self.stack.addWidget(self.riskPage)
-        self.stack.addWidget(self.reportsPage)
-        self.stack.addWidget(self.settingsPage)
-
+        for page in (self.dashboardPage, self.liveMarketPage, self.chartCapturePage, self.journalPage,
+                     self.checklistPage, self.aiPage, self.riskPage, self.reportsPage, self.settingsPage):
+            self.stack.addWidget(page)
         self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
         self.journalPage.trade_saved.connect(self.reportsPage.refresh)
+        self.chartCapturePage.symbol_ready.connect(self.journalPage.set_symbol_from_capture)
+        for button, index in ((self.sidebar.dashboardButton, 0), (self.sidebar.liveMarketButton, 1),
+                              (self.sidebar.chartCaptureButton, 2), (self.sidebar.journalButton, 3),
+                              (self.sidebar.checklistButton, 4), (self.sidebar.aiButton, 5),
+                              (self.sidebar.riskButton, 6), (self.sidebar.reportButton, 7),
+                              (self.sidebar.settingsButton, 8)):
+            button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
+        body_layout.addWidget(self.stack)
+        main_layout.addLayout(body_layout)
 
-        bodyLayout.addWidget(self.stack)
-
-        mainLayout.addLayout(bodyLayout)
-
-        self.sidebar.dashboardButton.clicked.connect(
-            lambda: (self.dashboardPage.refresh(), self.stack.setCurrentIndex(0))
-        )
-
-        self.sidebar.liveMarketButton.clicked.connect(
-            lambda: self.stack.setCurrentIndex(1)
-        )
-
-        self.sidebar.journalButton.clicked.connect(
-            lambda: self.stack.setCurrentIndex(2)
-        )
-
-        self.sidebar.checklistButton.clicked.connect(
-            lambda: self.stack.setCurrentIndex(3)
-        )
-
-        self.sidebar.aiButton.clicked.connect(
-            lambda: self.stack.setCurrentIndex(4)
-        )
-
-        self.sidebar.riskButton.clicked.connect(
-            lambda: self.stack.setCurrentIndex(5)
-        )
-
-        self.sidebar.reportButton.clicked.connect(
-            lambda: (self.reportsPage.refresh(), self.stack.setCurrentIndex(6))
-        )
-
-        self.sidebar.settingsButton.clicked.connect(
-            lambda: self.stack.setCurrentIndex(7)
-        )
+    def show_page(self, index: int):
+        if index == 0:
+            self.dashboardPage.refresh()
+        elif index == 7:
+            self.reportsPage.refresh()
+        self.stack.setCurrentIndex(index)
