@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFileDialog, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
 
 from core.database_manager import Database
 
@@ -15,6 +15,9 @@ class ReportsPage(QWidget):
         refresh = QPushButton("Refresh Report")
         refresh.clicked.connect(self.refresh)
         layout.addWidget(refresh)
+        export = QPushButton("Export Journal to CSV")
+        export.clicked.connect(self.export_csv)
+        layout.addWidget(export)
         layout.addStretch()
         self.refresh()
 
@@ -27,3 +30,14 @@ class ReportsPage(QWidget):
             f"Win rate: {summary['win_rate']:.1f}%\n"
             f"Average AI confidence: {summary['average_ai']:.1f}%"
         )
+
+    def export_csv(self):
+        path, _ = QFileDialog.getSaveFileName(self, "Export Trade Journal", "trade_journal.csv", "CSV files (*.csv)")
+        if not path:
+            return
+        try:
+            count = self.db.export_csv(path)
+        except OSError as error:
+            QMessageBox.critical(self, "Export failed", str(error))
+            return
+        QMessageBox.information(self, "Export complete", f"Exported {count} trade(s) to CSV.")

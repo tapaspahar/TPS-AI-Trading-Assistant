@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+import csv
 from datetime import datetime
 from pathlib import Path
 from engine.tps_engine import TPSEngine
@@ -120,6 +121,40 @@ class Database:
             FROM trades ORDER BY id DESC
             """
         ).fetchall()
+
+    def get_journal_rows(self) -> list[sqlite3.Row]:
+        """Return rows with IDs for display and safe deletion in the journal."""
+        return self.cursor.execute(
+            """
+            SELECT id, trade_date, trade_time, symbol, option_type, entry, exit,
+                   quantity, pnl, rr_ratio, psychology_before, ai_score, ai_decision
+            FROM trades ORDER BY id DESC
+            """
+        ).fetchall()
+
+    def delete_trade(self, trade_id: int) -> bool:
+        """Delete one selected trade. Returns False when it no longer exists."""
+        result = self.cursor.execute("DELETE FROM trades WHERE id = ?", (int(trade_id),))
+        self.connection.commit()
+        return result.rowcount == 1
+
+    def export_csv(self, destination: str | Path) -> int:
+        """Export journal records as a portable CSV file and return row count."""
+        rows = self.cursor.execute(
+            """
+            SELECT trade_date, trade_time, market, symbol, expiry, strike, option_type,
+                   entry, exit, stoploss, target, quantity, pnl, rr_ratio, setup,
+                   psychology_before, psychology_after, mistake, confidence, ai_score,
+                   ai_decision, ai_review, notes, created_at
+            FROM trades ORDER BY id DESC
+            """
+        ).fetchall()
+        headers = [column[0] for column in self.cursor.description]
+        with Path(destination).open("w", newline="", encoding="utf-8-sig") as file:
+            writer = csv.writer(file)
+            writer.writerow(headers)
+            writer.writerows(rows)
+        return len(rows)
 
     def get_summary(self) -> dict[str, float | int]:
         """Return portfolio-level metrics for the local dashboard and reports."""

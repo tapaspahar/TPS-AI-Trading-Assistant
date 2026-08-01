@@ -57,7 +57,12 @@ class JournalPage(QWidget):
         self.save_button = QPushButton("Save Trade")
         self.save_button.clicked.connect(self.save_trade)
         layout.addWidget(self.save_button)
+        self.delete_button = QPushButton("Delete Selected Trade")
+        self.delete_button.clicked.connect(self.delete_selected_trade)
+        layout.addWidget(self.delete_button)
         self.table = QTableWidget()
+        self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         layout.addWidget(self.table)
         self.load_trades()
 
@@ -104,8 +109,8 @@ class JournalPage(QWidget):
             QMessageBox.warning(self, "Daily loss warning", "Today's recorded loss exceeds your configured daily-loss limit.")
 
     def load_trades(self) -> None:
-        headers = ["Date", "Time", "Symbol", "Option", "Entry", "Exit", "Qty", "P&L", "R:R", "Psychology", "AI", "Decision"]
-        data = self.db.get_all_trades()
+        headers = ["ID", "Date", "Time", "Symbol", "Option", "Entry", "Exit", "Qty", "P&L", "R:R", "Psychology", "AI", "Decision"]
+        data = self.db.get_journal_rows()
         self.table.setColumnCount(len(headers))
         self.table.setHorizontalHeaderLabels(headers)
         self.table.setRowCount(len(data))
@@ -113,3 +118,19 @@ class JournalPage(QWidget):
             for column, value in enumerate(trade):
                 self.table.setItem(row, column, QTableWidgetItem(str(value)))
         self.table.resizeColumnsToContents()
+
+    def delete_selected_trade(self) -> None:
+        row = self.table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Select a trade", "Select one table row before deleting it.")
+            return
+        trade_id = int(self.table.item(row, 0).text())
+        answer = QMessageBox.question(self, "Delete trade", "Delete the selected trade permanently?")
+        if answer != QMessageBox.Yes:
+            return
+        if self.db.delete_trade(trade_id):
+            self.load_trades()
+            self.trade_saved.emit()
+        else:
+            QMessageBox.warning(self, "Trade not found", "This trade has already been removed. Refreshing the table.")
+            self.load_trades()

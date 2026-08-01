@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+import csv
 from pathlib import Path
 
 from core.database_manager import Database
@@ -56,6 +57,17 @@ class DatabaseTests(unittest.TestCase):
         self.db.save_trade(sample_trade(trade_date="02-08-2026", symbol="FINNIFTY"))
 
         self.assertEqual(self.db.get_day_summary("01-08-2026"), {"trades": 1, "pnl": 1875.0})
+
+    def test_delete_and_csv_export(self):
+        trade_id = self.db.save_trade(sample_trade())
+        export_path = Path(self.temp_dir.name) / "journal.csv"
+        self.assertEqual(self.db.export_csv(export_path), 1)
+        with export_path.open(encoding="utf-8-sig", newline="") as file:
+            exported = list(csv.DictReader(file))
+        self.assertEqual(exported[0]["symbol"], "NIFTY")
+        self.assertTrue(self.db.delete_trade(trade_id))
+        self.assertFalse(self.db.delete_trade(trade_id))
+        self.assertEqual(self.db.get_summary()["trades"], 0)
 
 
 if __name__ == "__main__":
