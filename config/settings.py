@@ -1,0 +1,15 @@
+APP_NAME = "TPS AI Trading Assistant"
+
+VERSION = "1.0 Beta"
+
+THEME = "Dark"
+
+DATABASE = "database/tps_ai.db"
+
+CAPITAL = 100000
+
+DEFAULT_RISK_PERCENT = 1
+
+MAX_DAILY_LOSS_PERCENT = 3
+
+MAX_TRADES_PER_DAY = 5

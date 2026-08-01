@@ -1,6 +1,13 @@
+from engine.psychology_engine import PsychologyEngine
+
+
 class TPSEngine:
 
-    def calculate_score(self, trade):
+    def __init__(self):
+
+        self.psychology = PsychologyEngine()
+
+    def calculate(self, trade):
 
         score = 0
 
@@ -20,14 +27,39 @@ class TPSEngine:
 
         if trade.volume:
             score += 15
-            reasons.append("Volume Confirmation")
+            reasons.append("Volume Confirmed")
 
         if trade.oi:
             score += 20
-            reasons.append("Option Chain Confirmation")
+            reasons.append("Option Chain Confirmed")
 
-        if trade.psychology.lower() in ["calm", "confident"]:
-            score += 10
-            reasons.append("Good Psychology")
+        psychology_score = self.psychology.evaluate(
+    trade.psychology_before)
 
-        return score, reasons
+        score += psychology_score
+
+        if score >= 90:
+
+            decision = "STRONG BUY"
+
+        elif score >= 75:
+
+            decision = "BUY"
+
+        elif score >= 60:
+
+            decision = "WATCH"
+
+        else:
+
+            decision = "NO TRADE"
+
+        return {
+
+            "score": score,
+
+            "decision": decision,
+
+            "reasons": reasons
+
+        }
