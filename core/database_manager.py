@@ -1,280 +1,125 @@
+"""SQLite persistence for the TPS trade journal."""
+
+from __future__ import annotations
+
 import sqlite3
 from datetime import datetime
+from pathlib import Path
+from engine.tps_engine import TPSEngine
+from models.trade import Trade
 
 
 class Database:
+    """Store and retrieve journal trades.
 
-    def __init__(self):
+    ``db_path`` is injectable so tests and future deployments do not depend on
+    the current working directory.
+    """
 
-        print("Database Connected Successfully")
-
-        self.connection = sqlite3.connect("database/tps_ai.db")
-
+    def __init__(self, db_path: str | Path | None = None):
+        default_path = Path(__file__).resolve().parents[1] / "database" / "tps_ai.db"
+        self.db_path = Path(db_path) if db_path else default_path
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.connection = sqlite3.connect(self.db_path)
+        self.connection.row_factory = sqlite3.Row
         self.cursor = self.connection.cursor()
-
         self.create_tables()
 
-    def create_tables(self):
-
-        self.cursor.execute("""
-        CREATE TABLE IF NOT EXISTS trades(
-
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-            trade_date TEXT,
-            trade_time TEXT,
-
-            market TEXT,
-
-            symbol TEXT,
-
-            expiry TEXT,
-
-            strike TEXT,
-
-            option_type TEXT,
-
-            entry REAL,
-            exit REAL,
-
-            stoploss REAL,
-            target REAL,
-
-            quantity INTEGER,
-
-            pnl REAL,
-
-            rr_ratio REAL,
-
-            setup TEXT,
-
-            trend INTEGER,
-            vwap INTEGER,
-            ema INTEGER,
-            volume INTEGER,
-            oi INTEGER,
-
-            psychology_before TEXT,
-            psychology_after TEXT,
-
-            mistake TEXT,
-
-            confidence INTEGER,
-
-            ai_score INTEGER,
-
-            ai_decision TEXT,
-
-            ai_review TEXT,
-
-            notes TEXT,
-
-            screenshot TEXT,
-
-            created_at TEXT
-
+    def create_tables(self) -> None:
+        self.cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS trades (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                trade_date TEXT NOT NULL,
+                trade_time TEXT NOT NULL,
+                market TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                expiry TEXT,
+                strike TEXT,
+                option_type TEXT,
+                entry REAL NOT NULL,
+                exit REAL NOT NULL,
+                stoploss REAL NOT NULL,
+                target REAL NOT NULL,
+                quantity INTEGER NOT NULL,
+                pnl REAL NOT NULL,
+                rr_ratio REAL NOT NULL,
+                setup TEXT,
+                trend INTEGER NOT NULL DEFAULT 0,
+                vwap INTEGER NOT NULL DEFAULT 0,
+                ema INTEGER NOT NULL DEFAULT 0,
+                volume INTEGER NOT NULL DEFAULT 0,
+                oi INTEGER NOT NULL DEFAULT 0,
+                psychology_before TEXT,
+                psychology_after TEXT,
+                mistake TEXT,
+                confidence INTEGER NOT NULL DEFAULT 0,
+                ai_score INTEGER NOT NULL DEFAULT 0,
+                ai_decision TEXT,
+                ai_review TEXT,
+                notes TEXT,
+                screenshot TEXT,
+                created_at TEXT NOT NULL
+            )
+            """
         )
-        """)
-
         self.connection.commit()
 
-    def save_trade(
-        self,
-        trade_date,
-        trade_time,
-        market,
-        symbol,
-        expiry,
-        strike,
-        option_type,
-        entry,
-        exit,
-        stoploss,
-        target,
-        quantity,
-        setup,
-        trend,
-        vwap,
-        ema,
-        volume,
-        oi,
-        psychology_before,
-        psychology_after,
-        mistake,
-        confidence,
-        notes,
-        screenshot=""
-    ):
+    @staticmethod
+    def _calculate_trade_values(trade: Trade) -> tuple[float, float]:
+        pnl = round((float(trade.exit) - float(trade.entry)) * int(trade.quantity), 2)
+        risk = abs(float(trade.entry) - float(trade.stoploss))
+        reward = abs(float(trade.target) - float(trade.entry))
+        return pnl, round(reward / risk, 2) if risk else 0.0
 
-        pnl = (float(exit) - float(entry)) * int(quantity)
+    def save_trade(self, trade: Trade) -> int:
+        """Persist a validated :class:`Trade` and return its database id."""
+        if not trade.symbol.strip():
+            raise ValueError("Symbol is required.")
+        if trade.entry <= 0 or trade.exit < 0 or trade.stoploss < 0 or trade.target < 0:
+            raise ValueError("Prices must be non-negative, and entry must be greater than zero.")
+        if trade.quantity <= 0:
+            raise ValueError("Quantity must be greater than zero.")
 
-        risk = abs(float(entry) - float(stoploss))
+        pnl, rr_ratio = self._calculate_trade_values(trade)
+        analysis = TPSEngine().calculate(trade)
+        trade.pnl, trade.rr_ratio = pnl, rr_ratio
+        trade.ai_score = analysis["score"]
+        trade.ai_decision = analysis["decision"]
+        trade.ai_review = ", ".join(analysis["reasons"]) or "No technical confirmations recorded."
 
-        reward = abs(float(target) - float(entry))
-
-        rr_ratio = round(reward / risk, 2) if risk > 0 else 0
-
-        self.cursor.execute("""
-        INSERT INTO trades(
-
-            trade_date,
-            trade_time,
-
-            market,
-
-            symbol,
-
-            expiry,
-
-            strike,
-
-            option_type,
-
-            entry,
-            exit,
-
-            stoploss,
-            target,
-
-            quantity,
-
-            pnl,
-
-            rr_ratio,
-
-            setup,
-
-            trend,
-            vwap,
-            ema,
-            volume,
-            oi,
-
-            psychology_before,
-            psychology_after,
-
-            mistake,
-
-            confidence,
-
-            ai_score,
-
-            ai_decision,
-
-            ai_review,
-
-            notes,
-
-            screenshot,
-
-            created_at
-
+        values = (
+            trade.trade_date, trade.trade_time, trade.market, trade.symbol.upper(),
+            trade.expiry, trade.strike, trade.option, trade.entry, trade.exit,
+            trade.stoploss, trade.target, trade.quantity, pnl, rr_ratio, trade.setup,
+            int(trade.trend), int(trade.vwap), int(trade.ema), int(trade.volume), int(trade.oi),
+            trade.psychology_before, trade.psychology_after, trade.mistake, trade.confidence,
+            trade.ai_score, trade.ai_decision, trade.ai_review, trade.notes, trade.screenshot,
+            datetime.now().isoformat(timespec="seconds"),
         )
-
-        VALUES(
-            ?,?,?,?,?,?,
-            ?,?,?,?,?,?,
-            ?,?,?,?,?,?,
-            ?,?,?,?,?,?,
-            ?,?,?,?,?
+        self.cursor.execute(
+            """
+            INSERT INTO trades (
+                trade_date, trade_time, market, symbol, expiry, strike, option_type,
+                entry, exit, stoploss, target, quantity, pnl, rr_ratio, setup,
+                trend, vwap, ema, volume, oi, psychology_before, psychology_after,
+                mistake, confidence, ai_score, ai_decision, ai_review, notes,
+                screenshot, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            values,
         )
-        """, (
-
-            trade_date,
-            trade_time,
-
-            market,
-
-            symbol,
-
-            expiry,
-
-            strike,
-
-            option_type,
-
-            entry,
-            exit,
-
-            stoploss,
-            target,
-
-            quantity,
-
-            pnl,
-
-            rr_ratio,
-
-            setup,
-
-            int(trend),
-            int(vwap),
-            int(ema),
-            int(volume),
-            int(oi),
-
-            psychology_before,
-            psychology_after,
-
-            mistake,
-
-            confidence,
-
-            0,
-
-            "",
-
-            "",
-
-            notes,
-
-            screenshot,
-
-            datetime.now().strftime("%d-%m-%Y %H:%M:%S")
-
-        ))
-
         self.connection.commit()
+        return int(self.cursor.lastrowid)
 
-    def get_all_trades(self):
+    def get_all_trades(self) -> list[sqlite3.Row]:
+        return self.cursor.execute(
+            """
+            SELECT trade_date, trade_time, symbol, option_type, entry, exit,
+                   quantity, pnl, rr_ratio, psychology_before, ai_score, ai_decision
+            FROM trades ORDER BY id DESC
+            """
+        ).fetchall()
 
-        self.cursor.execute("""
-
-        SELECT
-
-            trade_date,
-            trade_time,
-
-            market,
-
-            symbol,
-
-            strike,
-
-            option_type,
-
-            entry,
-
-            exit,
-
-            quantity,
-
-            pnl,
-
-            rr_ratio,
-
-            psychology_before,
-
-            confidence
-
-        FROM trades
-
-        ORDER BY id DESC
-
-        """)
-
-        return self.cursor.fetchall()
-
-    def close(self):
-
+    def close(self) -> None:
         self.connection.close()

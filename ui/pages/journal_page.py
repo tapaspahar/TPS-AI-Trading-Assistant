@@ -1,191 +1,83 @@
 from datetime import datetime
 
 from PySide6.QtWidgets import (
-    QWidget,
-    QLabel,
-    QLineEdit,
-    QPushButton,
-    QComboBox,
-    QFormLayout,
-    QVBoxLayout,
-    QTableWidget,
-    QTableWidgetItem,
-    QMessageBox
+    QComboBox, QFormLayout, QLabel, QLineEdit, QMessageBox,
+    QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from core.database_manager import Database
+from models.trade import Trade
 
 
 class JournalPage(QWidget):
+    """A focused form for recording completed option trades."""
 
     def __init__(self):
-
         super().__init__()
-
         self.db = Database()
-
         layout = QVBoxLayout(self)
-
-        title = QLabel("📒 Trade Journal")
-        layout.addWidget(title)
+        layout.addWidget(QLabel("Trade Journal"))
 
         form = QFormLayout()
-
-        self.dateInput = QLineEdit(datetime.now().strftime("%d-%m-%Y"))
-        self.timeInput = QLineEdit(datetime.now().strftime("%H:%M:%S"))
-
-        self.symbolInput = QLineEdit()
-        self.strikeInput = QLineEdit()
-
-        self.optionInput = QComboBox()
-        self.optionInput.addItems(["CE", "PE"])
-
-        self.entryInput = QLineEdit()
-        self.exitInput = QLineEdit()
-        self.quantityInput = QLineEdit()
-
-        self.psychologyInput = QComboBox()
-        self.psychologyInput.addItems([
-            "Calm",
-            "Confident",
-            "Fear",
-            "Greed",
-            "FOMO",
-            "Revenge"
-        ])
-
-        form.addRow("Date", self.dateInput)
-        form.addRow("Time", self.timeInput)
-        form.addRow("Symbol", self.symbolInput)
-        form.addRow("Strike", self.strikeInput)
-        form.addRow("Option", self.optionInput)
-        form.addRow("Entry", self.entryInput)
-        form.addRow("Exit", self.exitInput)
-        form.addRow("Quantity", self.quantityInput)
-        form.addRow("Psychology", self.psychologyInput)
-
+        self.date_input = QLineEdit(datetime.now().strftime("%d-%m-%Y"))
+        self.time_input = QLineEdit(datetime.now().strftime("%H:%M"))
+        self.symbol_input = QLineEdit()
+        self.strike_input = QLineEdit()
+        self.option_input = QComboBox(); self.option_input.addItems(["CE", "PE"])
+        self.entry_input, self.exit_input = QLineEdit(), QLineEdit()
+        self.stoploss_input, self.target_input = QLineEdit(), QLineEdit()
+        self.quantity_input = QLineEdit()
+        self.psychology_input = QComboBox()
+        self.psychology_input.addItems(["Calm", "Confident", "Fear", "Greed", "FOMO", "Revenge"])
+        for label, widget in (
+            ("Date", self.date_input), ("Time", self.time_input), ("Symbol", self.symbol_input),
+            ("Strike", self.strike_input), ("Option", self.option_input), ("Entry", self.entry_input),
+            ("Exit", self.exit_input), ("Stop loss", self.stoploss_input), ("Target", self.target_input),
+            ("Quantity", self.quantity_input), ("Psychology", self.psychology_input),
+        ):
+            form.addRow(label, widget)
         layout.addLayout(form)
 
-        self.saveButton = QPushButton("💾 Save Trade")
-        self.saveButton.clicked.connect(self.save_trade)
-
-        layout.addWidget(self.saveButton)
-
+        self.save_button = QPushButton("Save Trade")
+        self.save_button.clicked.connect(self.save_trade)
+        layout.addWidget(self.save_button)
         self.table = QTableWidget()
         layout.addWidget(self.table)
-
         self.load_trades()
 
-    def save_trade(self):
+    def _build_trade(self) -> Trade:
+        return Trade(
+            trade_date=self.date_input.text().strip(), trade_time=self.time_input.text().strip(),
+            market="OPTIONS", symbol=self.symbol_input.text().strip(), expiry="",
+            strike=self.strike_input.text().strip(), option=self.option_input.currentText(),
+            entry=float(self.entry_input.text()), exit=float(self.exit_input.text()),
+            stoploss=float(self.stoploss_input.text()), target=float(self.target_input.text()),
+            quantity=int(self.quantity_input.text()), psychology_before=self.psychology_input.currentText(),
+        )
 
-        if self.symbolInput.text().strip() == "":
-            QMessageBox.warning(self, "Warning", "Please enter Symbol.")
-            return
-
-        if self.strikeInput.text().strip() == "":
-            QMessageBox.warning(self, "Warning", "Please enter Strike.")
-            return
-
-        if self.entryInput.text().strip() == "":
-            QMessageBox.warning(self, "Warning", "Please enter Entry Price.")
-            return
-
-        if self.exitInput.text().strip() == "":
-            QMessageBox.warning(self, "Warning", "Please enter Exit Price.")
-            return
-
-        if self.quantityInput.text().strip() == "":
-            QMessageBox.warning(self, "Warning", "Please enter Quantity.")
-            return
-
+    def save_trade(self) -> None:
         try:
+            self.db.save_trade(self._build_trade())
+        except ValueError as error:
+            QMessageBox.warning(self, "Invalid trade", str(error))
+            return
+        except Exception as error:
+            QMessageBox.critical(self, "Could not save trade", str(error))
+            return
 
-            self.db.save_trade(
+        QMessageBox.information(self, "Saved", "Trade saved successfully.")
+        for field in (self.symbol_input, self.strike_input, self.entry_input, self.exit_input,
+                      self.stoploss_input, self.target_input, self.quantity_input):
+            field.clear()
+        self.load_trades()
 
-                self.dateInput.text(),
-
-                self.timeInput.text(),
-
-                self.symbolInput.text().upper(),
-
-                self.strikeInput.text(),
-
-                self.optionInput.currentText(),
-
-                float(self.entryInput.text()),
-
-                float(self.exitInput.text()),
-
-                int(self.quantityInput.text()),
-
-                self.psychologyInput.currentText()
-
-            )
-
-            QMessageBox.information(
-                self,
-                "Success",
-                "Trade Saved Successfully."
-            )
-
-            self.symbolInput.clear()
-            self.strikeInput.clear()
-            self.entryInput.clear()
-            self.exitInput.clear()
-            self.quantityInput.clear()
-
-            self.dateInput.setText(
-                datetime.now().strftime("%d-%m-%Y")
-            )
-
-            self.timeInput.setText(
-                datetime.now().strftime("%H:%M:%S")
-            )
-
-            self.load_trades()
-
-        except ValueError:
-
-            QMessageBox.warning(
-                self,
-                "Invalid Input",
-                "Entry, Exit and Quantity should be numeric."
-            )
-
-        except Exception as e:
-
-            QMessageBox.critical(
-                self,
-                "Error",
-                str(e)
-            )
-
-    def load_trades(self):
-
+    def load_trades(self) -> None:
+        headers = ["Date", "Time", "Symbol", "Option", "Entry", "Exit", "Qty", "P&L", "R:R", "Psychology", "AI", "Decision"]
         data = self.db.get_all_trades()
-
-        headers = [
-            "Date",
-            "Time",
-            "Symbol",
-            "Option",
-            "Entry",
-            "Exit",
-            "Qty",
-            "P&L",
-            "Psychology"
-        ]
-
         self.table.setColumnCount(len(headers))
         self.table.setHorizontalHeaderLabels(headers)
         self.table.setRowCount(len(data))
-
         for row, trade in enumerate(data):
-
-            for col, value in enumerate(trade):
-
-                self.table.setItem(
-                    row,
-                    col,
-                    QTableWidgetItem(str(value))
-                )
+            for column, value in enumerate(trade):
+                self.table.setItem(row, column, QTableWidgetItem(str(value)))
+        self.table.resizeColumnsToContents()
