@@ -12,13 +12,14 @@ class ChartCapturePage(QWidget):
         self.service = ChartCaptureService()
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Quick Chart Capture"))
+        layout.addWidget(QLabel("Fixed profile: EMA 5 Pink | EMA 20 Violet | EMA 50 White | VWAP Yellow | SuperTrend Green/Red | Volume EMA 20"))
         layout.addWidget(QLabel("Select a broker/chart screenshot. OCR runs locally; verify every extracted value before trading."))
         choose = QPushButton("Choose Chart Screenshot")
         choose.clicked.connect(self.choose_screenshot)
         layout.addWidget(choose)
         form = QFormLayout()
         self.fields = {}
-        for key, label in (("symbol", "Symbol"), ("timeframe", "Timeframe"), ("open", "Open"), ("high", "High"), ("low", "Low"), ("close", "Close"), ("vwap", "VWAP"), ("supertrend", "SuperTrend"), ("volume", "Volume")):
+        for key, label in (("symbol", "Symbol"), ("timeframe", "Timeframe"), ("open", "Open"), ("high", "High"), ("low", "Low"), ("close", "Close"), ("ema_5", "EMA 5 (Pink)"), ("ema_20", "EMA 20 (Violet)"), ("ema_50", "EMA 50 (White)"), ("vwap", "VWAP (Yellow)"), ("supertrend", "SuperTrend"), ("supertrend_state", "SuperTrend State"), ("volume", "Volume"), ("volume_ema_period", "Volume EMA")):
             field = QLineEdit()
             self.fields[key] = field
             form.addRow(label, field)
