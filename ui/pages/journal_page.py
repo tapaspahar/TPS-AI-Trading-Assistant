@@ -8,6 +8,7 @@ from PySide6.QtCore import Signal
 
 from core.database_manager import Database
 from models.trade import Trade
+from core.settings_store import SettingsStore
 
 
 class JournalPage(QWidget):
@@ -17,6 +18,7 @@ class JournalPage(QWidget):
     def __init__(self):
         super().__init__()
         self.db = Database()
+        self.settings_store = SettingsStore()
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Trade Journal"))
 
@@ -89,6 +91,17 @@ class JournalPage(QWidget):
             checkbox.setChecked(False)
         self.load_trades()
         self.trade_saved.emit()
+        self._show_daily_guardrail()
+
+    def _show_daily_guardrail(self) -> None:
+        """Warn after recording, without preventing journal history from being saved."""
+        settings = self.settings_store.load()
+        summary = self.db.get_day_summary(self.date_input.text().strip())
+        loss_limit = settings["capital"] * settings["daily_loss_percent"] / 100
+        if summary["trades"] > settings["max_trades_per_day"]:
+            QMessageBox.warning(self, "Trade limit warning", "Today's recorded trades exceed your configured daily limit.")
+        elif summary["pnl"] <= -loss_limit:
+            QMessageBox.warning(self, "Daily loss warning", "Today's recorded loss exceeds your configured daily-loss limit.")
 
     def load_trades(self) -> None:
         headers = ["Date", "Time", "Symbol", "Option", "Entry", "Exit", "Qty", "P&L", "R:R", "Psychology", "AI", "Decision"]

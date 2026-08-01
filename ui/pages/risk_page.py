@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import QFormLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget
 
 from engine.risk_engine import RiskEngine
+from core.settings_store import SettingsStore
 
 
 class RiskPage(QWidget):
@@ -11,8 +12,9 @@ class RiskPage(QWidget):
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Risk Manager"))
         form = QFormLayout()
-        self.capital = QLineEdit("100000")
-        self.risk_percent = QLineEdit("1")
+        defaults = SettingsStore().load()
+        self.capital = QLineEdit(str(defaults["capital"]))
+        self.risk_percent = QLineEdit(str(defaults["risk_percent"]))
         self.entry = QLineEdit()
         self.stoploss = QLineEdit()
         self.target = QLineEdit()

@@ -142,5 +142,16 @@ class Database:
             "win_rate": round((wins / trades) * 100, 1) if trades else 0.0,
         }
 
+    def get_day_summary(self, trade_date: str) -> dict[str, float | int]:
+        """Return the recorded-trade metrics for the supplied journal date."""
+        row = self.cursor.execute(
+            """
+            SELECT COUNT(*) AS trades, COALESCE(SUM(pnl), 0) AS pnl
+            FROM trades WHERE trade_date = ?
+            """,
+            (trade_date,),
+        ).fetchone()
+        return {"trades": int(row["trades"]), "pnl": round(float(row["pnl"]), 2)}
+
     def close(self) -> None:
         self.connection.close()

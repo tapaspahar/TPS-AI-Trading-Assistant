@@ -51,6 +51,12 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(summary["pnl"], 1775.0)
         self.assertEqual(summary["win_rate"], 50.0)
 
+    def test_day_summary_filters_by_journal_date(self):
+        self.db.save_trade(sample_trade())
+        self.db.save_trade(sample_trade(trade_date="02-08-2026", symbol="FINNIFTY"))
+
+        self.assertEqual(self.db.get_day_summary("01-08-2026"), {"trades": 1, "pnl": 1875.0})
+
 
 if __name__ == "__main__":
     unittest.main()
