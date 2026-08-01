@@ -121,5 +121,26 @@ class Database:
             """
         ).fetchall()
 
+    def get_summary(self) -> dict[str, float | int]:
+        """Return portfolio-level metrics for the local dashboard and reports."""
+        row = self.cursor.execute(
+            """
+            SELECT COUNT(*) AS trades,
+                   COALESCE(SUM(pnl), 0) AS pnl,
+                   COALESCE(AVG(ai_score), 0) AS average_ai,
+                   COALESCE(SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END), 0) AS winning_trades
+            FROM trades
+            """
+        ).fetchone()
+        trades = int(row["trades"])
+        wins = int(row["winning_trades"])
+        return {
+            "trades": trades,
+            "pnl": round(float(row["pnl"]), 2),
+            "average_ai": round(float(row["average_ai"]), 1),
+            "winning_trades": wins,
+            "win_rate": round((wins / trades) * 100, 1) if trades else 0.0,
+        }
+
     def close(self) -> None:
         self.connection.close()

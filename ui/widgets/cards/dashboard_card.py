@@ -15,11 +15,14 @@ class DashboardCard(QFrame):
         titleLabel = QLabel(title)
         titleLabel.setObjectName("cardTitle")
 
-        valueLabel = QLabel(value)
-        valueLabel.setObjectName("cardValue")
+        self.value_label = QLabel(value)
+        self.value_label.setObjectName("cardValue")
 
-        valueLabel.setAlignment(Qt.AlignCenter)
+        self.value_label.setAlignment(Qt.AlignCenter)
 
         layout.addWidget(titleLabel)
         layout.addStretch()
-        layout.addWidget(valueLabel)
+        layout.addWidget(self.value_label)
+
+    def set_value(self, value):
+        self.value_label.setText(str(value))

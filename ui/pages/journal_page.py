@@ -1,9 +1,10 @@
 from datetime import datetime
 
 from PySide6.QtWidgets import (
-    QComboBox, QFormLayout, QLabel, QLineEdit, QMessageBox,
+    QCheckBox, QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
     QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
+from PySide6.QtCore import Signal
 
 from core.database_manager import Database
 from models.trade import Trade
@@ -11,6 +12,7 @@ from models.trade import Trade
 
 class JournalPage(QWidget):
     """A focused form for recording completed option trades."""
+    trade_saved = Signal()
 
     def __init__(self):
         super().__init__()
@@ -38,6 +40,18 @@ class JournalPage(QWidget):
             form.addRow(label, widget)
         layout.addLayout(form)
 
+        confirmations = QGroupBox("Technical confirmations")
+        confirmation_layout = QHBoxLayout(confirmations)
+        self.trend_check = QCheckBox("Trend")
+        self.vwap_check = QCheckBox("VWAP")
+        self.ema_check = QCheckBox("EMA")
+        self.volume_check = QCheckBox("Volume")
+        self.oi_check = QCheckBox("OI")
+        for checkbox in (self.trend_check, self.vwap_check, self.ema_check, self.volume_check, self.oi_check):
+            confirmation_layout.addWidget(checkbox)
+        confirmation_layout.addStretch()
+        layout.addWidget(confirmations)
+
         self.save_button = QPushButton("Save Trade")
         self.save_button.clicked.connect(self.save_trade)
         layout.addWidget(self.save_button)
@@ -53,6 +67,8 @@ class JournalPage(QWidget):
             entry=float(self.entry_input.text()), exit=float(self.exit_input.text()),
             stoploss=float(self.stoploss_input.text()), target=float(self.target_input.text()),
             quantity=int(self.quantity_input.text()), psychology_before=self.psychology_input.currentText(),
+            trend=self.trend_check.isChecked(), vwap=self.vwap_check.isChecked(),
+            ema=self.ema_check.isChecked(), volume=self.volume_check.isChecked(), oi=self.oi_check.isChecked(),
         )
 
     def save_trade(self) -> None:
@@ -69,7 +85,10 @@ class JournalPage(QWidget):
         for field in (self.symbol_input, self.strike_input, self.entry_input, self.exit_input,
                       self.stoploss_input, self.target_input, self.quantity_input):
             field.clear()
+        for checkbox in (self.trend_check, self.vwap_check, self.ema_check, self.volume_check, self.oi_check):
+            checkbox.setChecked(False)
         self.load_trades()
+        self.trade_saved.emit()
 
     def load_trades(self) -> None:
         headers = ["Date", "Time", "Symbol", "Option", "Entry", "Exit", "Qty", "P&L", "R:R", "Psychology", "AI", "Decision"]

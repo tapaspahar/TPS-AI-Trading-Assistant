@@ -55,12 +55,15 @@ class DashboardScreen(QWidget):
         self.stack.addWidget(self.reportsPage)
         self.stack.addWidget(self.settingsPage)
 
+        self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
+        self.journalPage.trade_saved.connect(self.reportsPage.refresh)
+
         bodyLayout.addWidget(self.stack)
 
         mainLayout.addLayout(bodyLayout)
 
         self.sidebar.dashboardButton.clicked.connect(
-            lambda: self.stack.setCurrentIndex(0)
+            lambda: (self.dashboardPage.refresh(), self.stack.setCurrentIndex(0))
         )
 
         self.sidebar.liveMarketButton.clicked.connect(
@@ -84,7 +87,7 @@ class DashboardScreen(QWidget):
         )
 
         self.sidebar.reportButton.clicked.connect(
-            lambda: self.stack.setCurrentIndex(6)
+            lambda: (self.reportsPage.refresh(), self.stack.setCurrentIndex(6))
         )
 
         self.sidebar.settingsButton.clicked.connect(

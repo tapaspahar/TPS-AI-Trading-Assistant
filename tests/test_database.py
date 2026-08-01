@@ -41,6 +41,16 @@ class DatabaseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Quantity"):
             self.db.save_trade(sample_trade(quantity=0))
 
+    def test_summary_aggregates_saved_trades(self):
+        self.db.save_trade(sample_trade())
+        self.db.save_trade(sample_trade(symbol="BANKNIFTY", entry=100, exit=90, stoploss=80, target=140, quantity=10))
+
+        summary = self.db.get_summary()
+        self.assertEqual(summary["trades"], 2)
+        self.assertEqual(summary["winning_trades"], 1)
+        self.assertEqual(summary["pnl"], 1775.0)
+        self.assertEqual(summary["win_rate"], 50.0)
+
 
 if __name__ == "__main__":
     unittest.main()
