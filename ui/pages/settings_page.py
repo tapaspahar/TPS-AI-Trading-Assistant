@@ -2,6 +2,7 @@ from PySide6.QtWidgets import QFormLayout, QGroupBox, QLabel, QLineEdit, QMessag
 
 from core.settings_store import SettingsStore
 from services.angel_one_client import AngelOneClient
+from services.live_session import LiveSession
 
 
 class SettingsPage(QWidget):
@@ -56,4 +57,5 @@ class SettingsPage(QWidget):
         except (ValueError, RuntimeError) as error:
             QMessageBox.warning(self, "Angel One connection", str(error))
             return
+        LiveSession.client = client
         QMessageBox.information(self, "Angel One", result["message"])
