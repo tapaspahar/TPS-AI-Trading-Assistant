@@ -28,4 +28,6 @@ class AngelOneClient:
         if not response.get("status"):
             raise RuntimeError(response.get("message", "Angel One login failed."))
         self.session = client
+        self.auth_token = response["data"]["jwtToken"]
+        self.feed_token = client.getfeedToken()
         return {"connected": True, "message": "Connected for read-only market data."}
