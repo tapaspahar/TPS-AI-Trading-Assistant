@@ -6,6 +6,7 @@ from services.chart_capture_service import ChartCaptureService, OCRUnavailableEr
 
 class ChartCapturePage(QWidget):
     symbol_ready = Signal(str)
+    analysis_ready = Signal(dict)
 
     def __init__(self):
         super().__init__()
@@ -44,6 +45,9 @@ class ChartCapturePage(QWidget):
         for key, field in self.fields.items():
             field.setText(capture[key])
         self.raw_text.setPlainText(capture["raw_text"])
+        # Send every extracted value to Decision Engine V1 immediately. Fields
+        # remain editable there because OCR can be uncertain.
+        self.analysis_ready.emit(capture)
 
     def send_symbol(self):
         symbol = self.fields["symbol"].text().strip().upper()

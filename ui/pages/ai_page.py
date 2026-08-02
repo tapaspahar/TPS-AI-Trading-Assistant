@@ -42,3 +42,23 @@ class AIPage(QWidget):
         reason_text = "\n".join(f"✓ {item}" for item in result["reasons"])
         warning_text = "\n".join(f"⚠ {item}" for item in result["warnings"])
         self.result.setText(f"Score: {result['score']}/100\nDirection: {result['direction']}\nDecision: {result['decision']}\n\n{reason_text}\n{warning_text}".strip())
+
+    def load_chart_capture(self, capture: dict):
+        """Pre-fill Decision Engine fields from local Chart Capture OCR."""
+        field_mapping = {
+            "close": "price", "ema_5": "ema_5", "ema_20": "ema_20",
+            "ema_50": "ema_50", "vwap": "vwap", "supertrend": "supertrend",
+            "volume": "volume", "volume_ema_period": "volume_ema",
+        }
+        missing = []
+        for source_key, target_key in field_mapping.items():
+            value = str(capture.get(source_key, "")).strip()
+            if value:
+                self.fields[target_key].setText(value)
+            else:
+                missing.append(target_key.replace("_", " "))
+        symbol = capture.get("symbol", "Unknown symbol")
+        if missing:
+            self.result.setText(f"Chart Capture loaded for {symbol}. Verify or enter: {', '.join(missing)}.")
+        else:
+            self.result.setText(f"Chart Capture loaded for {symbol}. Review values, choose CE/PE, then Evaluate Setup.")

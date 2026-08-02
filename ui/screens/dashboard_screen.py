@@ -37,6 +37,8 @@ class DashboardScreen(QWidget):
         self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
         self.journalPage.trade_saved.connect(self.reportsPage.refresh)
         self.chartCapturePage.symbol_ready.connect(self.journalPage.set_symbol_from_capture)
+        self.chartCapturePage.analysis_ready.connect(self.aiPage.load_chart_capture)
+        self.chartCapturePage.analysis_ready.connect(lambda _capture: self.show_page(5))
         for button, index in ((self.sidebar.dashboardButton, 0), (self.sidebar.liveMarketButton, 1),
                               (self.sidebar.chartCaptureButton, 2), (self.sidebar.journalButton, 3),
                               (self.sidebar.checklistButton, 4), (self.sidebar.aiButton, 5),
