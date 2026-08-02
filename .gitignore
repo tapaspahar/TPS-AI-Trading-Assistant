@@ -11,3 +11,6 @@ venv/
 
 # Logs
 *.log
+
+# Never commit broker credentials
+.env

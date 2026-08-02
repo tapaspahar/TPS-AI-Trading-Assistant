@@ -1,6 +1,7 @@
-from PySide6.QtWidgets import QFormLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFormLayout, QGroupBox, QLabel, QLineEdit, QMessageBox, QPushButton, QVBoxLayout, QWidget
 
 from core.settings_store import SettingsStore
+from services.angel_one_client import AngelOneClient
 
 
 class SettingsPage(QWidget):
@@ -23,6 +24,18 @@ class SettingsPage(QWidget):
         save.clicked.connect(self.save)
         layout.addWidget(save)
         layout.addWidget(QLabel("Settings are stored only on this computer. They do not connect to a broker or place trades."))
+        broker_box = QGroupBox("Angel One live data (session-only)")
+        broker_form = QFormLayout(broker_box)
+        self.api_key = QLineEdit()
+        self.client_code = QLineEdit()
+        self.mpin = QLineEdit(); self.mpin.setEchoMode(QLineEdit.Password)
+        self.totp_secret = QLineEdit(); self.totp_secret.setEchoMode(QLineEdit.Password)
+        for label, field in (("API Key", self.api_key), ("Client Code", self.client_code), ("MPIN", self.mpin), ("TOTP secret", self.totp_secret)):
+            broker_form.addRow(label, field)
+        connect = QPushButton("Connect Live Data")
+        connect.clicked.connect(self.connect_angel_one)
+        broker_form.addRow(connect)
+        layout.addWidget(broker_box)
         layout.addStretch()
 
     def save(self):
@@ -35,3 +48,12 @@ class SettingsPage(QWidget):
             QMessageBox.warning(self, "Invalid settings", str(error))
             return
         QMessageBox.information(self, "Settings saved", "Risk settings have been saved locally.")
+
+    def connect_angel_one(self):
+        try:
+            client = AngelOneClient(self.api_key.text(), self.client_code.text(), self.mpin.text(), self.totp_secret.text())
+            result = client.connect()
+        except (ValueError, RuntimeError) as error:
+            QMessageBox.warning(self, "Angel One connection", str(error))
+            return
+        QMessageBox.information(self, "Angel One", result["message"])
