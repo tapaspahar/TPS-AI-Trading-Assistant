@@ -16,6 +16,10 @@ class MarketSnapshotRecorder:
         self.client = client
 
     def capture(self, symbol: str, timeframes=("5m", "15m")) -> int:
+        if isinstance(timeframes, bool) or timeframes is None:
+            timeframes = ("5m", "15m")
+        elif isinstance(timeframes, str):
+            timeframes = (timeframes,)
         symbol = symbol.upper()
         if symbol not in INSTRUMENTS:
             raise ValueError("Snapshots currently support NIFTY, BANKNIFTY, and SENSEX.")

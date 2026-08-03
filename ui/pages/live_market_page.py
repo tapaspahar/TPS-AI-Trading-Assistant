@@ -68,7 +68,7 @@ class LiveMarketPage(QWidget):
         self.snapshot_status = QLabel("Snapshot recorder: waiting for a live symbol.")
         layout.addWidget(self.snapshot_status)
         self.capture_snapshot_button = QPushButton("Save Market Snapshot Now (5m + 15m)")
-        self.capture_snapshot_button.clicked.connect(self.capture_market_snapshot)
+        self.capture_snapshot_button.clicked.connect(lambda _checked=False: self.capture_market_snapshot())
         layout.addWidget(self.capture_snapshot_button)
         overview_box = QGroupBox("Live Index & Current-Month Futures (updates every 30 seconds)")
         overview_grid = QGridLayout(overview_box)
@@ -159,6 +159,11 @@ class LiveMarketPage(QWidget):
         self.capture_market_snapshot(timeframes)
 
     def capture_market_snapshot(self, timeframes=("5m", "15m")):
+        # QPushButton.clicked emits a bool.  Keep this callable safe if it is
+        # ever connected directly again, rather than iterating over True/False
+        # inside the recorder thread.
+        if isinstance(timeframes, bool):
+            timeframes = ("5m", "15m")
         if not LiveSession.connected() or not self.selected_symbol:
             self.snapshot_status.setText("Snapshot recorder: select a live symbol after Angel One connects.")
             return
@@ -177,7 +182,7 @@ class LiveMarketPage(QWidget):
             for alert in alerts:
                 self.guard_alert.emit(alert)
             self.snapshot_saved.emit(f"Snapshot recorder: saved {count} new {symbol} record(s).")
-        except (RuntimeError, ValueError) as error:
+        except (RuntimeError, ValueError, TypeError) as error:
             self.snapshot_error.emit(f"Snapshot recorder: {error}")
 
     def show_snapshot_saved(self, message):
