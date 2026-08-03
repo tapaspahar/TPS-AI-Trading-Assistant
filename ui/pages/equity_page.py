@@ -1,9 +1,10 @@
 from threading import Thread
 
-from PySide6.QtCore import Signal
-from PySide6.QtWidgets import (QComboBox, QFormLayout, QGridLayout, QLabel, QMessageBox,
-                               QProgressBar, QPushButton, QScrollArea, QVBoxLayout, QWidget)
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import (QComboBox, QFormLayout, QGridLayout, QHBoxLayout, QLabel, QListWidget,
+                               QMessageBox, QProgressBar, QPushButton, QScrollArea, QVBoxLayout, QWidget)
 
+from core.equity_watchlist_store import EquityWatchlistStore
 from engine.equity_analysis import analyze_equity
 from engine.live_setup_capture import TIMEFRAMES
 from services.equity_service import EquityInstrumentService
@@ -45,6 +46,16 @@ class EquityPage(QWidget):
         self.analyze_button = QPushButton("Analyze Selected Share"); self.analyze_button.clicked.connect(self.analyze_selected); layout.addWidget(self.analyze_button)
         self.company_detail = QLabel("Company details will appear here after selecting a share."); self.company_detail.setWordWrap(True); layout.addWidget(self.company_detail)
 
+        layout.addWidget(QLabel("My Equity Watchlist"))
+        watchlist_actions = QHBoxLayout()
+        self.add_watchlist_button = QPushButton("Add Selected Share")
+        self.remove_watchlist_button = QPushButton("Remove Watchlist Share")
+        watchlist_actions.addWidget(self.add_watchlist_button); watchlist_actions.addWidget(self.remove_watchlist_button)
+        layout.addLayout(watchlist_actions)
+        self.watchlist = QListWidget()
+        self.watchlist.setMinimumHeight(120)
+        layout.addWidget(self.watchlist)
+
         grid = QGridLayout()
         self.cards = {key: DashboardCard(title, "Waiting") for key, title in (("price", "Last Candle Close"), ("state", "Chart Structure"), ("score", "Research Score"), ("support", "Support"), ("resistance", "Resistance"), ("entry", "Long Entry Trigger"), ("stop", "Protective Stop"), ("target1", "Target 1"), ("target2", "Target 2"))}
         for index, card in enumerate(self.cards.values()):
@@ -53,9 +64,14 @@ class EquityPage(QWidget):
         self.summary = QLabel("Load a share list to begin equity research."); self.summary.setWordWrap(True); layout.addWidget(self.summary)
         layout.addStretch()
         self.equities = []
+        self.watchlist_store = EquityWatchlistStore()
         self.instruments_loaded.connect(self.show_instruments); self.analysis_ready.connect(self.show_analysis); self.load_error.connect(self.show_error)
         self.download_progress.connect(self.show_download_progress)
         self.share.currentIndexChanged.connect(self.show_selected_company)
+        self.add_watchlist_button.clicked.connect(self.add_selected_to_watchlist)
+        self.remove_watchlist_button.clicked.connect(self.remove_selected_from_watchlist)
+        self.watchlist.itemDoubleClicked.connect(self.select_watchlist_equity)
+        self.refresh_watchlist()
 
     def load_instruments(self):
         self.load_button.setEnabled(False); self.download_progress_bar.setRange(0, 100); self.download_progress_bar.setValue(0)
@@ -114,6 +130,43 @@ class EquityPage(QWidget):
         values = (("price", f"{result['price']:,.2f}"), ("state", result["state"]), ("score", f"{result['score']}/100"), ("support", f"{result['support']:,.2f}"), ("resistance", f"{result['resistance']:,.2f}"), ("entry", f"{result['entry']:,.2f}"), ("stop", f"{result['stop_loss']:,.2f}"), ("target1", f"{result['target_1']:,.2f}"), ("target2", f"{result['target_2']:,.2f}"))
         for key, value in values: self.cards[key].set_value(value)
         self.summary.setText(f"{result['company']} ({result['symbol']}) | {result['timeframe']} | {result['candle_count']} candles\nPlan: {result['plan_state']} | {result['plan_note']}\nRSI 14: {result['rsi_14']:.2f} | ATR 14: {result['atr_14']:.2f} | {result['volume_signal']}\nLevels are chart-based study levels, not a recommendation or guarantee.")
+        self.watchlist_store.update_analysis(result["symbol"], result)
+        self.refresh_watchlist()
+
+    def add_selected_to_watchlist(self):
+        item = self.share.currentData()
+        if not item:
+            QMessageBox.information(self, "Equity watchlist", "Load and select an NSE share first.")
+            return
+        self.watchlist_store.save_equity(item)
+        self.refresh_watchlist()
+
+    def remove_selected_from_watchlist(self):
+        selected = self.watchlist.currentItem()
+        if not selected:
+            QMessageBox.information(self, "Equity watchlist", "Select a watchlist share to remove.")
+            return
+        self.watchlist_store.remove(selected.data(Qt.UserRole)["symbol"])
+        self.refresh_watchlist()
+
+    def refresh_watchlist(self):
+        self.watchlist.clear()
+        for equity in self.watchlist_store.load():
+            detail = "Not analysed"
+            if equity.get("last_price") is not None:
+                detail = f"Last {float(equity['last_price']):,.2f} | Score {int(equity.get('score', 0))}/100 | {equity.get('plan_state', '')}"
+            self.watchlist.addItem(f"{equity['symbol']} - {equity.get('company', '')} | {detail}")
+            self.watchlist.item(self.watchlist.count() - 1).setData(Qt.UserRole, equity)
+
+    def select_watchlist_equity(self, selected):
+        equity = selected.data(Qt.UserRole)
+        index = self.share.findData(equity)
+        if index < 0:
+            index = next((i for i in range(self.share.count()) if (self.share.itemData(i) or {}).get("symbol") == equity["symbol"]), -1)
+        if index >= 0:
+            self.share.setCurrentIndex(index)
+        else:
+            QMessageBox.information(self, "Equity watchlist", "Load today's NSE share list before opening this watchlist item.")
 
     def show_error(self, message):
         self.load_button.setEnabled(True); self.analyze_button.setEnabled(True); self.download_progress_bar.setRange(0, 100)
