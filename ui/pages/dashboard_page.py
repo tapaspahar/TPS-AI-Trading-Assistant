@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import QGridLayout, QPushButton, QVBoxLayout, QWidget
 
 from core.database_manager import Database
+from services.live_session import LiveSession
 from ui.widgets.cards.dashboard_card import DashboardCard
 
 
@@ -15,7 +16,7 @@ class DashboardPage(QWidget):
         grid.setHorizontalSpacing(20)
         grid.setVerticalSpacing(20)
         self.cards = {
-            "market": DashboardCard("Market Trend", "Offline"),
+            "market": DashboardCard("Live Data Status", "Not connected"),
             "pnl": DashboardCard("Journal P&L", "₹0.00"),
             "ai": DashboardCard("Average AI Confidence", "0%"),
             "win_rate": DashboardCard("Win Rate", "0%"),
@@ -33,6 +34,9 @@ class DashboardPage(QWidget):
 
     def refresh(self):
         summary = self.db.get_summary()
+        self.cards["market"].set_value(
+            "Connected (read-only)\nOpen Market Snapshot" if LiveSession.connected() else "Not connected\nOpen Settings"
+        )
         self.cards["pnl"].set_value(f"₹{summary['pnl']:,.2f}")
         self.cards["ai"].set_value(f"{summary['average_ai']:.0f}%")
         self.cards["win_rate"].set_value(f"{summary['win_rate']:.1f}%")
