@@ -1,12 +1,18 @@
+from threading import Thread
+
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QFileDialog, QFormLayout, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget
 
 from services.chart_capture_service import ChartCaptureService, OCRUnavailableError
+from services.live_session import LiveSession
+from engine.live_setup_capture import INSTRUMENTS, TIMEFRAMES, build_live_capture
 
 
 class ChartCapturePage(QWidget):
     symbol_ready = Signal(str)
     analysis_ready = Signal(dict)
+    live_capture_received = Signal(dict)
+    live_capture_error = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -18,6 +24,9 @@ class ChartCapturePage(QWidget):
         choose = QPushButton("Choose Chart Screenshot")
         choose.clicked.connect(self.choose_screenshot)
         layout.addWidget(choose)
+        self.live_capture_button = QPushButton("Capture Live Setup from Angel One")
+        self.live_capture_button.clicked.connect(self.capture_live_setup)
+        layout.addWidget(self.live_capture_button)
         form = QFormLayout()
         self.fields = {}
         for key, label in (("symbol", "Symbol"), ("timeframe", "Timeframe"), ("open", "Open"), ("high", "High"), ("low", "Low"), ("close", "Close"), ("ema_5", "EMA 5 (Pink)"), ("ema_20", "EMA 20 (Violet)"), ("ema_50", "EMA 50 (White)"), ("vwap", "VWAP (Yellow)"), ("supertrend", "SuperTrend"), ("supertrend_state", "SuperTrend State"), ("volume", "Volume"), ("volume_ema_period", "Volume EMA")):
@@ -32,6 +41,8 @@ class ChartCapturePage(QWidget):
         self.raw_text.setReadOnly(True)
         self.raw_text.setPlaceholderText("OCR text will appear here for review.")
         layout.addWidget(self.raw_text)
+        self.live_capture_received.connect(self.apply_capture)
+        self.live_capture_error.connect(self.show_live_capture_error)
 
     def choose_screenshot(self):
         path, _ = QFileDialog.getOpenFileName(self, "Select chart screenshot", "", "Images (*.png *.jpg *.jpeg *.bmp)")
@@ -42,12 +53,47 @@ class ChartCapturePage(QWidget):
         except (OCRUnavailableError, OSError) as error:
             QMessageBox.warning(self, "Chart capture unavailable", str(error))
             return
-        for key, field in self.fields.items():
-            field.setText(capture[key])
-        self.raw_text.setPlainText(capture["raw_text"])
+        self.apply_capture(capture)
         # Send every extracted value to Decision Engine V1 immediately. Fields
         # remain editable there because OCR can be uncertain.
+
+    def capture_live_setup(self):
+        if not LiveSession.connected():
+            QMessageBox.warning(self, "Angel One", "Connect live data from Settings first.")
+            return
+        symbol = self.fields["symbol"].text().strip().upper() or "NIFTY"
+        timeframe = self.fields["timeframe"].text().strip() or "5m"
+        if symbol not in INSTRUMENTS:
+            QMessageBox.warning(self, "Live capture", "Live capture currently supports NIFTY, BANKNIFTY, and SENSEX.")
+            return
+        if timeframe not in TIMEFRAMES:
+            QMessageBox.warning(self, "Live capture", "Use one of: 5m, 15m, 1h, 1D.")
+            return
+        self.live_capture_button.setEnabled(False)
+        self.live_capture_button.setText("Capturing Angel One setup…")
+        Thread(target=self._capture_live_setup, args=(symbol, timeframe), daemon=True).start()
+
+    def _capture_live_setup(self, symbol, timeframe):
+        exchange, token = INSTRUMENTS[symbol]
+        interval, days = TIMEFRAMES[timeframe]
+        try:
+            candles = LiveSession.client.get_recent_candles(exchange, token, interval, days)
+            self.live_capture_received.emit(build_live_capture(symbol, timeframe, candles))
+        except (RuntimeError, ValueError) as error:
+            self.live_capture_error.emit(str(error))
+
+    def apply_capture(self, capture):
+        for key, field in self.fields.items():
+            field.setText(str(capture.get(key, "")))
+        self.raw_text.setPlainText(capture.get("raw_text", ""))
+        self.live_capture_button.setEnabled(True)
+        self.live_capture_button.setText("Capture Live Setup from Angel One")
         self.analysis_ready.emit(capture)
+
+    def show_live_capture_error(self, message):
+        self.live_capture_button.setEnabled(True)
+        self.live_capture_button.setText("Capture Live Setup from Angel One")
+        QMessageBox.warning(self, "Live capture", message)
 
     def send_symbol(self):
         symbol = self.fields["symbol"].text().strip().upper()
