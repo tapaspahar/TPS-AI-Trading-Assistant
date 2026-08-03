@@ -53,6 +53,7 @@ class DashboardScreen(QWidget):
         QTimer.singleShot(0, self.settingsPage.auto_connect_saved_credentials)
 
     def show_page(self, index: int):
+        self.sidebar.set_active(index)
         if index == 0:
             self.dashboardPage.refresh()
         elif index == 8:
