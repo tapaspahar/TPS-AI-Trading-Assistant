@@ -23,6 +23,7 @@ QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QPlainTextEdit:focus, QTextEdi
 QComboBox::drop-down { border: none; width: 26px; }
 QSpinBox::up-button, QSpinBox::down-button { width: 20px; }
 QComboBox QAbstractItemView { background: white; color: #13233a; border: 1px solid #c9d8eb; selection-background-color: #dbeafe; }
+QTableWidget::item:selected { background: #2563eb; color: white; }
 QGroupBox { border: 1px solid #d1ddeb; border-radius: 10px; margin-top: 12px; padding: 15px 11px 10px 11px; color: #294b70; font-weight: 700; }
 QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 5px; }
 QHeaderView::section { background: #eaf1fa; color: #33516f; border: none; border-bottom: 1px solid #cedbea; padding: 8px; font-weight: 700; }

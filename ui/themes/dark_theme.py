@@ -79,6 +79,7 @@ QGroupBox {
 QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 5px; }
 QHeaderView::section { background: #17243b; color: #bcd1ed; border: none; border-bottom: 1px solid #344b6d; padding: 8px; font-weight: 700; }
 QTableWidget { gridline-color: #263a57; alternate-background-color: #0e192b; }
+QTableWidget::item:selected { background: #2563eb; color: white; }
 QScrollBar:vertical { background: #0e192b; width: 10px; margin: 2px; }
 QScrollBar::handle:vertical { background: #3a5276; min-height: 25px; border-radius: 5px; }
 QScrollBar::handle:vertical:hover { background: #5685c5; }

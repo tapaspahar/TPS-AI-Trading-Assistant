@@ -114,7 +114,9 @@ class JournalPage(QWidget):
         layout.addWidget(self.delete_button)
         self.table = QTableWidget()
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.setSelectionMode(QTableWidget.SingleSelection)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.verticalHeader().setVisible(False)
         self.table.itemSelectionChanged.connect(self.load_selected_trade)
         self.table.setMinimumHeight(230)
         layout.addWidget(self.table)
@@ -161,7 +163,7 @@ class JournalPage(QWidget):
             QMessageBox.information(self, "Select an open trade", "Select the open trade row, enter its actual exit price, then close it.")
             return
         try:
-            trade_id = int(self.table.item(row, 0).text())
+            trade_id = int(self.table.item(row, 1).text())
             trade = self.db.get_trade(trade_id)
             if not trade or trade["status"] != "OPEN":
                 raise ValueError("Select an OPEN trade to save its exit outcome.")
@@ -213,7 +215,7 @@ class JournalPage(QWidget):
         if row < 0:
             QMessageBox.information(self, "Select a stop-loss trade", "Select a closed Stop Loss Hit row first.")
             return
-        trade = self.db.get_trade(int(self.table.item(row, 0).text()))
+        trade = self.db.get_trade(int(self.table.item(row, 1).text()))
         if not trade or trade["outcome"] != "STOP LOSS HIT":
             QMessageBox.information(self, "Stop-loss review", "Select a trade whose recorded outcome is Stop Loss Hit.")
             return
@@ -257,21 +259,31 @@ class JournalPage(QWidget):
         )
 
     def load_trades(self) -> None:
-        headers = ["ID", "Date", "Time", "Symbol", "Strike", "Option", "Entry", "Stop Loss", "Target", "Exit", "Status", "Outcome", "Qty", "P&L", "R:R", "Psychology", "AI", "Decision"]
+        headers = ["Trade", "ID", "Date", "Time", "Symbol", "Strike", "Option", "Entry", "Stop Loss", "Target", "Exit", "Status", "Outcome", "Qty", "P&L", "R:R", "Psychology", "AI", "Decision"]
         data = self.db.get_journal_rows()
+        self.table.blockSignals(True)
         self.table.setColumnCount(len(headers))
         self.table.setHorizontalHeaderLabels(headers)
         self.table.setRowCount(len(data))
         for row, trade in enumerate(data):
-            for column, value in enumerate(trade):
+            marker = QTableWidgetItem("Select")
+            marker.setTextAlignment(0x0084)  # Qt.AlignHCenter | Qt.AlignVCenter
+            self.table.setItem(row, 0, marker)
+            for column, value in enumerate(trade, start=1):
                 self.table.setItem(row, column, QTableWidgetItem(str(value)))
         self.table.resizeColumnsToContents()
+        self.table.setColumnWidth(0, 92)
+        self.table.blockSignals(False)
 
     def load_selected_trade(self) -> None:
         row = self.table.currentRow()
+        for index in range(self.table.rowCount()):
+            marker = self.table.item(index, 0)
+            if marker:
+                marker.setText("✓ Selected" if index == row else "Select")
         if row < 0:
             return
-        item = self.table.item(row, 0)
+        item = self.table.item(row, 1)
         if not item:
             return
         trade = self.db.get_trade(int(item.text()))
@@ -307,7 +319,7 @@ class JournalPage(QWidget):
         if row < 0:
             QMessageBox.information(self, "Select a trade", "Select one table row before deleting it.")
             return
-        trade_id = int(self.table.item(row, 0).text())
+        trade_id = int(self.table.item(row, 1).text())
         answer = QMessageBox.question(self, "Delete trade", "Delete the selected trade permanently?")
         if answer != QMessageBox.Yes:
             return
