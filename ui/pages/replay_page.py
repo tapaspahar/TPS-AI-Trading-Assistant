@@ -18,9 +18,11 @@ class ReplayPage(QWidget):
         super().__init__()
         self.candles = []
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Candle Replay â€” review past market behaviour without placing an order"))
+        layout.addWidget(QLabel("Candle Replay - review past market behaviour without placing an order"))
         note = QLabel("Load historical future candles once, then move candle by candle. Values shown are calculated only from candles available up to that moment (no future-candle look-ahead).")
         note.setWordWrap(True); layout.addWidget(note)
+        self.contract_source = QLabel("Data source: current-month index future will be shown here after loading.")
+        self.contract_source.setWordWrap(True); layout.addWidget(self.contract_source)
         form = QFormLayout()
         self.symbol = QComboBox(); self.symbol.addItems(("NIFTY", "BANKNIFTY", "SENSEX"))
         self.timeframe = QComboBox(); self.timeframe.addItems(("5m", "15m", "1h", "1D"))
@@ -45,13 +47,18 @@ class ReplayPage(QWidget):
             future = OptionContractService().get_front_month_future(symbol)
             candles = LiveSession.client.get_recent_candles(future["exchange"], future["token"], TIMEFRAMES[timeframe][0], days)
             if len(candles) < 55: raise ValueError("Not enough candles returned for a reliable replay.")
-            self.loaded.emit({"symbol": symbol, "timeframe": timeframe, "future": future["symbol"], "candles": candles})
+            self.loaded.emit({"symbol": symbol, "timeframe": timeframe, "future": future["symbol"], "expiry": future.get("expiry"), "candles": candles})
         except (RuntimeError, ValueError) as error:
             self.load_error.emit(str(error))
 
     def show_loaded(self, result):
         self.load_button.setEnabled(True); self.candles = result["candles"]
         self.replay_symbol, self.replay_timeframe, self.future = result["symbol"], result["timeframe"], result["future"]
+        expiry = result.get("expiry")
+        expiry_text = expiry.strftime("%d %b %Y") if hasattr(expiry, "strftime") else str(expiry or "expiry unavailable")
+        self.contract_source.setText(
+            f"Data source: {self.replay_symbol} current-month future - {self.future} | Expiry: {expiry_text} | Angel One historical candles"
+        )
         self.slider.blockSignals(True); self.slider.setRange(50, len(self.candles) - 1); self.slider.setValue(50); self.slider.blockSignals(False)
         self.slider.setEnabled(True); self.show_candle(50)
 
@@ -63,7 +70,7 @@ class ReplayPage(QWidget):
             structure = analyze_candles(history[-40:])
             candle = history[-1]
             self.summary.setText(
-                f"Candle {index - 49}/{len(self.candles) - 50} | {candle.get('time')} | O/H/L/C: {capture['open']} / {capture['high']} / {capture['low']} / {capture['close']}\n"
+                f"{self.future} | Candle {index - 49}/{len(self.candles) - 50} | {candle.get('time')} | O/H/L/C: {capture['open']} / {capture['high']} / {capture['low']} / {capture['close']}\n"
                 f"Structure: {structure['state']} | Support {structure['support']:.2f} | Resistance {structure['resistance']:.2f}\n"
                 f"RSI 14: {capture['rsi_14']} | ATR 14: {capture['atr_14']} | {capture['volume_signal']}. This is a study tool, not a trade instruction."
             )
