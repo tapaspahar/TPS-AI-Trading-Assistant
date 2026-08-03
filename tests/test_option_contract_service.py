@@ -1,7 +1,7 @@
 import unittest
 from datetime import date, timedelta
 
-from services.option_contract_service import buying_risk, parse_option_contracts
+from services.option_contract_service import buying_risk, contracts_near_spot, parse_option_contracts
 
 
 class OptionContractServiceTests(unittest.TestCase):
@@ -22,3 +22,12 @@ class OptionContractServiceTests(unittest.TestCase):
         self.assertEqual(result["risk_cap"], 1000)
         self.assertEqual(result["per_lot_risk"], 7500)
         self.assertEqual(result["lots"], 0)
+
+    def test_limits_contracts_to_atm_and_requested_wings(self):
+        contracts = [
+            {"strike": strike, "option_type": option_type}
+            for strike in range(24000, 25051, 50) for option_type in ("CE", "PE")
+        ]
+        focused = contracts_near_spot(contracts, spot_price=24510, wings=2)
+        self.assertEqual({contract["strike"] for contract in focused}, {24400, 24450, 24500, 24550, 24600})
+        self.assertEqual(len(focused), 10)

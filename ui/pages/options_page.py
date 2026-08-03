@@ -5,7 +5,7 @@ from PySide6.QtWidgets import QComboBox, QFormLayout, QGroupBox, QLabel, QMessag
 
 from core.settings_store import SettingsStore
 from services.live_session import LiveSession
-from services.option_contract_service import OptionContractService, buying_risk
+from services.option_contract_service import UNDERLYING_QUOTES, OptionContractService, buying_risk, contracts_near_spot
 
 
 class OptionsPage(QWidget):
@@ -52,24 +52,37 @@ class OptionsPage(QWidget):
         self.quote_error.connect(self.show_error)
 
     def load_contracts(self):
+        if not LiveSession.connected():
+            QMessageBox.warning(self, "Angel One", "Connect live data from Settings first so TPS can use the current spot price.")
+            return
         self.details.setText("Downloading today's instrument master…")
         Thread(target=self._load_contracts, args=(self.underlying.currentText(),), daemon=True).start()
 
     def _load_contracts(self, underlying):
         try:
-            self.contracts_loaded.emit(self.service.get_contracts(underlying))
+            contracts = self.service.get_contracts(underlying)
+            quote_config = UNDERLYING_QUOTES[underlying]
+            quote = LiveSession.client.get_option_quote(quote_config["exchange"], quote_config["token"])
+            spot_price = float(quote.get("ltp", 0) or 0)
+            if spot_price <= 0:
+                raise RuntimeError("Angel One did not return a usable spot price.")
+            focused = contracts_near_spot(contracts, spot_price, wings=20)
+            self.contracts_loaded.emit({"contracts": focused, "spot_price": spot_price})
         except (RuntimeError, ValueError) as error:
             self.load_error.emit(str(error))
 
-    def show_contracts(self, contracts):
-        self.contracts = contracts
+    def show_contracts(self, result):
+        self.contracts = result["contracts"]
         self.expiry.blockSignals(True)
         self.expiry.clear()
-        for expiry in sorted({contract["expiry"] for contract in contracts}):
+        for expiry in sorted({contract["expiry"] for contract in self.contracts}):
             self.expiry.addItem(expiry.strftime("%d %b %Y"), expiry)
         self.expiry.blockSignals(False)
         self.populate_strikes()
-        self.details.setText(f"{len(contracts)} current contracts loaded. Select expiry, CE/PE and strike.")
+        self.details.setText(
+            f"Live spot: {result['spot_price']:,.2f}. {len(self.contracts)} focused contracts loaded: "
+            "ATM plus 20 strikes on each side. Select expiry, CE/PE and strike."
+        )
 
     def populate_strikes(self):
         if not self.contracts or self.expiry.currentIndex() < 0:

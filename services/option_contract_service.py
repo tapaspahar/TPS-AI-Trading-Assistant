@@ -15,6 +15,11 @@ UNDERLYINGS = {
     "BANKNIFTY": "NFO",
     "SENSEX": "BFO",
 }
+UNDERLYING_QUOTES = {
+    "NIFTY": {"exchange": "NSE", "token": "99926000"},
+    "BANKNIFTY": {"exchange": "NSE", "token": "99926009"},
+    "SENSEX": {"exchange": "BSE", "token": "99919000"},
+}
 
 
 def _expiry_date(value):
@@ -59,6 +64,16 @@ def buying_risk(premium, lot_size, capital, risk_percent):
     risk_cap = float(capital) * float(risk_percent) / 100
     lots = int(risk_cap // per_lot_risk) if per_lot_risk > 0 else 0
     return {"risk_cap": risk_cap, "per_lot_risk": per_lot_risk, "lots": lots}
+
+
+def contracts_near_spot(contracts, spot_price, wings=20):
+    """Return ATM plus a fixed number of available strikes on either side of spot."""
+    if not contracts:
+        return []
+    strikes = sorted({contract["strike"] for contract in contracts})
+    atm_index = min(range(len(strikes)), key=lambda index: abs(strikes[index] - float(spot_price)))
+    selected_strikes = set(strikes[max(0, atm_index - wings): atm_index + wings + 1])
+    return [contract for contract in contracts if contract["strike"] in selected_strikes]
 
 
 class OptionContractService:
