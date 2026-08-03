@@ -54,6 +54,19 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual((closed_trade["exit"], closed_trade["pnl"], closed_trade["rr_ratio"]), (145.0, 1875.0, 3.0))
         self.assertEqual(closed_trade["outcome"], "TARGET HIT")
 
+    def test_market_snapshots_are_saved_once_per_timeframe_bucket(self):
+        snapshot = {
+            "captured_at": "2026-08-03T10:15", "trade_date": "03-08-2026", "symbol": "NIFTY", "timeframe": "5m",
+            "open": 24500, "high": 24520, "low": 24490, "close": 24510,
+            "volume": 1000, "volume_ema": 900, "ema_5": 24505, "ema_20": 24495, "ema_50": 24480,
+            "vwap": 24500, "supertrend": 24470, "rsi_14": 60, "atr_14": 20,
+            "oi_pcr": 1.1, "volume_pcr": 0.9, "put_support": 24500, "call_resistance": 24600, "option_contracts": 22,
+        }
+        self.assertTrue(self.db.save_market_snapshot(snapshot))
+        self.assertFalse(self.db.save_market_snapshot(snapshot))
+        saved = self.db.get_market_snapshots("03-08-2026")
+        self.assertEqual((len(saved), saved[0]["symbol"], saved[0]["oi_pcr"]), (1, "NIFTY", 1.1))
+
     def test_summary_aggregates_saved_trades(self):
         self.db.save_trade(sample_trade())
         self.db.save_trade(sample_trade(symbol="BANKNIFTY", entry=100, exit=90, stoploss=80, target=140, quantity=10))

@@ -75,6 +75,36 @@ class Database:
             self.cursor.execute("ALTER TABLE trades ADD COLUMN outcome TEXT NOT NULL DEFAULT 'MANUAL EXIT'")
         if "closed_at" not in columns:
             self.cursor.execute("ALTER TABLE trades ADD COLUMN closed_at TEXT")
+        self.cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS market_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                captured_at TEXT NOT NULL,
+                trade_date TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                timeframe TEXT NOT NULL,
+                open REAL NOT NULL,
+                high REAL NOT NULL,
+                low REAL NOT NULL,
+                close REAL NOT NULL,
+                volume REAL,
+                volume_ema REAL,
+                ema_5 REAL,
+                ema_20 REAL,
+                ema_50 REAL,
+                vwap REAL,
+                supertrend REAL,
+                rsi_14 REAL,
+                atr_14 REAL,
+                oi_pcr REAL,
+                volume_pcr REAL,
+                put_support REAL,
+                call_resistance REAL,
+                option_contracts INTEGER,
+                UNIQUE(captured_at, symbol, timeframe)
+            )
+            """
+        )
         self.connection.commit()
 
     @staticmethod
@@ -272,6 +302,29 @@ class Database:
             "manual_exits": int(row["manual_exits"] or 0),
             "target_vs_stop_accuracy": round((target_hits / decisive) * 100, 1) if decisive else 0.0,
         }
+
+    def save_market_snapshot(self, snapshot: dict) -> bool:
+        """Persist a timed, read-only market/option-chain observation."""
+        columns = (
+            "captured_at", "trade_date", "symbol", "timeframe", "open", "high", "low", "close",
+            "volume", "volume_ema", "ema_5", "ema_20", "ema_50", "vwap", "supertrend",
+            "rsi_14", "atr_14", "oi_pcr", "volume_pcr", "put_support", "call_resistance", "option_contracts",
+        )
+        values = tuple(snapshot.get(column) for column in columns)
+        result = self.cursor.execute(
+            f"INSERT OR IGNORE INTO market_snapshots ({', '.join(columns)}) VALUES ({', '.join('?' for _ in columns)})",
+            values,
+        )
+        self.connection.commit()
+        return result.rowcount == 1
+
+    def get_market_snapshots(self, trade_date: str | None = None) -> list[sqlite3.Row]:
+        if trade_date:
+            return self.cursor.execute(
+                "SELECT * FROM market_snapshots WHERE trade_date = ? ORDER BY captured_at ASC, timeframe ASC",
+                (trade_date,),
+            ).fetchall()
+        return self.cursor.execute("SELECT * FROM market_snapshots ORDER BY captured_at DESC, timeframe ASC").fetchall()
 
     def get_day_summary(self, trade_date: str) -> dict[str, float | int]:
         """Return the recorded-trade metrics for the supplied journal date."""

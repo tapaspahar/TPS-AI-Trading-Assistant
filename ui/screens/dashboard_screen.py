@@ -13,6 +13,7 @@ from ui.pages.ai_page import AIPage
 from ui.pages.risk_page import RiskPage
 from ui.pages.reports_page import ReportsPage
 from ui.pages.backtest_page import BacktestPage
+from ui.pages.post_market_page import PostMarketPage
 from ui.pages.settings_page import SettingsPage
 
 
@@ -35,9 +36,10 @@ class DashboardScreen(QWidget):
         self.riskPage = RiskPage()
         self.reportsPage = ReportsPage()
         self.backtestPage = BacktestPage()
+        self.postMarketPage = PostMarketPage()
         self.settingsPage = SettingsPage()
         for page in (self.dashboardPage, self.liveMarketPage, self.optionsPage, self.chartCapturePage, self.journalPage,
-                     self.checklistPage, self.aiPage, self.riskPage, self.reportsPage, self.settingsPage, self.backtestPage):
+                     self.checklistPage, self.aiPage, self.riskPage, self.reportsPage, self.settingsPage, self.backtestPage, self.postMarketPage):
             self.stack.addWidget(page)
         self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
         self.journalPage.trade_saved.connect(self.reportsPage.refresh)
@@ -53,7 +55,7 @@ class DashboardScreen(QWidget):
                               (self.sidebar.journalButton, 4), (self.sidebar.checklistButton, 5),
                               (self.sidebar.aiButton, 6), (self.sidebar.riskButton, 7),
                               (self.sidebar.reportButton, 8), (self.sidebar.settingsButton, 9),
-                              (self.sidebar.backtestButton, 10)):
+                              (self.sidebar.backtestButton, 10), (self.sidebar.postMarketButton, 11)):
             button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
         body_layout.addWidget(self.stack)
         main_layout.addLayout(body_layout)
@@ -70,6 +72,8 @@ class DashboardScreen(QWidget):
             self.liveMarketPage.start_market_overview()
         elif index == 2:
             self.optionsPage.prepare_live_workspace()
+        elif index == 11:
+            self.postMarketPage.refresh()
         self.stack.setCurrentIndex(index)
 
     def handle_ai_decision(self, context):

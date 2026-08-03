@@ -1,3 +1,4 @@
+from datetime import datetime
 from threading import Thread
 
 from PySide6.QtCore import QTimer, Signal
@@ -6,6 +7,7 @@ from PySide6.QtWidgets import QComboBox, QGridLayout, QGroupBox, QLabel, QPushBu
 from services.angel_one_stream import AngelOneStream
 from services.live_session import LiveSession
 from services.option_contract_service import OptionContractService
+from services.market_snapshot_recorder import MarketSnapshotRecorder
 from engine.market_structure import analyze_candles
 from engine.multi_timeframe_engine import analyze_multi_timeframe
 from ui.widgets.cards.dashboard_card import DashboardCard
@@ -21,6 +23,8 @@ class LiveMarketPage(QWidget):
     multi_timeframe_error = Signal(str)
     overview_received = Signal(dict)
     overview_error = Signal(str)
+    snapshot_saved = Signal(str)
+    snapshot_error = Signal(str)
     # SmartAPI index mappings: (WebSocket exchange type, current index token).
     # Angel One uses exchange type 1 for NSE cash-market indices and 3 for BSE.
     INSTRUMENTS = {
@@ -58,6 +62,11 @@ class LiveMarketPage(QWidget):
         layout.addWidget(QLabel("Live feed values will auto-fill Decision Engine V2. This workspace is read-only and cannot place orders."))
         self.multi_timeframe_detail = QLabel("Select a live symbol, then run multi-timeframe chart analysis.")
         layout.addWidget(self.multi_timeframe_detail)
+        self.snapshot_status = QLabel("Snapshot recorder: waiting for a live symbol.")
+        layout.addWidget(self.snapshot_status)
+        self.capture_snapshot_button = QPushButton("Save Market Snapshot Now (5m + 15m)")
+        self.capture_snapshot_button.clicked.connect(self.capture_market_snapshot)
+        layout.addWidget(self.capture_snapshot_button)
         overview_box = QGroupBox("Live Index & Current-Month Futures (updates every 10 seconds)")
         overview_grid = QGridLayout(overview_box)
         self.overview_cards = {
@@ -77,11 +86,16 @@ class LiveMarketPage(QWidget):
         self.multi_timeframe_error.connect(self.show_multi_timeframe_error)
         self.overview_received.connect(self.show_overview)
         self.overview_error.connect(self.show_overview_error)
+        self.snapshot_saved.connect(self.show_snapshot_saved)
+        self.snapshot_error.connect(self.show_snapshot_error)
         self.selected_symbol = None
         self.overview_loading = False
         self.future_contracts = {}
         self.overview_timer = QTimer(self)
         self.overview_timer.timeout.connect(self.load_market_overview)
+        self.snapshot_timer = QTimer(self)
+        self.snapshot_timer.timeout.connect(self.capture_scheduled_snapshot)
+        self.last_snapshot_bucket = None
         self.refresh_status()
         self.start_market_overview()
 
@@ -103,6 +117,8 @@ class LiveMarketPage(QWidget):
             LiveSession.stream.stop()
         exchange_type, token = self.INSTRUMENTS[symbol]
         self.selected_symbol = (symbol, exchange_type, token)
+        if not self.snapshot_timer.isActive():
+            self.snapshot_timer.start(30_000)
         self.start_market_overview()
         LiveSession.stream = AngelOneStream(LiveSession.client, self.tick_received.emit, self.feed_status.emit)
         try:
@@ -118,6 +134,42 @@ class LiveMarketPage(QWidget):
         self.cards["breakdown"].set_value("5m close + volume confirmation")
         Thread(target=self.load_market_structure, args=(symbol, exchange_type, token), daemon=True).start()
         self.load_selected_timeframe()
+
+    def capture_scheduled_snapshot(self):
+        """Record once per completed five-minute bucket while the cash market is open."""
+        if not LiveSession.connected() or not self.selected_symbol:
+            return
+        now = datetime.now()
+        if now.weekday() >= 5 or not ((now.hour == 9 and now.minute >= 15) or 10 <= now.hour < 15 or (now.hour == 15 and now.minute <= 30)):
+            return
+        if now.minute % 5:
+            return
+        bucket = now.strftime("%Y-%m-%d %H:%M")
+        if bucket == self.last_snapshot_bucket:
+            return
+        self.last_snapshot_bucket = bucket
+        self.capture_market_snapshot()
+
+    def capture_market_snapshot(self):
+        if not LiveSession.connected() or not self.selected_symbol:
+            self.snapshot_status.setText("Snapshot recorder: select a live symbol after Angel One connects.")
+            return
+        symbol = self.selected_symbol[0]
+        self.snapshot_status.setText(f"Snapshot recorder: saving {symbol} 5m / 15m + focused option-chain data…")
+        Thread(target=self._capture_market_snapshot, args=(symbol,), daemon=True).start()
+
+    def _capture_market_snapshot(self, symbol):
+        try:
+            count = MarketSnapshotRecorder(LiveSession.client).capture(symbol)
+            self.snapshot_saved.emit(f"Snapshot recorder: saved {count} new {symbol} record(s).")
+        except (RuntimeError, ValueError) as error:
+            self.snapshot_error.emit(f"Snapshot recorder: {error}")
+
+    def show_snapshot_saved(self, message):
+        self.snapshot_status.setText(message)
+
+    def show_snapshot_error(self, message):
+        self.snapshot_status.setText(message)
 
     def load_selected_timeframe(self):
         if not LiveSession.connected() or not self.selected_symbol:
