@@ -287,6 +287,9 @@ class OptionsPage(QWidget):
         chart_text = "✓ Fresh STRONG chart confirmation" if chart_ready else "• Fresh STRONG chart confirmation required"
         chain_text = "✓ OI/PCR analysis ready" if chain_ready else "• Selected-expiry OI/PCR analysis required"
         self.plan_status.setText(f"Trade plan checklist: {chart_text}  |  {chain_text}")
+        chart_text = "✓ Fresh chart review ready" if chart_ready else "• Fresh chart score 65+ required"
+        chain_text = "✓ OI/PCR analysis ready" if chain_ready else "• Selected-expiry OI/PCR analysis required"
+        self.plan_status.setText(f"Trade plan checklist: {chart_text}  |  {chain_text}")
         self.create_plan_button.setEnabled(chart_ready and chain_ready)
 
     def prepare_live_workspace(self):
