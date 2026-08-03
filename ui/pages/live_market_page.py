@@ -148,19 +148,20 @@ class LiveMarketPage(QWidget):
         if bucket == self.last_snapshot_bucket:
             return
         self.last_snapshot_bucket = bucket
-        self.capture_market_snapshot()
+        timeframes = ("5m", "15m") if now.minute % 15 == 0 else ("5m",)
+        self.capture_market_snapshot(timeframes)
 
-    def capture_market_snapshot(self):
+    def capture_market_snapshot(self, timeframes=("5m", "15m")):
         if not LiveSession.connected() or not self.selected_symbol:
             self.snapshot_status.setText("Snapshot recorder: select a live symbol after Angel One connects.")
             return
         symbol = self.selected_symbol[0]
         self.snapshot_status.setText(f"Snapshot recorder: saving {symbol} 5m / 15m + focused option-chain data…")
-        Thread(target=self._capture_market_snapshot, args=(symbol,), daemon=True).start()
+        Thread(target=self._capture_market_snapshot, args=(symbol, timeframes), daemon=True).start()
 
-    def _capture_market_snapshot(self, symbol):
+    def _capture_market_snapshot(self, symbol, timeframes):
         try:
-            count = MarketSnapshotRecorder(LiveSession.client).capture(symbol)
+            count = MarketSnapshotRecorder(LiveSession.client).capture(symbol, timeframes)
             self.snapshot_saved.emit(f"Snapshot recorder: saved {count} new {symbol} record(s).")
         except (RuntimeError, ValueError) as error:
             self.snapshot_error.emit(f"Snapshot recorder: {error}")

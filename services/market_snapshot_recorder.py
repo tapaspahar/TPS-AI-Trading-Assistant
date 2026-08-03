@@ -15,7 +15,7 @@ class MarketSnapshotRecorder:
     def __init__(self, client):
         self.client = client
 
-    def capture(self, symbol: str) -> int:
+    def capture(self, symbol: str, timeframes=("5m", "15m")) -> int:
         symbol = symbol.upper()
         if symbol not in INSTRUMENTS:
             raise ValueError("Snapshots currently support NIFTY, BANKNIFTY, and SENSEX.")
@@ -25,7 +25,7 @@ class MarketSnapshotRecorder:
         database = Database()
         try:
             saved = 0
-            for timeframe in ("5m", "15m"):
+            for timeframe in timeframes:
                 interval, days = TIMEFRAMES[timeframe]
                 candles = self.client.get_recent_candles(exchange, token, interval, days)
                 data = build_live_capture(symbol, timeframe, candles, "Angel One index candle data")
