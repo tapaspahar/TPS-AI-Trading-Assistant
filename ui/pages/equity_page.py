@@ -2,7 +2,7 @@ from threading import Thread
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (QComboBox, QFormLayout, QGridLayout, QLabel, QMessageBox,
-                               QPushButton, QScrollArea, QVBoxLayout, QWidget)
+                               QProgressBar, QPushButton, QScrollArea, QVBoxLayout, QWidget)
 
 from engine.equity_analysis import analyze_equity
 from engine.live_setup_capture import TIMEFRAMES
@@ -16,6 +16,7 @@ class EquityPage(QWidget):
     instruments_loaded = Signal(list)
     analysis_ready = Signal(dict)
     load_error = Signal(str)
+    download_progress = Signal(int, str)
 
     def __init__(self):
         super().__init__()
@@ -35,6 +36,12 @@ class EquityPage(QWidget):
         form.addRow("NSE share", self.share); form.addRow("Analysis timeframe", self.timeframe); form.addRow("History days", self.days)
         layout.addLayout(form)
         self.load_button = QPushButton("Load Listed NSE Shares"); self.load_button.clicked.connect(self.load_instruments); layout.addWidget(self.load_button)
+        self.download_progress_bar = QProgressBar()
+        self.download_progress_bar.setRange(0, 100)
+        self.download_progress_bar.setValue(0)
+        self.download_progress_bar.setTextVisible(True)
+        self.download_progress_bar.setFormat("Ready to load share list")
+        layout.addWidget(self.download_progress_bar)
         self.analyze_button = QPushButton("Analyze Selected Share"); self.analyze_button.clicked.connect(self.analyze_selected); layout.addWidget(self.analyze_button)
         self.company_detail = QLabel("Company details will appear here after selecting a share."); self.company_detail.setWordWrap(True); layout.addWidget(self.company_detail)
 
@@ -47,15 +54,17 @@ class EquityPage(QWidget):
         layout.addStretch()
         self.equities = []
         self.instruments_loaded.connect(self.show_instruments); self.analysis_ready.connect(self.show_analysis); self.load_error.connect(self.show_error)
+        self.download_progress.connect(self.show_download_progress)
         self.share.currentIndexChanged.connect(self.show_selected_company)
 
     def load_instruments(self):
-        self.load_button.setEnabled(False); self.summary.setText("Downloading today's Angel One NSE equity list…")
+        self.load_button.setEnabled(False); self.download_progress_bar.setRange(0, 100); self.download_progress_bar.setValue(0)
+        self.download_progress_bar.setFormat("Starting download…"); self.summary.setText("Downloading today's Angel One NSE equity list…")
         Thread(target=self._load_instruments, daemon=True).start()
 
     def _load_instruments(self):
         try:
-            self.instruments_loaded.emit(EquityInstrumentService().get_equities())
+            self.instruments_loaded.emit(EquityInstrumentService().get_equities(self.download_progress.emit))
         except RuntimeError as error:
             self.load_error.emit(str(error))
 
@@ -65,7 +74,18 @@ class EquityPage(QWidget):
             self.share.addItem(f"{item['symbol']} - {item['company']}", item)
         self.share.blockSignals(False)
         self.summary.setText(f"Loaded {len(equities):,} NSE equity shares from Angel One. Type a symbol or company name to search.")
+        self.download_progress_bar.setRange(0, 100); self.download_progress_bar.setValue(100)
+        self.download_progress_bar.setFormat(f"Ready - {len(equities):,} NSE shares loaded")
         self.show_selected_company()
+
+    def show_download_progress(self, percent, message):
+        if percent < 0:
+            self.download_progress_bar.setRange(0, 0)
+        else:
+            self.download_progress_bar.setRange(0, 100)
+            self.download_progress_bar.setValue(percent)
+        self.download_progress_bar.setFormat(message)
+        self.summary.setText(message)
 
     def show_selected_company(self):
         item = self.share.currentData()
@@ -96,4 +116,6 @@ class EquityPage(QWidget):
         self.summary.setText(f"{result['company']} ({result['symbol']}) | {result['timeframe']} | {result['candle_count']} candles\nPlan: {result['plan_state']} | {result['plan_note']}\nRSI 14: {result['rsi_14']:.2f} | ATR 14: {result['atr_14']:.2f} | {result['volume_signal']}\nLevels are chart-based study levels, not a recommendation or guarantee.")
 
     def show_error(self, message):
-        self.load_button.setEnabled(True); self.analyze_button.setEnabled(True); self.summary.setText(f"Equity analysis unavailable: {message}")
+        self.load_button.setEnabled(True); self.analyze_button.setEnabled(True); self.download_progress_bar.setRange(0, 100)
+        self.download_progress_bar.setFormat("Download unavailable")
+        self.summary.setText(f"Equity analysis unavailable: {message}")

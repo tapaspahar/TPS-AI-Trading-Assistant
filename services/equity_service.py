@@ -24,8 +24,8 @@ def parse_equity_instruments(rows):
 class EquityInstrumentService(OptionContractService):
     """Uses the existing daily Angel One instrument-master cache."""
 
-    def get_equities(self):
-        equities = parse_equity_instruments(self._load_master())
+    def get_equities(self, progress_callback=None):
+        equities = parse_equity_instruments(self._load_master(progress_callback))
         if not equities:
             raise RuntimeError("No NSE equity instruments were found in Angel One's instrument master.")
         return equities

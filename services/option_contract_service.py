@@ -5,6 +5,7 @@ import json
 import os
 from datetime import date, datetime
 from pathlib import Path
+from time import perf_counter
 from urllib.request import urlopen
 
 
@@ -104,16 +105,38 @@ class OptionContractService:
         base = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "TPS AI Trading Assistant" / "cache"
         self.cache_path = Path(cache_path) if cache_path else base / "angel_instruments.json"
 
-    def _load_master(self):
+    def _load_master(self, progress_callback=None):
         if self.cache_path.exists() and datetime.fromtimestamp(self.cache_path.stat().st_mtime).date() == date.today():
+            if progress_callback:
+                progress_callback(100, "Using today's saved Angel One instrument list.")
             return json.loads(self.cache_path.read_text(encoding="utf-8"))
         try:
             with urlopen(MASTER_URL, timeout=45) as response:
-                rows = json.loads(response.read().decode("utf-8"))
+                total = int(response.headers.get("Content-Length", 0) or 0)
+                chunks, downloaded, started = [], 0, perf_counter()
+                if progress_callback:
+                    progress_callback(0, "Connecting to Angel One instrument list…")
+                while True:
+                    chunk = response.read(64 * 1024)
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                    downloaded += len(chunk)
+                    if progress_callback and total:
+                        elapsed = max(perf_counter() - started, 0.1)
+                        percent = min(int(downloaded * 100 / total), 99)
+                        rate = downloaded / elapsed
+                        remaining = max(total - downloaded, 0) / rate if rate else 0
+                        progress_callback(percent, f"Downloading Angel One list: {percent}% ({downloaded / 1_048_576:.1f} / {total / 1_048_576:.1f} MB) - about {max(1, round(remaining))} sec left")
+                    elif progress_callback:
+                        progress_callback(-1, f"Downloading Angel One list: {downloaded / 1_048_576:.1f} MB received…")
+                rows = json.loads(b"".join(chunks).decode("utf-8"))
         except Exception as error:
             raise RuntimeError("Could not download Angel One's instrument master. Check internet and try again.") from error
         self.cache_path.parent.mkdir(parents=True, exist_ok=True)
         self.cache_path.write_text(json.dumps(rows), encoding="utf-8")
+        if progress_callback:
+            progress_callback(100, "Download complete. Preparing the share list…")
         return rows
 
     def get_contracts(self, underlying):
