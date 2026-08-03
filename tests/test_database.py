@@ -67,6 +67,20 @@ class DatabaseTests(unittest.TestCase):
         saved = self.db.get_market_snapshots("03-08-2026")
         self.assertEqual((len(saved), saved[0]["symbol"], saved[0]["oi_pcr"]), (1, "NIFTY", 1.1))
 
+    def test_open_ce_trade_gets_one_reversal_alert(self):
+        trade_id = self.db.save_open_trade(sample_trade(exit=0.0))
+        for timeframe in ("5m", "15m"):
+            self.db.save_market_snapshot({
+                "captured_at": f"2026-08-03T10:{'15' if timeframe == '5m' else '30'}", "trade_date": "03-08-2026",
+                "symbol": "NIFTY", "timeframe": timeframe, "open": 100, "high": 101, "low": 90, "close": 92,
+                "volume": 1000, "volume_ema": 900, "ema_5": 95, "ema_20": 96, "ema_50": 97,
+                "vwap": 98, "supertrend": 94, "rsi_14": 40, "atr_14": 4,
+                "oi_pcr": 0.8, "volume_pcr": 0.7, "put_support": 90, "call_resistance": 100, "option_contracts": 22,
+            })
+        first = self.db.evaluate_open_trade_alerts("NIFTY")
+        self.assertEqual((len(first), first[0]["trade_id"]), (1, trade_id))
+        self.assertEqual(self.db.evaluate_open_trade_alerts("NIFTY"), [])
+
     def test_summary_aggregates_saved_trades(self):
         self.db.save_trade(sample_trade())
         self.db.save_trade(sample_trade(symbol="BANKNIFTY", entry=100, exit=90, stoploss=80, target=140, quantity=10))

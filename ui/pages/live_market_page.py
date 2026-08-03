@@ -2,12 +2,13 @@ from datetime import datetime
 from threading import Thread
 
 from PySide6.QtCore import QTimer, Signal
-from PySide6.QtWidgets import QComboBox, QGridLayout, QGroupBox, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QComboBox, QGridLayout, QGroupBox, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
 
 from services.angel_one_stream import AngelOneStream
 from services.live_session import LiveSession
 from services.option_contract_service import OptionContractService
 from services.market_snapshot_recorder import MarketSnapshotRecorder
+from core.database_manager import Database
 from engine.market_structure import analyze_candles
 from engine.multi_timeframe_engine import analyze_multi_timeframe
 from ui.widgets.cards.dashboard_card import DashboardCard
@@ -25,6 +26,7 @@ class LiveMarketPage(QWidget):
     overview_error = Signal(str)
     snapshot_saved = Signal(str)
     snapshot_error = Signal(str)
+    guard_alert = Signal(object)
     # SmartAPI index mappings: (WebSocket exchange type, current index token).
     # Angel One uses exchange type 1 for NSE cash-market indices and 3 for BSE.
     INSTRUMENTS = {
@@ -88,6 +90,7 @@ class LiveMarketPage(QWidget):
         self.overview_error.connect(self.show_overview_error)
         self.snapshot_saved.connect(self.show_snapshot_saved)
         self.snapshot_error.connect(self.show_snapshot_error)
+        self.guard_alert.connect(self.show_guard_alert)
         self.selected_symbol = None
         self.overview_loading = False
         self.future_contracts = {}
@@ -162,6 +165,13 @@ class LiveMarketPage(QWidget):
     def _capture_market_snapshot(self, symbol, timeframes):
         try:
             count = MarketSnapshotRecorder(LiveSession.client).capture(symbol, timeframes)
+            database = Database()
+            try:
+                alerts = database.evaluate_open_trade_alerts(symbol)
+            finally:
+                database.close()
+            for alert in alerts:
+                self.guard_alert.emit(alert)
             self.snapshot_saved.emit(f"Snapshot recorder: saved {count} new {symbol} record(s).")
         except (RuntimeError, ValueError) as error:
             self.snapshot_error.emit(f"Snapshot recorder: {error}")
@@ -171,6 +181,10 @@ class LiveMarketPage(QWidget):
 
     def show_snapshot_error(self, message):
         self.snapshot_status.setText(message)
+
+    def show_guard_alert(self, alert):
+        self.snapshot_status.setText(f"Open Trade Guard: {alert['title']}")
+        QMessageBox.warning(self, "Open Trade Guard — review required", alert["message"])
 
     def load_selected_timeframe(self):
         if not LiveSession.connected() or not self.selected_symbol:

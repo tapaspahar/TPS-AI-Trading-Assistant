@@ -43,6 +43,7 @@ class DashboardScreen(QWidget):
             self.stack.addWidget(page)
         self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
         self.journalPage.trade_saved.connect(self.reportsPage.refresh)
+        self.journalPage.trade_saved.connect(self.optionsPage.update_plan_readiness)
         self.chartCapturePage.symbol_ready.connect(self.journalPage.set_symbol_from_capture)
         self.chartCapturePage.analysis_ready.connect(self.aiPage.load_chart_capture)
         self.aiPage.decision_ready.connect(self.handle_ai_decision)

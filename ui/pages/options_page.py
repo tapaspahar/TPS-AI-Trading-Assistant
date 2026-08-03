@@ -4,6 +4,7 @@ from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import QComboBox, QFormLayout, QGroupBox, QLabel, QMessageBox, QPushButton, QSpinBox, QVBoxLayout, QWidget
 
 from core.settings_store import SettingsStore
+from core.database_manager import Database
 from engine.option_chain_engine import analyze_option_chain
 from engine.trade_plan_engine import create_review_plan
 from services.live_session import LiveSession
@@ -31,6 +32,7 @@ class OptionsPage(QWidget):
         self.chain_loading = False
         self.auto_refresh_pending = False
         self.service = OptionContractService()
+        self.db = Database()
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Options Decision Workspace — verify every condition before placing a manual broker order."))
 
@@ -305,7 +307,10 @@ class OptionsPage(QWidget):
         chart_text = "✓ Score above 75" if chart_ready else "• Score above 75 required"
         chain_text = "✓ OI/PCR analysis ready" if chain_ready else "• Selected-expiry OI/PCR analysis required"
         self.plan_status.setText(f"{score_text} (minimum: >75)  |  {chart_text}  |  {chain_text}")
-        self.create_plan_button.setEnabled(chart_ready and chain_ready)
+        open_trade = self.db.has_open_trade(underlying)
+        open_text = "â€¢ Close/review the active open trade before a new plan" if open_trade else "âœ“ No active open trade for this underlying"
+        self.plan_status.setText(f"{score_text} (minimum: >75)  |  {chart_text}  |  {chain_text}  |  {open_text}")
+        self.create_plan_button.setEnabled(chart_ready and chain_ready and not open_trade)
 
     def prepare_live_workspace(self):
         """Open with current expiry/ATM data already loading when a live session exists."""

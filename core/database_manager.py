@@ -67,6 +67,20 @@ class Database:
             )
             """
         )
+        self.cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS trade_alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                trade_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                alert_type TEXT NOT NULL,
+                title TEXT NOT NULL,
+                message TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'ACTIVE',
+                UNIQUE(trade_id, alert_type, status)
+            )
+            """
+        )
         # Migrate journals created before open-trade tracking was introduced.
         columns = {row["name"] for row in self.cursor.execute("PRAGMA table_info(trades)")}
         if "status" not in columns:
@@ -208,8 +222,12 @@ class Database:
             "UPDATE trades SET exit = ?, pnl = ?, rr_ratio = ?, status = 'CLOSED', outcome = ?, closed_at = ? WHERE id = ? AND status = 'OPEN'",
             (float(exit_price), pnl, rr_ratio, outcome, datetime.now().isoformat(timespec="seconds"), int(trade_id)),
         )
+        closed = result.rowcount == 1
         self.connection.commit()
-        return result.rowcount == 1
+        if closed:
+            self.cursor.execute("UPDATE trade_alerts SET status = 'RESOLVED' WHERE trade_id = ? AND status = 'ACTIVE'", (int(trade_id),))
+            self.connection.commit()
+        return closed
 
     def get_trade(self, trade_id: int) -> sqlite3.Row | None:
         return self.cursor.execute("SELECT * FROM trades WHERE id = ?", (int(trade_id),)).fetchone()
@@ -325,6 +343,41 @@ class Database:
                 (trade_date,),
             ).fetchall()
         return self.cursor.execute("SELECT * FROM market_snapshots ORDER BY captured_at DESC, timeframe ASC").fetchall()
+
+    def get_open_trades(self, symbol: str | None = None) -> list[sqlite3.Row]:
+        query, values = "SELECT * FROM trades WHERE status = 'OPEN'", ()
+        if symbol:
+            query += " AND symbol = ?"
+            values = (str(symbol).upper(),)
+        return self.cursor.execute(query + " ORDER BY id DESC", values).fetchall()
+
+    def has_open_trade(self, symbol: str) -> bool:
+        return bool(self.get_open_trades(symbol))
+
+    def evaluate_open_trade_alerts(self, symbol: str) -> list[dict]:
+        """Evaluate the latest 5m/15m saved snapshots and persist new review alerts."""
+        from engine.open_trade_guard import evaluate_open_trade
+
+        snapshots = self.get_market_snapshots()
+        latest = {
+            timeframe: next((row for row in snapshots if row["symbol"] == str(symbol).upper() and row["timeframe"] == timeframe), None)
+            for timeframe in ("5m", "15m")
+        }
+        if not all(latest.values()):
+            return []
+        alerts = []
+        for trade in self.get_open_trades(symbol):
+            alert = evaluate_open_trade(trade, latest["5m"], latest["15m"])
+            if not alert:
+                continue
+            result = self.cursor.execute(
+                "INSERT OR IGNORE INTO trade_alerts (trade_id, created_at, alert_type, title, message) VALUES (?, ?, ?, ?, ?)",
+                (alert["trade_id"], datetime.now().isoformat(timespec="seconds"), alert["alert_type"], alert["title"], alert["message"]),
+            )
+            if result.rowcount:
+                alerts.append(alert)
+        self.connection.commit()
+        return alerts
 
     def get_day_summary(self, trade_date: str) -> dict[str, float | int]:
         """Return the recorded-trade metrics for the supplied journal date."""
