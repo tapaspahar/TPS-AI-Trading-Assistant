@@ -1,8 +1,9 @@
 from threading import Thread
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import (QComboBox, QFormLayout, QGridLayout, QHBoxLayout, QLabel, QListWidget,
-                               QMessageBox, QProgressBar, QPushButton, QScrollArea, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QComboBox, QCompleter, QFormLayout, QGridLayout, QHBoxLayout, QLabel,
+                               QListWidget, QMessageBox, QProgressBar, QPushButton, QScrollArea,
+                               QVBoxLayout, QWidget)
 
 from core.equity_watchlist_store import EquityWatchlistStore
 from engine.equity_analysis import analyze_equity
@@ -32,6 +33,11 @@ class EquityPage(QWidget):
         form = QFormLayout()
         self.share = QComboBox(); self.share.setEditable(True); self.share.setInsertPolicy(QComboBox.NoInsert)
         self.share.setPlaceholderText("Load NSE shares, then type to search")
+        self.share_completer = self.share.completer()
+        self.share_completer.setCaseSensitivity(Qt.CaseInsensitive)
+        self.share_completer.setFilterMode(Qt.MatchContains)
+        self.share_completer.setCompletionMode(QCompleter.PopupCompletion)
+        self.share_completer.setMaxVisibleItems(15)
         self.timeframe = QComboBox(); self.timeframe.addItems(("1D", "1h", "15m", "5m"))
         self.days = QComboBox(); self.days.addItems(("90", "180", "365"))
         form.addRow("NSE share", self.share); form.addRow("Analysis timeframe", self.timeframe); form.addRow("History days", self.days)
@@ -68,6 +74,8 @@ class EquityPage(QWidget):
         self.instruments_loaded.connect(self.show_instruments); self.analysis_ready.connect(self.show_analysis); self.load_error.connect(self.show_error)
         self.download_progress.connect(self.show_download_progress)
         self.share.currentIndexChanged.connect(self.show_selected_company)
+        self.share.lineEdit().textEdited.connect(self.show_share_suggestions)
+        self.share_completer.activated[str].connect(self.select_completed_share)
         self.add_watchlist_button.clicked.connect(self.add_selected_to_watchlist)
         self.remove_watchlist_button.clicked.connect(self.remove_selected_from_watchlist)
         self.watchlist.itemDoubleClicked.connect(self.select_watchlist_equity)
@@ -107,6 +115,21 @@ class EquityPage(QWidget):
         item = self.share.currentData()
         if item:
             self.company_detail.setText(f"Company: {item['company']} | Trading symbol: {item['symbol']} | Exchange: NSE | Angel One token: {item['token']}")
+
+    def show_share_suggestions(self, text):
+        """Open a contains-filtered symbol/company list while the user types."""
+        query = text.strip()
+        if not query or not self.share.count():
+            self.share_completer.popup().hide()
+            return
+        self.share_completer.setCompletionPrefix(query)
+        self.share_completer.complete()
+
+    def select_completed_share(self, label):
+        """Make the chosen autocomplete result the active analysis instrument."""
+        index = self.share.findText(label, Qt.MatchExactly)
+        if index >= 0:
+            self.share.setCurrentIndex(index)
 
     def analyze_selected(self):
         item = self.share.currentData()
