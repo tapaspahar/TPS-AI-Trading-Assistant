@@ -1,0 +1,24 @@
+import unittest
+from datetime import date, timedelta
+
+from services.option_contract_service import buying_risk, parse_option_contracts
+
+
+class OptionContractServiceTests(unittest.TestCase):
+    def test_parses_current_index_options_and_normalizes_strikes(self):
+        expiry = (date.today() + timedelta(days=7)).strftime("%d%b%Y").upper()
+        rows = [
+            {"token": "1", "symbol": "NIFTY26AUG25000CE", "name": "NIFTY", "expiry": expiry,
+             "strike": "2500000.000000", "lotsize": "75", "instrumenttype": "OPTIDX", "exch_seg": "NFO"},
+            {"token": "2", "symbol": "NIFTY26AUG25000PE", "name": "NIFTY", "expiry": expiry,
+             "strike": "2500000.000000", "lotsize": "75", "instrumenttype": "OPTIDX", "exch_seg": "NFO"},
+        ]
+        contracts = parse_option_contracts(rows, "NIFTY")
+        self.assertEqual(len(contracts), 2)
+        self.assertEqual(contracts[0]["strike"], 25000)
+
+    def test_buying_risk_uses_whole_lots(self):
+        result = buying_risk(premium=100, lot_size=75, capital=100000, risk_percent=1)
+        self.assertEqual(result["risk_cap"], 1000)
+        self.assertEqual(result["per_lot_risk"], 7500)
+        self.assertEqual(result["lots"], 0)

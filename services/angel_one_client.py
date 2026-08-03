@@ -61,3 +61,15 @@ class AngelOneClient:
         if not candles:
             raise RuntimeError("No recent candles were returned for this symbol.")
         return candles
+
+    def get_option_quote(self, exchange: str, token: str):
+        """Fetch read-only FULL quote data for one selected option contract."""
+        if not self.session:
+            raise RuntimeError("Connect Angel One before loading option data.")
+        response = self.session.getMarketData("FULL", {exchange: [str(token)]})
+        if not response.get("status"):
+            raise RuntimeError(response.get("message", "Angel One option quote is unavailable."))
+        fetched = (response.get("data") or {}).get("fetched") or []
+        if not fetched:
+            raise RuntimeError("No live quote was returned for this option contract.")
+        return fetched[0]
