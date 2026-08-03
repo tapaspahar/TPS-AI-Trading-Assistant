@@ -126,7 +126,7 @@ class Database:
         """Return rows with IDs for display and safe deletion in the journal."""
         return self.cursor.execute(
             """
-            SELECT id, trade_date, trade_time, symbol, option_type, entry, exit,
+            SELECT id, trade_date, trade_time, symbol, strike, option_type, entry, stoploss, target, exit,
                    quantity, pnl, rr_ratio, psychology_before, ai_score, ai_decision
             FROM trades ORDER BY id DESC
             """

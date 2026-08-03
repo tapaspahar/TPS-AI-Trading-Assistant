@@ -132,7 +132,7 @@ class JournalPage(QWidget):
         )
 
     def load_trades(self) -> None:
-        headers = ["ID", "Date", "Time", "Symbol", "Option", "Entry", "Exit", "Qty", "P&L", "R:R", "Psychology", "AI", "Decision"]
+        headers = ["ID", "Date", "Time", "Symbol", "Strike", "Option", "Entry", "Stop Loss", "Target", "Exit", "Qty", "P&L", "R:R", "Psychology", "AI", "Decision"]
         data = self.db.get_journal_rows()
         self.table.setColumnCount(len(headers))
         self.table.setHorizontalHeaderLabels(headers)
