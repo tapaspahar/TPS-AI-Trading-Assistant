@@ -26,3 +26,9 @@ class SettingsStoreTests(unittest.TestCase):
             store = SettingsStore(Path(directory) / "settings.json")
             with self.assertRaises(ValueError):
                 store.save({"capital": 100000, "risk_percent": 1, "daily_loss_percent": 3, "max_trades_per_day": 5, "theme": "blue"})
+
+    def test_new_visual_themes_are_valid_preferences(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = SettingsStore(Path(directory) / "settings.json")
+            saved = store.save({"capital": 100000, "risk_percent": 1, "daily_loss_percent": 3, "max_trades_per_day": 5, "theme": "emerald"})
+            self.assertEqual(saved["theme"], "emerald")

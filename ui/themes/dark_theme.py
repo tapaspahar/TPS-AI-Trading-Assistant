@@ -18,6 +18,7 @@ QFrame#sidebar {
 }
 QLabel#title { color: #f8fafc; font-size: 23px; font-weight: 800; letter-spacing: .2px; }
 QLabel#subtitle { color: #8fa3c2; font-size: 10.5pt; }
+QLabel#appBadge { background: #2563eb; color: white; border: 1px solid #60a5fa; border-radius: 12px; font-size: 13pt; font-weight: 800; qproperty-alignment: AlignCenter; }
 QLabel#status {
     color: #5ee9a3;
     background: #102a2a;

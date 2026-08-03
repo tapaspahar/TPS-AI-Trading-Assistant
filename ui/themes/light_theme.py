@@ -6,6 +6,7 @@ QFrame#header { background: #ffffff; border-bottom: 1px solid #d7e1ef; }
 QFrame#sidebar { background: #edf3fa; border-right: 1px solid #d7e1ef; }
 QLabel#title { color: #102a43; font-size: 23px; font-weight: 800; }
 QLabel#subtitle { color: #58708c; font-size: 10.5pt; }
+QLabel#appBadge { background: #2563eb; color: white; border: 1px solid #60a5fa; border-radius: 12px; font-size: 13pt; font-weight: 800; qproperty-alignment: AlignCenter; }
 QLabel#status { color: #087443; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 7px 11px; min-width: 245px; }
 QLabel#clock { color: #075985; font-weight: 700; }
 QLabel#user { color: #5b21b6; font-weight: 600; }

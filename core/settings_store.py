@@ -40,8 +40,8 @@ class SettingsStore:
             raise ValueError("Capital must be positive and risk percentage must be between 0 and 100.")
         if not 0 < values["daily_loss_percent"] <= 100 or values["max_trades_per_day"] < 1:
             raise ValueError("Daily-loss percentage must be between 0 and 100, and trade limit must be at least 1.")
-        if values["theme"] not in {"dark", "light"}:
-            raise ValueError("Theme must be dark or light.")
+        if values["theme"] not in {"dark", "light", "emerald", "sunset"}:
+            raise ValueError("Choose a valid TPS visual theme.")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps(values, indent=2), encoding="utf-8")
         return values

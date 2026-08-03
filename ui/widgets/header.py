@@ -14,11 +14,19 @@ class Header(QFrame):
 
         self.title = QLabel("TPS AI Trading Assistant")
         self.title.setObjectName("title")
+        badge = QLabel("TPS")
+        badge.setObjectName("appBadge")
+        badge.setFixedSize(46, 46)
         self.subtitle = QLabel("Professional Trading Dashboard • UI Design: Pooja Pandey (Cutie)")
         self.subtitle.setObjectName("subtitle")
         left = QVBoxLayout()
         left.addWidget(self.title)
         left.addWidget(self.subtitle)
+
+        brand = QHBoxLayout()
+        brand.setSpacing(10)
+        brand.addWidget(badge)
+        brand.addLayout(left)
 
         self.market = QLabel("Market Status: Loading…")
         self.market.setObjectName("status")
@@ -37,7 +45,7 @@ class Header(QFrame):
         right.addWidget(self.user)
 
         layout = QHBoxLayout(self)
-        layout.addLayout(left)
+        layout.addLayout(brand)
         layout.addStretch()
         layout.addLayout(center)
         layout.addStretch()

@@ -27,14 +27,20 @@ class SettingsPage(QWidget):
         self.daily_loss_percent = QLineEdit(str(values["daily_loss_percent"]))
         self.max_trades = QLineEdit(str(values["max_trades_per_day"]))
         self.theme = QComboBox()
-        self.theme.addItem("Dark theme", "dark")
-        self.theme.addItem("Light theme", "light")
-        self.theme.setCurrentIndex(0 if values["theme"] == "dark" else 1)
+        self.theme.addItem("Midnight Blue  •  focused trading terminal", "dark")
+        self.theme.addItem("Arctic Light  •  clean daylight workspace", "light")
+        self.theme.addItem("Emerald Pulse  •  calm market green", "emerald")
+        self.theme.addItem("Sunset Copper  •  warm premium light", "sunset")
+        self.theme.setCurrentIndex(max(0, self.theme.findData(values["theme"])))
+        self.theme.currentIndexChanged.connect(self.preview_theme)
         for label, field in (("Account capital", self.capital), ("Risk per trade (%)", self.risk_percent),
                              ("Daily loss limit (%)", self.daily_loss_percent), ("Maximum trades per day", self.max_trades),
-                             ("Appearance", self.theme)):
+                             ("Theme Studio", self.theme)):
             form.addRow(label, field)
         layout.addLayout(form)
+        self.theme_hint = QLabel("Choose a look, preview it instantly, then press Save Settings to keep it for next launch.")
+        self.theme_hint.setWordWrap(True)
+        layout.addWidget(self.theme_hint)
         save = QPushButton("Save Settings")
         save.clicked.connect(self.save)
         layout.addWidget(save)
@@ -83,6 +89,10 @@ class SettingsPage(QWidget):
             return
         apply_theme(QApplication.instance(), self.theme.currentData())
         QMessageBox.information(self, "Settings saved", "Settings and theme have been saved locally.")
+
+    def preview_theme(self):
+        """Preview the selected visual style; persistence remains an explicit Save action."""
+        apply_theme(QApplication.instance(), self.theme.currentData())
 
     def save_angel_credentials(self):
         try:
