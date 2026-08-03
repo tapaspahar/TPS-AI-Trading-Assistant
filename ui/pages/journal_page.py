@@ -21,6 +21,9 @@ class JournalPage(QWidget):
         self.settings_store = SettingsStore()
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Trade Journal"))
+        self.plan_summary = QLabel("No review plan loaded. Quantity can be entered manually for completed trades.")
+        self.plan_summary.setWordWrap(True)
+        layout.addWidget(self.plan_summary)
 
         form = QFormLayout()
         self.date_input = QLineEdit(datetime.now().strftime("%d-%m-%Y"))
@@ -126,6 +129,10 @@ class JournalPage(QWidget):
         self.stoploss_input.setText(f"{plan['stoploss']:.2f}")
         self.target_input.setText(f"{plan['target']:.2f}")
         self.quantity_input.setText(str(plan["quantity"]))
+        self.plan_summary.setText(
+            f"Review plan quantity: {plan['lots']} lot(s) × {plan['lot_size']} = {plan['quantity']} quantity. "
+            f"Estimated premium risk: ₹{plan['estimated_risk']:,.2f} (configured cap: ₹{plan['risk_cap']:,.2f})."
+        )
         for checkbox in (self.trend_check, self.vwap_check, self.ema_check, self.volume_check, self.oi_check):
             checkbox.setChecked(True)
         QMessageBox.information(

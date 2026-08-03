@@ -325,6 +325,7 @@ class OptionsPage(QWidget):
             plan = create_review_plan(
                 self.underlying.currentText(), self.spot_price, contracts,
                 self.chain_context["quote_rows"], self.chart_context, self.chain_context, SettingsStore().load(),
+                requested_lots=self.lots.value(),
             )
         except ValueError as error:
             QMessageBox.warning(self, "Trade plan", str(error))
@@ -340,7 +341,7 @@ class OptionsPage(QWidget):
         self.decision.setText(
             f"REVIEW PLAN — {plan['contract']['symbol']}\n"
             f"Entry reference: ₹{plan['entry']:,.2f} | Stop: ₹{plan['stoploss']:,.2f} | Target: ₹{plan['target']:,.2f}\n"
-            f"Quantity: {plan['quantity']} ({plan['quantity'] // plan['contract']['lot_size']} lot(s))\n"
+            f"Quantity: {plan['quantity']} ({plan['lots']} lot(s) × {plan['lot_size']})\n"
             + "\n".join(f"• {reason}" for reason in plan["reasons"]) + f"\n\n{plan['warning']}"
         )
         self.send_plan_button.setEnabled(True)

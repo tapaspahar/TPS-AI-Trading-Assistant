@@ -32,3 +32,13 @@ class TradePlanEngineTests(unittest.TestCase):
                 {"symbol": "NIFTY", "direction": "BULLISH", "decision": "WATCH CE", "score": 70},
                 {"context": "available"}, {"capital": 100000, "risk_percent": 1},
             )
+
+    def test_uses_selected_lots_for_plan_quantity(self):
+        contracts = [{"token": "ce", "symbol": "NIFTY25000CE", "strike": 25000, "option_type": "CE", "lot_size": 75}]
+        plan = create_review_plan(
+            "NIFTY", 25010, contracts, [{"symbolToken": "ce", "ltp": 100, "tradeVolume": 1000}],
+            {"symbol": "NIFTY", "direction": "BULLISH", "decision": "STRONG CE SETUP", "score": 90},
+            {"context": "Put OI is higher"}, {"capital": 1_000_000, "risk_percent": 3}, requested_lots=2,
+        )
+        self.assertEqual(plan["lots"], 2)
+        self.assertEqual(plan["quantity"], 150)

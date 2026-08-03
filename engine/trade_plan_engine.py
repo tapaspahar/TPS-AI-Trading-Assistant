@@ -8,7 +8,7 @@ from __future__ import annotations
 from services.option_contract_service import buying_risk
 
 
-def create_review_plan(underlying, spot_price, contracts, quote_rows, chart_context, chain_context, settings):
+def create_review_plan(underlying, spot_price, contracts, quote_rows, chart_context, chain_context, settings, requested_lots=None):
     """Select a liquid near-ATM contract only when every required context agrees."""
     if not chart_context or chart_context.get("score", 0) <= 75 or str(chart_context.get("decision", "")) == "NO TRADE":
         raise ValueError("Trade Plan requires a fresh chart score above 75/100.")
@@ -38,9 +38,22 @@ def create_review_plan(underlying, spot_price, contracts, quote_rows, chart_cont
     stop_loss = round(premium * 0.80, 2)
     target = round(premium + (premium - stop_loss) * 2, 2)
     risk = buying_risk(premium, contract["lot_size"], settings["capital"], settings["risk_percent"])
-    quantity = risk["lots"] * contract["lot_size"]
+    safe_lots = risk["lots"]
+    if requested_lots is None:
+        requested_lots = safe_lots
+    requested_lots = int(requested_lots)
+    if requested_lots < 1:
+        raise ValueError("Select at least one whole lot for the review plan.")
+    quantity = requested_lots * contract["lot_size"]
     if quantity <= 0:
         raise ValueError("Configured risk cap does not allow even one whole lot at the current premium.")
+    selected_risk = requested_lots * risk["per_lot_risk"]
+    risk_within_cap = selected_risk <= risk["risk_cap"]
+    risk_warning = (
+        "Selected quantity is within the configured risk cap."
+        if risk_within_cap else
+        f"Selected {requested_lots} lot(s) has estimated premium risk of ₹{selected_risk:,.2f}, above your configured cap of ₹{risk['risk_cap']:,.2f}. Reduce lots or review Risk Settings before manually placing an order."
+    )
 
     return {
         "underlying": underlying,
@@ -50,12 +63,17 @@ def create_review_plan(underlying, spot_price, contracts, quote_rows, chart_cont
         "entry": round(premium, 2),
         "stoploss": stop_loss,
         "target": target,
+        "lots": requested_lots,
+        "lot_size": contract["lot_size"],
         "quantity": quantity,
+        "estimated_risk": selected_risk,
+        "risk_cap": risk["risk_cap"],
+        "risk_within_cap": risk_within_cap,
         "confidence": int(chart_context["score"]),
         "reasons": [
             f"{chart_context['decision']} ({chart_context['score']}/100)",
             f"Focused OI/PCR context: {chain_context.get('context', 'available')}",
             f"Near-ATM liquid contract selected (volume {volume:,.0f})",
         ],
-        "warning": "Conditional review plan: verify live premium, bid/ask, volume, stop-loss and target in Angel One before manually placing an order.",
+        "warning": "Conditional review plan: verify live premium, bid/ask, volume, stop-loss and target in Angel One before manually placing an order. " + risk_warning,
     }
