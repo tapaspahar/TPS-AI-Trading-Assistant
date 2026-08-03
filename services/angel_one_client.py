@@ -7,15 +7,25 @@ Order placement is intentionally out of scope.
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from threading import Lock
+from time import monotonic, sleep
 
 
 class AngelOneClient:
+    # Historical candle requests have a stricter SmartAPI limit than quotes.
+    # Serialising them also avoids several UI pages exhausting the limit together.
+    CANDLE_REQUEST_INTERVAL_SECONDS = 1.25
+    CANDLE_CACHE_SECONDS = 15
+
     def __init__(self, api_key: str, client_code: str, pin: str, totp_secret: str):
         self.api_key = api_key.strip()
         self.client_code = client_code.strip().upper()
         self.pin = pin
         self.totp_secret = totp_secret.replace(" ", "")
         self.session = None
+        self._candle_lock = Lock()
+        self._last_candle_request_at = 0.0
+        self._candle_cache = {}
 
     def connect(self) -> dict:
         if not all((self.api_key, self.client_code, self.pin, self.totp_secret)):
@@ -38,29 +48,56 @@ class AngelOneClient:
         """Fetch recent OHLCV data only; this method never submits an order."""
         if not self.session:
             raise RuntimeError("Connect Angel One before loading market candles.")
-        end = datetime.now()
-        start = end - timedelta(days=days)
-        response = self.session.getCandleData({
-            "exchange": exchange,
-            "symboltoken": str(token),
-            "interval": interval,
-            "fromdate": start.strftime("%Y-%m-%d %H:%M"),
-            "todate": end.strftime("%Y-%m-%d %H:%M"),
-        })
-        if not response.get("status"):
-            raise RuntimeError(response.get("message", "Angel One candle data is unavailable."))
-        candles = []
-        for row in response.get("data") or []:
-            if len(row) < 5:
-                continue
-            candles.append({
-                "time": row[0], "open": float(row[1]), "high": float(row[2]),
-                "low": float(row[3]), "close": float(row[4]),
-                "volume": float(row[5]) if len(row) > 5 else 0,
-            })
-        if not candles:
-            raise RuntimeError("No recent candles were returned for this symbol.")
-        return candles
+        cache_key = (exchange, str(token), interval, int(days))
+        cached = self._candle_cache.get(cache_key)
+        if cached and monotonic() - cached[0] < self.CANDLE_CACHE_SECONDS:
+            return cached[1]
+
+        # Keep every candle call in one queue. This includes multi-timeframe
+        # analysis and live setup capture, both of which may run in UI threads.
+        with self._candle_lock:
+            cached = self._candle_cache.get(cache_key)
+            if cached and monotonic() - cached[0] < self.CANDLE_CACHE_SECONDS:
+                return cached[1]
+
+            wait_seconds = self.CANDLE_REQUEST_INTERVAL_SECONDS - (monotonic() - self._last_candle_request_at)
+            if wait_seconds > 0:
+                sleep(wait_seconds)
+
+            end = datetime.now()
+            start = end - timedelta(days=days)
+            self._last_candle_request_at = monotonic()
+            try:
+                response = self.session.getCandleData({
+                    "exchange": exchange,
+                    "symboltoken": str(token),
+                    "interval": interval,
+                    "fromdate": start.strftime("%Y-%m-%d %H:%M"),
+                    "todate": end.strftime("%Y-%m-%d %H:%M"),
+                })
+            except Exception as error:
+                message = str(error)
+                if "access rate" in message.lower() or "rate limit" in message.lower():
+                    raise RuntimeError(
+                        "Angel One candle limit reached. TPS has slowed requests; wait 15 seconds and try once."
+                    ) from error
+                raise RuntimeError(f"Angel One candle request failed: {message}") from error
+
+            if not response.get("status"):
+                raise RuntimeError(response.get("message", "Angel One candle data is unavailable."))
+            candles = []
+            for row in response.get("data") or []:
+                if len(row) < 5:
+                    continue
+                candles.append({
+                    "time": row[0], "open": float(row[1]), "high": float(row[2]),
+                    "low": float(row[3]), "close": float(row[4]),
+                    "volume": float(row[5]) if len(row) > 5 else 0,
+                })
+            if not candles:
+                raise RuntimeError("No recent candles were returned for this symbol.")
+            self._candle_cache[cache_key] = (monotonic(), candles)
+            return candles
 
     def get_option_quote(self, exchange: str, token: str):
         """Fetch read-only FULL quote data for one selected option contract."""
