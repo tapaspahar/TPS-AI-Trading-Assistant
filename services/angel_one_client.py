@@ -6,6 +6,8 @@ Order placement is intentionally out of scope.
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+
 
 class AngelOneClient:
     def __init__(self, api_key: str, client_code: str, pin: str, totp_secret: str):
@@ -31,3 +33,31 @@ class AngelOneClient:
         self.auth_token = response["data"]["jwtToken"]
         self.feed_token = client.getfeedToken()
         return {"connected": True, "message": "Connected for read-only market data."}
+
+    def get_recent_candles(self, exchange: str, token: str, interval: str = "FIVE_MINUTE", days: int = 5):
+        """Fetch recent OHLCV data only; this method never submits an order."""
+        if not self.session:
+            raise RuntimeError("Connect Angel One before loading market candles.")
+        end = datetime.now()
+        start = end - timedelta(days=days)
+        response = self.session.getCandleData({
+            "exchange": exchange,
+            "symboltoken": str(token),
+            "interval": interval,
+            "fromdate": start.strftime("%Y-%m-%d %H:%M"),
+            "todate": end.strftime("%Y-%m-%d %H:%M"),
+        })
+        if not response.get("status"):
+            raise RuntimeError(response.get("message", "Angel One candle data is unavailable."))
+        candles = []
+        for row in response.get("data") or []:
+            if len(row) < 5:
+                continue
+            candles.append({
+                "time": row[0], "open": float(row[1]), "high": float(row[2]),
+                "low": float(row[3]), "close": float(row[4]),
+                "volume": float(row[5]) if len(row) > 5 else 0,
+            })
+        if not candles:
+            raise RuntimeError("No recent candles were returned for this symbol.")
+        return candles
