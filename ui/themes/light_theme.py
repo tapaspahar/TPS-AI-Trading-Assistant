@@ -17,9 +17,11 @@ QPushButton:disabled { background: #eef2f7; color: #94a3b8; }
 QPushButton#menuButton { background: transparent; color: #46617f; border: 1px solid transparent; border-radius: 9px; padding: 9px 12px; text-align: left; font-size: 9.5pt; font-weight: 600; }
 QPushButton#menuButton:hover { background: #e0ecff; color: #173456; border-color: #c4d9f7; }
 QPushButton#menuButton:checked { background: #2563eb; color: white; border-color: #2563eb; }
-QLineEdit, QComboBox, QPlainTextEdit, QTextEdit, QTableWidget { background: #ffffff; color: #13233a; border: 1px solid #c9d8eb; border-radius: 7px; padding: 7px 9px; selection-background-color: #2563eb; selection-color: white; }
-QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus, QTextEdit:focus { border: 1px solid #377cf6; background: #fbfdff; }
+QLineEdit, QComboBox, QSpinBox, QPlainTextEdit, QTextEdit, QTableWidget { background: #ffffff; color: #13233a; border: 1px solid #c9d8eb; border-radius: 7px; padding: 3px 9px; selection-background-color: #2563eb; selection-color: white; }
+QLineEdit, QComboBox, QSpinBox { min-height: 24px; }
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QPlainTextEdit:focus, QTextEdit:focus { border: 1px solid #377cf6; background: #fbfdff; }
 QComboBox::drop-down { border: none; width: 26px; }
+QSpinBox::up-button, QSpinBox::down-button { width: 20px; }
 QComboBox QAbstractItemView { background: white; color: #13233a; border: 1px solid #c9d8eb; selection-background-color: #dbeafe; }
 QGroupBox { border: 1px solid #d1ddeb; border-radius: 10px; margin-top: 12px; padding: 15px 11px 10px 11px; color: #294b70; font-weight: 700; }
 QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 5px; }

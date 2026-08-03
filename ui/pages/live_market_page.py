@@ -69,7 +69,7 @@ class LiveMarketPage(QWidget):
         self.capture_snapshot_button = QPushButton("Save Market Snapshot Now (5m + 15m)")
         self.capture_snapshot_button.clicked.connect(self.capture_market_snapshot)
         layout.addWidget(self.capture_snapshot_button)
-        overview_box = QGroupBox("Live Index & Current-Month Futures (updates every 10 seconds)")
+        overview_box = QGroupBox("Live Index & Current-Month Futures (updates every 30 seconds)")
         overview_grid = QGridLayout(overview_box)
         self.overview_cards = {
             **{symbol: DashboardCard(f"{symbol} Spot", "Waiting") for symbol in ("NIFTY", "BANKNIFTY", "SENSEX")},

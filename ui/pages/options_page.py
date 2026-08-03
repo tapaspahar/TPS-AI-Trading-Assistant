@@ -309,7 +309,7 @@ class OptionsPage(QWidget):
         chart_text = "✓ Score above 75" if chart_ready else "• Score above 75 required"
         chain_text = "✓ OI/PCR analysis ready" if chain_ready else "• Selected-expiry OI/PCR analysis required"
         open_trade = self.db.has_open_trade(underlying)
-        open_text = "â€¢ Close/review the active open trade before a new plan" if open_trade else "âœ“ No active open trade for this underlying"
+        open_text = "[!] Close/review the active open trade before a new plan" if open_trade else "[OK] No active open trade for this underlying"
         self.plan_status.setText(
             f"{score_text} (minimum: 95)  |  "
             f"{'✓ Score 95+ with high-volume confirmation' if chart_ready else '• Score 95+ and Volume > Volume EMA 20 required'}  |  "

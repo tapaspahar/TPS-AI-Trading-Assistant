@@ -16,7 +16,15 @@ class AngelOneStream:
             raise RuntimeError("SmartAPI WebSocket dependency is unavailable.") from error
         self.socket = SmartWebSocketV2(self.client.auth_token, self.client.api_key, self.client.client_code, self.client.feed_token)
         self.socket.on_data = lambda _ws, message: self.on_tick(message)
-        self.socket.on_error = lambda _ws, error: self.on_status(f"Feed error: {error}")
+
+        def report_error(_ws, error):
+            text = str(error)
+            if "connection closed" in text.lower():
+                self.on_status("Live feed disconnected — reconnect when Angel One is available")
+            else:
+                self.on_status(f"Live feed issue: {text}")
+
+        self.socket.on_error = report_error
         self.socket.on_close = lambda _ws: self.on_status("Feed disconnected")
         def open_feed(_ws):
             self.on_status("Live feed connected")

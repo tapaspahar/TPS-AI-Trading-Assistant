@@ -52,19 +52,21 @@ QPushButton#menuButton {
 }
 QPushButton#menuButton:hover { background: #172841; color: #f8fbff; border-color: #294363; }
 QPushButton#menuButton:checked { background: #1d4ed8; color: white; border-color: #5590ff; }
-QLineEdit, QComboBox, QPlainTextEdit, QTextEdit, QTableWidget {
+QLineEdit, QComboBox, QSpinBox, QPlainTextEdit, QTextEdit, QTableWidget {
     background: #101a2d;
     color: #edf4ff;
     border: 1px solid #30435f;
     border-radius: 7px;
-    padding: 7px 9px;
+    padding: 3px 9px;
     selection-background-color: #2563eb;
 }
-QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus, QTextEdit:focus {
+QLineEdit, QComboBox, QSpinBox { min-height: 24px; }
+QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QPlainTextEdit:focus, QTextEdit:focus {
     border: 1px solid #4f8cff;
     background: #13213a;
 }
 QComboBox::drop-down { border: none; width: 26px; }
+QSpinBox::up-button, QSpinBox::down-button { width: 20px; }
 QComboBox QAbstractItemView { background: #17243b; color: #edf4ff; border: 1px solid #3a5276; selection-background-color: #2563eb; }
 QGroupBox {
     border: 1px solid #2d405e;
