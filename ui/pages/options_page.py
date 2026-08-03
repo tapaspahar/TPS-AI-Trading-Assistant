@@ -1,7 +1,7 @@
 from threading import Thread
 
 from PySide6.QtCore import QTimer, Signal
-from PySide6.QtWidgets import QComboBox, QFormLayout, QGroupBox, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QComboBox, QFormLayout, QGroupBox, QLabel, QMessageBox, QPushButton, QSpinBox, QVBoxLayout, QWidget
 
 from core.settings_store import SettingsStore
 from engine.option_chain_engine import analyze_option_chain
@@ -41,6 +41,9 @@ class OptionsPage(QWidget):
         self.expiry = QComboBox(); self.expiry.currentIndexChanged.connect(self.populate_strikes)
         self.option_type = QComboBox(); self.option_type.addItems(("CE", "PE")); self.option_type.currentIndexChanged.connect(self.populate_strikes)
         self.strike = QComboBox(); self.strike.currentIndexChanged.connect(self.schedule_auto_refresh)
+        self.strike.currentIndexChanged.connect(self.update_lot_quantity)
+        self.lots = QSpinBox(); self.lots.setRange(1, 100); self.lots.setValue(1); self.lots.valueChanged.connect(self.update_lot_quantity)
+        self.quantity_preview = QLabel("Quantity: load a contract")
         self.auto_refresh_timer = QTimer(self)
         self.auto_refresh_timer.setSingleShot(True)
         self.auto_refresh_timer.timeout.connect(self.refresh_selected_context)
@@ -55,6 +58,8 @@ class OptionsPage(QWidget):
         form.addRow("Expiry", self.expiry)
         form.addRow("Type", self.option_type)
         form.addRow("Strike", self.strike)
+        form.addRow("Lots (1–100)", self.lots)
+        form.addRow("Auto quantity", self.quantity_preview)
         form.addRow(refresh)
         form.addRow(analyze_chain)
         layout.addWidget(selection)
@@ -144,6 +149,14 @@ class OptionsPage(QWidget):
         if not contract:
             raise ValueError("Load expiries and select a valid option contract first.")
         return contract
+
+    def update_lot_quantity(self, *_args):
+        contract = self.strike.currentData()
+        if not contract:
+            self.quantity_preview.setText("Quantity: load a contract")
+            return
+        lot_size = int(contract.get("lot_size", 0) or 0)
+        self.quantity_preview.setText(f"{self.lots.value()} lot(s) × {lot_size} = {self.lots.value() * lot_size} quantity")
 
     def load_quote(self):
         if not LiveSession.connected():

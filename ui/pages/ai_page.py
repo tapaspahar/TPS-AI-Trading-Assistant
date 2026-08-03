@@ -17,7 +17,7 @@ class AIPage(QWidget):
         self.fields = {}
         self.loaded_symbol = ""
         for key, label in (("price", "Current price"), ("ema_5", "EMA 5"), ("ema_20", "EMA 20"),
-                           ("ema_50", "EMA 50"), ("vwap", "VWAP"), ("supertrend", "SuperTrend"),
+                           ("ema_50", "EMA 50"), ("vwap", "VWAP"), ("rsi_14", "RSI 14"), ("atr_14", "ATR 14"), ("supertrend", "SuperTrend"),
                            ("volume", "Volume"), ("volume_ema", "Volume EMA 20")):
             field = QLineEdit()
             self.fields[key] = field
@@ -65,7 +65,7 @@ class AIPage(QWidget):
         """Pre-fill Decision Engine fields from local Chart Capture OCR."""
         field_mapping = {
             "close": "price", "ema_5": "ema_5", "ema_20": "ema_20",
-            "ema_50": "ema_50", "vwap": "vwap", "supertrend": "supertrend",
+            "ema_50": "ema_50", "vwap": "vwap", "rsi_14": "rsi_14", "atr_14": "atr_14", "supertrend": "supertrend",
             "volume": "volume", "volume_ema": "volume_ema",
         }
         missing = []

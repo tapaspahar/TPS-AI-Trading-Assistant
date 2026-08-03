@@ -27,6 +27,26 @@ def ema(values, period):
     return result
 
 
+def rsi(values, period=14):
+    if len(values) < period + 1:
+        raise ValueError("At least 15 candles are needed for RSI 14.")
+    changes = [float(values[index]) - float(values[index - 1]) for index in range(1, len(values))]
+    gains = [max(change, 0) for change in changes[-period:]]
+    losses = [abs(min(change, 0)) for change in changes[-period:]]
+    average_gain, average_loss = sum(gains) / period, sum(losses) / period
+    return 100.0 if not average_loss else 100 - (100 / (1 + average_gain / average_loss))
+
+
+def atr(candles, period=14):
+    if len(candles) < period + 1:
+        raise ValueError("At least 15 candles are needed for ATR 14.")
+    ranges = []
+    for index, candle in enumerate(candles[-(period + 1):]):
+        previous = candles[-(period + 2) + index] if index else candle
+        ranges.append(max(float(candle["high"]) - float(candle["low"]), abs(float(candle["high"]) - float(previous["close"])), abs(float(candle["low"]) - float(previous["close"]))))
+    return sum(ranges[1:]) / period
+
+
 def supertrend(candles, period=10, multiplier=3.0):
     if len(candles) < period + 1:
         raise ValueError("More candles are needed to calculate SuperTrend.")
@@ -81,6 +101,7 @@ def build_live_capture(symbol, timeframe, candles, analysis_source="Angel One ca
         "low": number(float(latest["low"])), "close": number(close),
         "ema_5": number(ema(closes[-20:], 5)), "ema_20": number(ema(closes[-50:], 20)),
         "ema_50": number(ema(closes[-100:], 50)), "vwap": number(vwap),
+        "rsi_14": number(rsi(closes)), "atr_14": number(atr(candles)),
         "supertrend": number(trend),
         "supertrend_state": "Green / Bullish" if close >= trend else "Red / Bearish",
         "volume": number(volume), "volume_ema": number(volume_ema), "volume_ema_period": "20",
