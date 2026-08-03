@@ -19,6 +19,7 @@ class OptionsPage(QWidget):
     chain_loaded = Signal(object)
     chain_error = Signal(str)
     trade_plan_ready = Signal(dict)
+    open_chart_capture = Signal()
 
     def __init__(self):
         super().__init__()
@@ -34,6 +35,7 @@ class OptionsPage(QWidget):
         selection = QGroupBox("1. Choose a contract")
         form = QFormLayout(selection)
         self.underlying = QComboBox(); self.underlying.addItems(("NIFTY", "BANKNIFTY", "SENSEX"))
+        self.underlying.currentTextChanged.connect(lambda _symbol: self.update_plan_readiness())
         self.expiry = QComboBox(); self.expiry.currentIndexChanged.connect(self.populate_strikes)
         self.option_type = QComboBox(); self.option_type.addItems(("CE", "PE")); self.option_type.currentIndexChanged.connect(self.populate_strikes)
         self.strike = QComboBox()
@@ -55,9 +57,17 @@ class OptionsPage(QWidget):
         self.details = QLabel("Load current expiries to choose an option contract.")
         layout.addWidget(self.details)
         self.decision = QLabel("Buying only: CE needs bullish underlying confirmation; PE needs bearish underlying confirmation.\nNaked option selling is intentionally not available in this version.")
+        self.decision.setWordWrap(True)
         layout.addWidget(self.decision)
+        self.plan_status = QLabel("Trade plan checklist: Chart confirmation required • OI/PCR analysis required")
+        self.plan_status.setWordWrap(True)
+        layout.addWidget(self.plan_status)
+        self.open_chart_button = QPushButton("1. Open Chart Capture & Evaluate")
+        self.open_chart_button.clicked.connect(self.open_chart_capture.emit)
+        layout.addWidget(self.open_chart_button)
         self.create_plan_button = QPushButton("Create Review Trade Plan (Auto-select CE / PE)")
         self.create_plan_button.clicked.connect(self.create_trade_plan)
+        self.create_plan_button.setEnabled(False)
         layout.addWidget(self.create_plan_button)
         self.send_plan_button = QPushButton("Send Review Plan to Journal")
         self.send_plan_button.clicked.connect(self.send_plan_to_journal)
@@ -98,6 +108,7 @@ class OptionsPage(QWidget):
         self.chain_context = None
         self.current_plan = None
         self.send_plan_button.setEnabled(False)
+        self.update_plan_readiness()
         self.expiry.blockSignals(True)
         self.expiry.clear()
         for expiry in sorted({contract["expiry"] for contract in self.contracts}):
@@ -193,6 +204,7 @@ class OptionsPage(QWidget):
     def show_chain_analysis(self, analysis):
         analysis["expiry"] = self.expiry.currentData()
         self.chain_context = analysis
+        self.update_plan_readiness()
         def number(value):
             return f"{float(value):.2f}" if value is not None else "unavailable"
         self.details.setText(
@@ -216,6 +228,20 @@ class OptionsPage(QWidget):
             f"Chart evaluation received for {symbol}: {context['decision']} ({context['score']}/100). "
             "Run expiry OI/PCR analysis, then create a review plan."
         )
+        self.update_plan_readiness()
+
+    def update_plan_readiness(self):
+        underlying = self.underlying.currentText()
+        chart_ready = bool(
+            self.chart_context
+            and self.chart_context.get("symbol") == underlying
+            and str(self.chart_context.get("decision", "")).startswith("STRONG")
+        )
+        chain_ready = bool(self.chain_context and self.chain_context.get("underlying") == underlying)
+        chart_text = "✓ Fresh STRONG chart confirmation" if chart_ready else "• Fresh STRONG chart confirmation required"
+        chain_text = "✓ OI/PCR analysis ready" if chain_ready else "• Selected-expiry OI/PCR analysis required"
+        self.plan_status.setText(f"Trade plan checklist: {chart_text}  |  {chain_text}")
+        self.create_plan_button.setEnabled(chart_ready and chain_ready)
 
     def create_trade_plan(self):
         if not self.contracts or self.spot_price is None:
