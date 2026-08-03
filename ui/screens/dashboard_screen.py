@@ -41,11 +41,11 @@ class DashboardScreen(QWidget):
         self.journalPage.trade_saved.connect(self.reportsPage.refresh)
         self.chartCapturePage.symbol_ready.connect(self.journalPage.set_symbol_from_capture)
         self.chartCapturePage.analysis_ready.connect(self.aiPage.load_chart_capture)
-        self.chartCapturePage.analysis_ready.connect(lambda _capture: self.show_page(6))
-        self.aiPage.decision_ready.connect(self.optionsPage.set_chart_context)
+        self.aiPage.decision_ready.connect(self.handle_ai_decision)
         self.optionsPage.trade_plan_ready.connect(self.journalPage.load_trade_plan)
         self.optionsPage.trade_plan_ready.connect(lambda _plan: self.show_page(4))
         self.optionsPage.open_chart_capture.connect(lambda: self.show_page(3))
+        self.settingsPage.live_connected.connect(self.start_default_nifty)
         for button, index in ((self.sidebar.dashboardButton, 0), (self.sidebar.liveMarketButton, 1),
                               (self.sidebar.optionsButton, 2), (self.sidebar.chartCaptureButton, 3),
                               (self.sidebar.journalButton, 4), (self.sidebar.checklistButton, 5),
@@ -65,4 +65,13 @@ class DashboardScreen(QWidget):
         elif index == 1:
             self.liveMarketPage.refresh_status()
             self.liveMarketPage.start_market_overview()
+        elif index == 2:
+            self.optionsPage.prepare_live_workspace()
         self.stack.setCurrentIndex(index)
+
+    def handle_ai_decision(self, context):
+        self.optionsPage.set_chart_context(context)
+        self.show_page(2)
+
+    def start_default_nifty(self):
+        self.liveMarketPage.select_symbol("NIFTY")

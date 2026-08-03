@@ -58,6 +58,7 @@ class AIPage(QWidget):
         self.decision_ready.emit({
             "symbol": self.loaded_symbol,
             "score": result["score"], "direction": result["direction"], "decision": result["decision"],
+            "reasons": result["reasons"], "warnings": result["warnings"],
         })
 
     def load_chart_capture(self, capture: dict):
@@ -76,7 +77,4 @@ class AIPage(QWidget):
                 missing.append(target_key.replace("_", " "))
         symbol = capture.get("symbol", "Unknown symbol")
         self.loaded_symbol = str(symbol).upper()
-        if missing:
-            self.result.setText(f"Chart Capture loaded for {symbol}. Verify or enter: {', '.join(missing)}.")
-        else:
-            self.result.setText(f"Chart Capture loaded for {symbol}. Review values, choose CE/PE, then Evaluate Setup.")
+        self.evaluate()

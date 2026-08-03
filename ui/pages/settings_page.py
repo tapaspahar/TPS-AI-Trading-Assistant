@@ -13,6 +13,7 @@ from ui.themes.theme_manager import apply_theme
 class SettingsPage(QWidget):
     auto_connection_succeeded = Signal(object, str)
     auto_connection_failed = Signal(str)
+    live_connected = Signal()
 
     def __init__(self):
         super().__init__()
@@ -127,6 +128,7 @@ class SettingsPage(QWidget):
             return
         LiveSession.client = client
         self.broker_status.setText("Connection status: connected (read-only)")
+        self.live_connected.emit()
         QMessageBox.information(self, "Angel One", result["message"])
 
     def auto_connect_saved_credentials(self):
@@ -158,6 +160,7 @@ class SettingsPage(QWidget):
     def complete_auto_connection(self, client, message):
         LiveSession.client = client
         self.broker_status.setText("Connection status: connected automatically (read-only)")
+        self.live_connected.emit()
 
     def show_auto_connection_error(self, message):
         self.broker_status.setText(f"Connection status: auto-connect failed ({message})")

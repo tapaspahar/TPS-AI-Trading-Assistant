@@ -1,10 +1,11 @@
 from threading import Thread
 
 from PySide6.QtCore import QTimer, Signal
-from PySide6.QtWidgets import QGridLayout, QGroupBox, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QComboBox, QGridLayout, QGroupBox, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from services.angel_one_stream import AngelOneStream
 from services.live_session import LiveSession
+from services.option_contract_service import OptionContractService
 from engine.market_structure import analyze_candles
 from engine.multi_timeframe_engine import analyze_multi_timeframe
 from ui.widgets.cards.dashboard_card import DashboardCard
@@ -39,8 +40,12 @@ class LiveMarketPage(QWidget):
             button.clicked.connect(lambda _checked=False, name=symbol: self.select_symbol(name))
             buttons.addWidget(button, 0, index)
         layout.addLayout(buttons)
-        self.multi_timeframe_button = QPushButton("Analyze 5m / 15m / 1h / 1D")
-        self.multi_timeframe_button.clicked.connect(self.load_multi_timeframe)
+        self.timeframe = QComboBox()
+        self.timeframe.addItems(("5m", "15m", "1h", "1D", "All timeframes"))
+        self.timeframe.currentTextChanged.connect(lambda _value: self.load_selected_timeframe())
+        layout.addWidget(self.timeframe)
+        self.multi_timeframe_button = QPushButton("Analyze Selected Timeframe")
+        self.multi_timeframe_button.clicked.connect(self.load_selected_timeframe)
         layout.addWidget(self.multi_timeframe_button)
         grid = QGridLayout()
         self.cards = {name: DashboardCard(title, "Waiting for live feed") for name, title in (
@@ -53,14 +58,15 @@ class LiveMarketPage(QWidget):
         layout.addWidget(QLabel("Live feed values will auto-fill Decision Engine V2. This workspace is read-only and cannot place orders."))
         self.multi_timeframe_detail = QLabel("Select a live symbol, then run multi-timeframe chart analysis.")
         layout.addWidget(self.multi_timeframe_detail)
-        overview_box = QGroupBox("Live Market Overview")
+        overview_box = QGroupBox("Live Index & Current-Month Futures (updates every 10 seconds)")
         overview_grid = QGridLayout(overview_box)
         self.overview_cards = {
-            "BANKNIFTY": DashboardCard("BANKNIFTY", "Waiting for live data"),
-            "SENSEX": DashboardCard("SENSEX", "Waiting for live data"),
+            **{symbol: DashboardCard(f"{symbol} Spot", "Waiting") for symbol in ("NIFTY", "BANKNIFTY", "SENSEX")},
+            **{f"{symbol} FUT": DashboardCard(f"{symbol} Future", "Loading") for symbol in ("NIFTY", "BANKNIFTY", "SENSEX")},
         }
         for index, card in enumerate(self.overview_cards.values()):
-            overview_grid.addWidget(card, 0, index)
+            card.set_compact(True)
+            overview_grid.addWidget(card, index // 3, index % 3)
         layout.addWidget(overview_box)
         layout.addStretch()
         self.tick_received.connect(self.show_tick)
@@ -72,7 +78,16 @@ class LiveMarketPage(QWidget):
         self.overview_received.connect(self.show_overview)
         self.overview_error.connect(self.show_overview_error)
         self.selected_symbol = None
+        for symbol, future in self.future_contracts.items():
+            quote = quotes.get(future["token"])
+            if quote:
+                self.overview_cards[f"{symbol} FUT"].set_value(
+                    f"Future ₹{float(quote.get('ltp', 0) or 0):,.2f}\nExpires {future['expiry'].strftime('%d %b')}"
+                )
+            else:
+                self.overview_cards[f"{symbol} FUT"].set_value("Future quote unavailable")
         self.overview_loading = False
+        self.future_contracts = {}
         self.overview_timer = QTimer(self)
         self.overview_timer.timeout.connect(self.load_market_overview)
         self.refresh_status()
@@ -110,6 +125,28 @@ class LiveMarketPage(QWidget):
         self.cards["breakout"].set_value("5m close + volume confirmation")
         self.cards["breakdown"].set_value("5m close + volume confirmation")
         Thread(target=self.load_market_structure, args=(symbol, exchange_type, token), daemon=True).start()
+        self.load_selected_timeframe()
+
+    def load_selected_timeframe(self):
+        if not LiveSession.connected() or not self.selected_symbol:
+            return
+        if self.timeframe.currentText() == "All timeframes":
+            self.load_multi_timeframe()
+            return
+        symbol, exchange_type, token = self.selected_symbol
+        self.multi_timeframe_detail.setText(f"Loading {symbol} {self.timeframe.currentText()} chart analysis...")
+        Thread(target=self._load_single_timeframe, args=(symbol, exchange_type, token, self.timeframe.currentText()), daemon=True).start()
+
+    def _load_single_timeframe(self, symbol, exchange_type, token, label):
+        exchange = "BSE" if exchange_type == 3 else "NSE"
+        requests = {"5m": ("FIVE_MINUTE", 5), "15m": ("FIFTEEN_MINUTE", 15), "1h": ("ONE_HOUR", 60), "1D": ("ONE_DAY", 365)}
+        try:
+            interval, days = requests[label]
+            result = analyze_candles(LiveSession.client.get_recent_candles(exchange, token, interval, days))
+            result.update({"symbol": symbol, "timeframe": label})
+            self.structure_received.emit(result)
+        except (RuntimeError, ValueError) as error:
+            self.multi_timeframe_error.emit(str(error))
 
     def load_market_structure(self, symbol, exchange_type, token):
         exchange = "BSE" if exchange_type == 3 else "NSE"
@@ -133,6 +170,11 @@ class LiveMarketPage(QWidget):
             f"5m close < {result['breakdown_level']:,.2f}\n{result['volume_condition']}"
         )
         self.status.setText(f"Angel One: {result['symbol']} levels refreshed from {result['candle_count']} 5m candles")
+        if result.get("timeframe"):
+            self.multi_timeframe_detail.setText(
+                f"{result['symbol']} {result['timeframe']} analysis: {result['state']}. "
+                f"Support {result['support']:,.2f} | Resistance {result['resistance']:,.2f}."
+            )
 
     def show_structure_error(self, message):
         self.cards["trend"].set_value("Structure unavailable")
@@ -185,13 +227,21 @@ class LiveMarketPage(QWidget):
 
     def _load_market_overview(self):
         try:
-            quotes = LiveSession.client.get_market_quotes({"NSE": ["99926009"], "BSE": ["99919000"]})
-            self.overview_received.emit({str(quote.get("symbolToken", quote.get("symboltoken", ""))): quote for quote in quotes})
+            futures = self.future_contracts
+            if not futures:
+                service = OptionContractService()
+                futures = {symbol: service.get_front_month_future(symbol) for symbol in ("NIFTY", "BANKNIFTY", "SENSEX")}
+            request = {"NSE": ["99926000", "99926009"], "BSE": ["99919000"]}
+            for future in futures.values():
+                request.setdefault(future["exchange"], []).append(future["token"])
+            quotes = LiveSession.client.get_market_quotes(request)
+            self.overview_received.emit({"quotes": {str(quote.get("symbolToken", quote.get("symboltoken", ""))): quote for quote in quotes}, "futures": futures})
         except RuntimeError as error:
             self.overview_error.emit(str(error))
 
-    def show_overview(self, quotes):
-        token_map = {"99926009": "BANKNIFTY", "99919000": "SENSEX"}
+    def show_overview(self, result):
+        quotes, self.future_contracts = result["quotes"], result["futures"]
+        token_map = {"99926000": "NIFTY", "99926009": "BANKNIFTY", "99919000": "SENSEX"}
         for token, symbol in token_map.items():
             quote = quotes.get(token)
             if not quote:

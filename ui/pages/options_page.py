@@ -280,13 +280,19 @@ class OptionsPage(QWidget):
         chart_ready = bool(
             self.chart_context
             and self.chart_context.get("symbol") == underlying
-            and str(self.chart_context.get("decision", "")).startswith("STRONG")
+            and self.chart_context.get("score", 0) >= 65
+            and str(self.chart_context.get("decision", "")) != "NO TRADE"
         )
         chain_ready = bool(self.chain_context and self.chain_context.get("underlying") == underlying)
         chart_text = "✓ Fresh STRONG chart confirmation" if chart_ready else "• Fresh STRONG chart confirmation required"
         chain_text = "✓ OI/PCR analysis ready" if chain_ready else "• Selected-expiry OI/PCR analysis required"
         self.plan_status.setText(f"Trade plan checklist: {chart_text}  |  {chain_text}")
         self.create_plan_button.setEnabled(chart_ready and chain_ready)
+
+    def prepare_live_workspace(self):
+        """Open with current expiry/ATM data already loading when a live session exists."""
+        if LiveSession.connected() and not self.contracts:
+            self.load_contracts()
 
     def create_trade_plan(self):
         if not self.contracts or self.spot_price is None:

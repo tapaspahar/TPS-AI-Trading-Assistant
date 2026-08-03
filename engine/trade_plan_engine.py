@@ -10,8 +10,8 @@ from services.option_contract_service import buying_risk
 
 def create_review_plan(underlying, spot_price, contracts, quote_rows, chart_context, chain_context, settings):
     """Select a liquid near-ATM contract only when every required context agrees."""
-    if not chart_context or not str(chart_context.get("decision", "")).startswith("STRONG"):
-        raise ValueError("Run a fresh STRONG chart evaluation before creating a trade plan.")
+    if not chart_context or chart_context.get("score", 0) < 65 or str(chart_context.get("decision", "")) == "NO TRADE":
+        raise ValueError("Run a fresh chart evaluation with score 65 or higher before creating a review plan.")
     if str(chart_context.get("symbol", "")).upper() != str(underlying).upper():
         raise ValueError("The latest chart evaluation is for a different underlying. Capture and evaluate this symbol first.")
     if not chain_context:
@@ -54,9 +54,8 @@ def create_review_plan(underlying, spot_price, contracts, quote_rows, chart_cont
         "confidence": int(chart_context["score"]),
         "reasons": [
             f"{chart_context['decision']} ({chart_context['score']}/100)",
-            "Futures VWAP and Volume EMA confirmation verified",
             f"Focused OI/PCR context: {chain_context.get('context', 'available')}",
             f"Near-ATM liquid contract selected (volume {volume:,.0f})",
         ],
-        "warning": "Review live premium, bid/ask, stop-loss and target in Angel One before manually placing an order.",
+        "warning": "Conditional review plan: verify live premium, bid/ask, volume, stop-loss and target in Angel One before manually placing an order.",
     }

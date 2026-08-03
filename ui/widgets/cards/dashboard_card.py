@@ -9,6 +9,7 @@ class DashboardCard(QFrame):
         super().__init__()
 
         self.setObjectName("dashboardCard")
+        self.compact = False
 
         layout = QVBoxLayout(self)
 
@@ -28,7 +29,12 @@ class DashboardCard(QFrame):
     def set_value(self, value):
         text = str(value)
         self.value_label.setText(text)
-        density = "compact" if len(text) > 20 or "\n" in text else "normal"
+        density = "compact" if self.compact or len(text) > 20 or "\n" in text else "normal"
         self.value_label.setProperty("density", density)
         self.value_label.style().unpolish(self.value_label)
         self.value_label.style().polish(self.value_label)
+
+    def set_compact(self, enabled=True):
+        self.compact = enabled
+        if enabled:
+            self.setFixedHeight(92)

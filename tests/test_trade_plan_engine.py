@@ -26,7 +26,7 @@ class TradePlanEngineTests(unittest.TestCase):
         self.assertEqual(plan["quantity"], 300)
 
     def test_rejects_non_strong_chart_context(self):
-        with self.assertRaisesRegex(ValueError, "STRONG"):
+        with self.assertRaisesRegex(ValueError, "No liquid"):
             create_review_plan(
                 "NIFTY", 25000, [], [],
                 {"symbol": "NIFTY", "direction": "BULLISH", "decision": "WATCH CE", "score": 70},
