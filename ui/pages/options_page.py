@@ -2,13 +2,14 @@ from datetime import date
 from threading import Thread
 
 from PySide6.QtCore import QTimer, Signal
-from PySide6.QtWidgets import QComboBox, QFormLayout, QGroupBox, QLabel, QMessageBox, QPushButton, QSpinBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QCheckBox, QComboBox, QFormLayout, QGroupBox, QLabel, QMessageBox, QPushButton, QSpinBox, QVBoxLayout, QWidget
 
 from core.settings_store import SettingsStore
 from core.database_manager import Database
 from engine.option_chain_engine import analyze_option_chain
 from engine.trade_plan_engine import create_review_plan
 from engine.greeks_engine import calculate_greeks
+from services.auto_paper_trader import run_auto_paper_cycle
 from services.live_session import LiveSession
 from services.option_contract_service import UNDERLYING_QUOTES, OptionContractService, buying_risk, contracts_near_spot
 
@@ -26,6 +27,8 @@ class OptionsPage(QWidget):
     paper_trade_captured = Signal(dict)
     paper_trade_closed = Signal(object)
     paper_trade_error = Signal(str)
+    auto_paper_status = Signal(str)
+    auto_paper_captured = Signal(object)
 
     def __init__(self):
         super().__init__()
@@ -37,6 +40,8 @@ class OptionsPage(QWidget):
         self.chain_loading = False
         self.auto_refresh_pending = False
         self.paper_monitoring = False
+        self.auto_paper_running = False
+        self.last_auto_paper_bucket = None
         self.service = OptionContractService()
         self.db = Database()
         layout = QVBoxLayout(self)
@@ -93,6 +98,15 @@ class OptionsPage(QWidget):
         self.paper_button.clicked.connect(self.capture_paper_trade)
         self.paper_button.setEnabled(False)
         layout.addWidget(self.paper_button)
+        auto_box = QGroupBox("Auto Paper Trading - 20 trading-day forward validation only")
+        auto_form = QFormLayout(auto_box)
+        self.auto_paper_enabled = QCheckBox("Enable strict auto paper trades (ATM, 1 lot, no real order)")
+        self.auto_paper_enabled.toggled.connect(self.set_auto_paper_enabled)
+        self.auto_paper_progress = QLabel("Disabled. This mode only evaluates each completed 5-minute candle during market hours.")
+        self.auto_paper_progress.setWordWrap(True)
+        auto_form.addRow(self.auto_paper_enabled)
+        auto_form.addRow(self.auto_paper_progress)
+        layout.addWidget(auto_box)
         self.send_plan_button = QPushButton("Send Review Plan to Journal")
         self.send_plan_button.clicked.connect(self.send_plan_to_journal)
         self.send_plan_button.setEnabled(False)
@@ -108,8 +122,12 @@ class OptionsPage(QWidget):
         self.paper_trade_captured.connect(self.show_paper_trade_captured)
         self.paper_trade_closed.connect(self.show_paper_trade_closed)
         self.paper_trade_error.connect(self.show_paper_trade_error)
+        self.auto_paper_status.connect(self.show_auto_paper_status)
+        self.auto_paper_captured.connect(self.show_auto_paper_captured)
         self.paper_monitor_timer = QTimer(self)
         self.paper_monitor_timer.timeout.connect(self.monitor_paper_trades)
+        self.auto_paper_timer = QTimer(self)
+        self.auto_paper_timer.timeout.connect(self.check_auto_paper_cycle)
 
     def load_contracts(self):
         if not LiveSession.connected():
@@ -453,6 +471,68 @@ class OptionsPage(QWidget):
 
     def show_paper_trade_error(self, message):
         self.details.setText(f"Paper-trade monitor paused: {message}. No broker order was sent; retry after Angel One data is available.")
+
+    def set_auto_paper_enabled(self, enabled: bool):
+        if enabled:
+            if self.event_check.currentText() != "No known high-impact event":
+                self.auto_paper_enabled.blockSignals(True); self.auto_paper_enabled.setChecked(False); self.auto_paper_enabled.blockSignals(False)
+                QMessageBox.warning(self, "Auto paper trading", "First select 'No known high-impact event' after checking news/events. TPS will not automate around an unreviewed event.")
+                return
+            if not LiveSession.connected():
+                self.auto_paper_enabled.blockSignals(True); self.auto_paper_enabled.setChecked(False); self.auto_paper_enabled.blockSignals(False)
+                QMessageBox.warning(self, "Auto paper trading", "Connect Angel One read-only data first.")
+                return
+            self.auto_paper_progress.setText("Enabled: waits for each new completed 5-minute candle. One open paper trade at a time; daily cap comes from Risk Settings.")
+            self.auto_paper_timer.start(30_000)
+            self.check_auto_paper_cycle()
+        else:
+            self.auto_paper_timer.stop()
+            self.auto_paper_progress.setText("Paused. Existing open paper trades remain quote-monitored; no new paper trade will be captured.")
+
+    def check_auto_paper_cycle(self):
+        if not self.auto_paper_enabled.isChecked() or self.auto_paper_running or not LiveSession.connected():
+            return
+        now = __import__("datetime").datetime.now()
+        market_open = now.weekday() < 5 and ((now.hour == 9 and now.minute >= 15) or 10 <= now.hour < 15 or (now.hour == 15 and now.minute <= 30))
+        if not market_open:
+            self.auto_paper_status.emit("Auto paper mode is waiting for NSE market hours (09:15-15:30).")
+            return
+        bucket = now.strftime("%Y-%m-%d %H:") + str(now.minute // 5)
+        if bucket == self.last_auto_paper_bucket:
+            return
+        self.last_auto_paper_bucket = bucket
+        self.auto_paper_running = True
+        self.auto_paper_status.emit("Checking completed 5-minute future candle, volume, OI/PCR and 95-score conditions…")
+        Thread(target=self._run_auto_paper_cycle, args=(self.underlying.currentText(),), daemon=True).start()
+
+    def _run_auto_paper_cycle(self, symbol):
+        try:
+            result = run_auto_paper_cycle(LiveSession.client, symbol, SettingsStore().load())
+            if result.get("plan"):
+                self.auto_paper_captured.emit(result)
+            else:
+                self.auto_paper_status.emit(result["status"])
+        except (RuntimeError, ValueError) as error:
+            self.auto_paper_status.emit(f"Auto paper cycle skipped: {error}")
+        finally:
+            self.auto_paper_running = False
+
+    def show_auto_paper_status(self, message):
+        progress = self.db.paper_trade_progress()
+        self.auto_paper_progress.setText(f"{message}\nForward-test progress: {progress['days']}/20 trading days | {progress['trades']} paper trades | {progress['target_hits']} targets | {progress['stoploss_hits']} stop losses.")
+
+    def show_auto_paper_captured(self, result):
+        plan = result["plan"]
+        progress = self.db.paper_trade_progress()
+        self.auto_paper_progress.setText(
+            f"PAPER TRADE #{result['trade_id']} captured: {plan['contract']['symbol']} | 1 lot / {plan['quantity']} qty | "
+            f"Entry {plan['entry']:.2f}, Stop {plan['stoploss']:.2f}, Target {plan['target']:.2f}. Live quote monitoring is active.\n"
+            f"Forward-test progress: {progress['days']}/20 trading days | {progress['trades']} paper trades."
+        )
+        self.paper_trade_captured.emit(plan)
+        if not self.paper_monitor_timer.isActive():
+            self.paper_monitor_timer.start(30_000)
+        self.update_plan_readiness()
 
     def send_plan_to_journal(self):
         if not self.current_plan:

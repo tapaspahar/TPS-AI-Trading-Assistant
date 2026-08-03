@@ -256,6 +256,20 @@ class Database:
                 closed.append({"trade_id": int(row["id"]), "symbol": row["contract_symbol"], "ltp": ltp, "outcome": outcome})
         return closed
 
+    def paper_trade_progress(self, trade_date: str | None = None) -> dict:
+        """Return forward-test progress without mixing it with manual real trades."""
+        where, values = "", ()
+        if trade_date:
+            where, values = "WHERE t.trade_date = ?", (trade_date,)
+        row = self.cursor.execute(
+            f"""SELECT COUNT(*) AS trades, COUNT(DISTINCT t.trade_date) AS days,
+                       SUM(CASE WHEN t.status = 'OPEN' THEN 1 ELSE 0 END) AS open_trades,
+                       SUM(CASE WHEN t.status = 'CLOSED' AND t.outcome = 'TARGET HIT' THEN 1 ELSE 0 END) AS target_hits,
+                       SUM(CASE WHEN t.status = 'CLOSED' AND t.outcome = 'STOP LOSS HIT' THEN 1 ELSE 0 END) AS stoploss_hits
+                FROM trades t JOIN paper_trade_links p ON p.trade_id = t.id {where}""", values,
+        ).fetchone()
+        return {key: int(row[key] or 0) for key in ("trades", "days", "open_trades", "target_hits", "stoploss_hits")}
+
     def close_trade(self, trade_id: int, exit_price: float, outcome: str = "MANUAL EXIT") -> bool:
         """Record the actual exit for one previously saved open trade."""
         if exit_price <= 0:
