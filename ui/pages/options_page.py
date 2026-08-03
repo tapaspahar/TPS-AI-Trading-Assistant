@@ -1,6 +1,6 @@
 from threading import Thread
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import QComboBox, QFormLayout, QGroupBox, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
 
 from core.settings_store import SettingsStore
@@ -28,6 +28,8 @@ class OptionsPage(QWidget):
         self.chart_context = None
         self.chain_context = None
         self.current_plan = None
+        self.chain_loading = False
+        self.auto_refresh_pending = False
         self.service = OptionContractService()
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Options Decision Workspace — verify every condition before placing a manual broker order."))
@@ -38,11 +40,14 @@ class OptionsPage(QWidget):
         self.underlying.currentTextChanged.connect(lambda _symbol: self.update_plan_readiness())
         self.expiry = QComboBox(); self.expiry.currentIndexChanged.connect(self.populate_strikes)
         self.option_type = QComboBox(); self.option_type.addItems(("CE", "PE")); self.option_type.currentIndexChanged.connect(self.populate_strikes)
-        self.strike = QComboBox()
+        self.strike = QComboBox(); self.strike.currentIndexChanged.connect(self.schedule_auto_refresh)
+        self.auto_refresh_timer = QTimer(self)
+        self.auto_refresh_timer.setSingleShot(True)
+        self.auto_refresh_timer.timeout.connect(self.refresh_selected_context)
         load = QPushButton("Load Current Expiries")
         load.clicked.connect(self.load_contracts)
-        refresh = QPushButton("Refresh Selected Contract")
-        refresh.clicked.connect(self.load_quote)
+        refresh = QPushButton("Refresh & Analyze Selected Contract")
+        refresh.clicked.connect(self.refresh_selected_context)
         analyze_chain = QPushButton("Analyze Selected Expiry OI / PCR")
         analyze_chain.clicked.connect(self.load_chain_analysis)
         form.addRow("Underlying", self.underlying)
@@ -116,9 +121,10 @@ class OptionsPage(QWidget):
         self.expiry.blockSignals(False)
         self.populate_strikes()
         self.details.setText(
-            f"Live spot: {result['spot_price']:,.2f}. {len(self.contracts)} focused contracts loaded: "
-            "ATM plus 5 strikes on each side. Select expiry, CE/PE and strike."
+            f"Live Angel spot: {result['spot_price']:,.2f}. {len(self.contracts)} focused contracts loaded. "
+            "Nearest current-expiry ATM strike is selected automatically; change it manually if required."
         )
+        self.schedule_auto_refresh()
 
     def populate_strikes(self):
         if not self.contracts or self.expiry.currentIndex() < 0:
@@ -129,6 +135,9 @@ class OptionsPage(QWidget):
         self.strike.clear()
         for contract in selected:
             self.strike.addItem(f"{contract['strike']:,.0f}", contract)
+        if selected and self.spot_price is not None:
+            atm_index = min(range(len(selected)), key=lambda index: abs(float(selected[index]["strike"]) - self.spot_price))
+            self.strike.setCurrentIndex(atm_index)
 
     def selected_contract(self):
         contract = self.strike.currentData()
@@ -147,6 +156,29 @@ class OptionsPage(QWidget):
             return
         self.details.setText("Refreshing live option quote…")
         Thread(target=self._load_quote, args=(contract,), daemon=True).start()
+
+    def schedule_auto_refresh(self, *_args):
+        """Coalesce rapid selector changes into one read-only batch quote request."""
+        if self.contracts and self.expiry.currentIndex() >= 0 and self.strike.currentIndex() >= 0:
+            self.auto_refresh_timer.start(450)
+
+    def refresh_selected_context(self):
+        if not LiveSession.connected() or not self.contracts or self.expiry.currentIndex() < 0:
+            return
+        if self.chain_loading:
+            self.auto_refresh_pending = True
+            return
+        expiry = self.expiry.currentData()
+        contracts = [contract for contract in self.contracts if contract["expiry"] == expiry]
+        if self.chain_loading:
+            self.auto_refresh_pending = True
+            return
+        self.chain_loading = True
+        if not contracts:
+            return
+        self.chain_loading = True
+        self.details.setText("Auto-refreshing selected contract and focused OI / PCR...")
+        Thread(target=self._load_chain_analysis, args=(contracts, self.underlying.currentText()), daemon=True).start()
 
     def _load_quote(self, contract):
         try:
@@ -202,12 +234,22 @@ class OptionsPage(QWidget):
             self.chain_error.emit(str(error))
 
     def show_chain_analysis(self, analysis):
+        self.chain_loading = False
         analysis["expiry"] = self.expiry.currentData()
         self.chain_context = analysis
         self.update_plan_readiness()
         def number(value):
             return f"{float(value):.2f}" if value is not None else "unavailable"
+        selected = self.strike.currentData()
+        selected_row = next((row for row in analysis["quote_rows"] if selected and row["token"] == selected["token"]), None)
+        selected_text = "Selected contract quote unavailable"
+        if selected_row:
+            selected_text = (
+                f"Selected {selected_row['symbol']} | Premium: ₹{selected_row['ltp']:,.2f}"
+                f" | OI: {selected_row['oi']:,.0f} | Volume: {selected_row['volume']:,.0f}"
+            )
         self.details.setText(
+            f"{selected_text}\n"
             f"Focused expiry analysis ({analysis['quoted_contracts']}/{analysis['total_contracts']} contracts quoted)\n"
             f"Focused OI PCR: {number(analysis['pcr_oi'])} | Focused volume PCR: {number(analysis['pcr_volume'])}\n"
             f"Angel One market PCR: {number(analysis['official_pcr'])}\n"
@@ -219,6 +261,9 @@ class OptionsPage(QWidget):
             "Use OI/PCR as context, not a standalone signal. Take a CE/PE decision only when the live underlying "
             "structure, breakout/breakdown, option liquidity, and risk-limit checks all agree."
         )
+        if self.auto_refresh_pending:
+            self.auto_refresh_pending = False
+            self.schedule_auto_refresh()
 
     def set_chart_context(self, context: dict):
         """Receive the last explicit Decision Engine evaluation for plan gating."""
@@ -282,4 +327,6 @@ class OptionsPage(QWidget):
         self.trade_plan_ready.emit(self.current_plan)
 
     def show_error(self, message):
+        self.chain_loading = False
+        self.auto_refresh_pending = False
         self.details.setText(f"Options data unavailable: {message}")
