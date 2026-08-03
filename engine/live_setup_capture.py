@@ -72,6 +72,25 @@ def _current_session_candles(candles):
         return candles
 
 
+def _session_levels(candles):
+    """Return prior-day and first-15-minute levels when timestamps permit it."""
+    try:
+        dated = [(datetime.fromisoformat(str(c["time"])).date(), c) for c in candles]
+        current_day = dated[-1][0]
+        today = [c for day, c in dated if day == current_day]
+        previous = [c for day, c in dated if day < current_day]
+        previous_day = previous[-1][0] if previous else None
+        prior = [c for day, c in dated if day == previous_day]
+        return {
+            "previous_day_high": max((float(c["high"]) for c in prior), default=None),
+            "previous_day_low": min((float(c["low"]) for c in prior), default=None),
+            "opening_range_high": max((float(c["high"]) for c in today[:3]), default=None),
+            "opening_range_low": min((float(c["low"]) for c in today[:3]), default=None),
+        }
+    except (ValueError, TypeError, KeyError):
+        return {"previous_day_high": None, "previous_day_low": None, "opening_range_high": None, "opening_range_low": None}
+
+
 def analyse_volume_candle(candles, period=20, heavy_ratio=1.5):
     """Classify the latest traded candle without treating a wick as a breakout.
 
@@ -136,6 +155,7 @@ def build_live_capture(symbol, timeframe, candles, analysis_source="Angel One ca
     trend = supertrend(candles[-60:])
     close = float(latest["close"])
     volume_analysis = analyse_volume_candle(candles)
+    levels = _session_levels(candles) if timeframe == "5m" else {}
     number = lambda value: f"{value:.2f}" if value is not None else ""
     return {
         "symbol": symbol,
@@ -154,6 +174,10 @@ def build_live_capture(symbol, timeframe, candles, analysis_source="Angel One ca
         "candle_body_ratio": number(volume_analysis.get("candle_body_ratio")),
         "candle_close_position": number(volume_analysis.get("candle_close_position")),
         "fake_breakout_risk": bool(volume_analysis.get("fake_breakout_risk", True)),
+        "previous_day_high": number(levels.get("previous_day_high")),
+        "previous_day_low": number(levels.get("previous_day_low")),
+        "opening_range_high": number(levels.get("opening_range_high")),
+        "opening_range_low": number(levels.get("opening_range_low")),
         "analysis_source": analysis_source,
         "raw_text": f"Angel One live setup capture: {symbol} {timeframe}. {volume_note}",
     }

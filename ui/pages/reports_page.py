@@ -25,6 +25,11 @@ class ReportsPage(QWidget):
         summary = self.db.get_summary()
         outcomes = self.db.get_ai_outcome_report()
         validation = self.db.get_validation_report()
+        versions = self.db.get_rule_version_report()
+        version_text = "\n".join(
+            f"• {row['rule_version']}: {row['samples']} closed | target {row['target_hits']} | stop {row['stoploss_hits']} | net P&L ₹{row['net_pnl']:,.2f}"
+            for row in versions
+        ) or "No closed trade samples recorded yet."
         self.report.setText(
             f"Recorded trades: {summary['trades']}\n"
             f"Net P&L: ₹{summary['pnl']:,.2f}\n"
@@ -39,6 +44,7 @@ class ReportsPage(QWidget):
             f"Fully-confirmed closed samples: {validation['samples']} | Target hits: {validation['target_hits']} | Stop losses: {validation['stoploss_hits']}\n"
             f"Observed target-vs-stop rate: {validation['accuracy']:.1f}%\n"
             f"Evidence status: {validation['status']}\n"
+            f"\nRule-Version Review\n{version_text}\n"
             "A stop loss does not prove the AI was wrong; review the chart, timing, volatility, news, liquidity and execution before changing the rules."
        )
 

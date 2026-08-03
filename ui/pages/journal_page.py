@@ -19,6 +19,7 @@ class JournalPage(QWidget):
         super().__init__()
         self.db = Database()
         self.settings_store = SettingsStore()
+        self.current_rule_version = "Manual / unclassified"
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Trade Journal"))
         self.plan_summary = QLabel("No review plan loaded. Quantity can be entered manually for completed trades.")
@@ -84,7 +85,7 @@ class JournalPage(QWidget):
             strike=self.strike_input.text().strip(), option=self.option_input.currentText(),
             entry=float(self.entry_input.text()), exit=float(exit_text) if exit_text else 0.0,
             stoploss=float(self.stoploss_input.text()), target=float(self.target_input.text()),
-            quantity=int(self.quantity_input.text()), psychology_before=self.psychology_input.currentText(),
+            quantity=int(self.quantity_input.text()), psychology_before=self.psychology_input.currentText(), setup=self.current_rule_version,
             trend=self.trend_check.isChecked(), vwap=self.vwap_check.isChecked(),
             ema=self.ema_check.isChecked(), volume=self.volume_check.isChecked(), oi=self.oi_check.isChecked(),
         )
@@ -160,6 +161,7 @@ class JournalPage(QWidget):
             f"Review plan quantity: {plan['lots']} lot(s) × {plan['lot_size']} = {plan['quantity']} quantity. "
             f"Estimated premium risk: ₹{plan['estimated_risk']:,.2f} (configured cap: ₹{plan['risk_cap']:,.2f})."
         )
+        self.current_rule_version = plan.get("rule_version", "TPS V2 strict")
         for checkbox in (self.trend_check, self.vwap_check, self.ema_check, self.volume_check, self.oi_check):
             checkbox.setChecked(True)
         QMessageBox.information(

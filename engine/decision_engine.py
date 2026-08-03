@@ -20,6 +20,10 @@ class ChartSnapshot:
     volume_ratio: float | None = None
     candle_direction: str | None = None
     fake_breakout_risk: bool = False
+    previous_day_high: float | None = None
+    previous_day_low: float | None = None
+    opening_range_high: float | None = None
+    opening_range_low: float | None = None
 
 
 class DecisionEngine:
@@ -50,6 +54,15 @@ class DecisionEngine:
 
         score += 20
         reasons.append(f"SuperTrend is {direction.lower()}")
+
+        if bullish and snapshot.previous_day_high is not None and snapshot.price > snapshot.previous_day_high:
+            reasons.append("Price is above previous-day high")
+        elif not bullish and snapshot.previous_day_low is not None and snapshot.price < snapshot.previous_day_low:
+            reasons.append("Price is below previous-day low")
+        if bullish and snapshot.opening_range_high is not None and snapshot.price > snapshot.opening_range_high:
+            reasons.append("Opening-range breakout is confirmed")
+        elif not bullish and snapshot.opening_range_low is not None and snapshot.price < snapshot.opening_range_low:
+            reasons.append("Opening-range breakdown is confirmed")
 
         volume_confirmed = False
         if snapshot.volume is None or snapshot.volume_ema is None:

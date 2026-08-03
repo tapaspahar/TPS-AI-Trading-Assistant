@@ -1,3 +1,4 @@
+from datetime import date
 from threading import Thread
 
 from PySide6.QtCore import QTimer, Signal
@@ -7,6 +8,7 @@ from core.settings_store import SettingsStore
 from core.database_manager import Database
 from engine.option_chain_engine import analyze_option_chain
 from engine.trade_plan_engine import create_review_plan
+from engine.greeks_engine import calculate_greeks
 from services.live_session import LiveSession
 from services.option_contract_service import UNDERLYING_QUOTES, OptionContractService, buying_risk, contracts_near_spot
 
@@ -45,6 +47,7 @@ class OptionsPage(QWidget):
         self.strike = QComboBox(); self.strike.currentIndexChanged.connect(self.schedule_auto_refresh)
         self.strike.currentIndexChanged.connect(self.update_lot_quantity)
         self.lots = QSpinBox(); self.lots.setRange(1, 100); self.lots.setValue(1); self.lots.valueChanged.connect(self.update_lot_quantity)
+        self.event_check = QComboBox(); self.event_check.addItems(("Review news / event risk", "No known high-impact event", "High-impact event or expiry-day risk")); self.event_check.currentIndexChanged.connect(self.update_plan_readiness)
         self.quantity_preview = QLabel("Quantity: load a contract")
         self.auto_refresh_timer = QTimer(self)
         self.auto_refresh_timer.setSingleShot(True)
@@ -62,6 +65,7 @@ class OptionsPage(QWidget):
         form.addRow("Strike", self.strike)
         form.addRow("Lots (1–100)", self.lots)
         form.addRow("Auto quantity", self.quantity_preview)
+        form.addRow("News / event check", self.event_check)
         form.addRow(refresh)
         form.addRow(analyze_chain)
         layout.addWidget(selection)
@@ -209,10 +213,15 @@ class OptionsPage(QWidget):
         risk = buying_risk(premium, contract["lot_size"], settings["capital"], settings["risk_percent"])
         oi = quote.get("opnInterest", "—")
         volume = quote.get("tradeVolume", "—")
+        greeks = calculate_greeks(self.spot_price, contract["strike"], premium, contract.get("expiry"), contract["option_type"]) if self.spot_price else None
+        greek_text = (
+            f"\nModel Greeks (estimate): IV {greeks['iv']:.2f}% | Delta {greeks['delta']:.3f} | Theta/day {greeks['theta_per_day']:.2f} | Gamma {greeks['gamma']:.5f}"
+            if greeks else "\nModel Greeks unavailable: verify premium, expiry and liquidity; TPS will not invent values."
+        )
         self.details.setText(
             f"{contract['symbol']}\nPremium: ₹{premium:,.2f} | OI: {oi} | Volume: {volume}\n"
             f"Lot size: {contract['lot_size']} | One-lot premium risk: ₹{risk['per_lot_risk']:,.2f}\n"
-            f"Your configured risk cap: ₹{risk['risk_cap']:,.2f} | Whole lots within cap: {risk['lots']}"
+            f"Your configured risk cap: ₹{risk['risk_cap']:,.2f} | Whole lots within cap: {risk['lots']}{greek_text}"
         )
         expected = "bullish" if contract["option_type"] == "CE" else "bearish"
         self.decision.setText(
@@ -263,6 +272,11 @@ class OptionsPage(QWidget):
                 f"Selected {selected_row['symbol']} | Premium: ₹{selected_row['ltp']:,.2f}"
                 f" | OI: {selected_row['oi']:,.0f} | Volume: {selected_row['volume']:,.0f}"
             )
+            greeks = calculate_greeks(self.spot_price, selected["strike"], selected_row["ltp"], selected.get("expiry"), selected["option_type"])
+            if greeks:
+                selected_text += f" | Greeks est. IV {greeks['iv']:.1f}% Δ {greeks['delta']:.3f} Θ/day {greeks['theta_per_day']:.2f}"
+            else:
+                selected_text += " | Greeks unavailable (no estimate created)"
         self.details.setText(
             f"{selected_text}\n"
             f"Focused expiry analysis ({analysis['quoted_contracts']}/{analysis['total_contracts']} contracts quoted)\n"
@@ -309,13 +323,18 @@ class OptionsPage(QWidget):
         chart_text = "✓ Score above 75" if chart_ready else "• Score above 75 required"
         chain_text = "✓ OI/PCR analysis ready" if chain_ready else "• Selected-expiry OI/PCR analysis required"
         open_trade = self.db.has_open_trade(underlying)
+        expiry_day = self.expiry.currentData() == date.today()
+        event_ready = self.event_check.currentText() == "No known high-impact event" and not expiry_day
+        event_text = "⚠ Expiry-day caution: TPS blocks new plans; review manually" if expiry_day else (
+            "✓ News/event check recorded" if event_ready else "• Confirm no high-impact news/event before planning"
+        )
         open_text = "[!] Close/review the active open trade before a new plan" if open_trade else "[OK] No active open trade for this underlying"
         self.plan_status.setText(
             f"{score_text} (minimum: 95)  |  "
             f"{'✓ Score 95+ with high-volume confirmation' if chart_ready else '• Score 95+ and Volume > Volume EMA 20 required'}  |  "
-            f"{chain_text}  |  {open_text}"
+            f"{chain_text}  |  {event_text}  |  {open_text}"
         )
-        self.create_plan_button.setEnabled(chart_ready and chain_ready and not open_trade)
+        self.create_plan_button.setEnabled(chart_ready and chain_ready and event_ready and not open_trade)
 
     def prepare_live_workspace(self):
         """Open with current expiry/ATM data already loading when a live session exists."""

@@ -74,6 +74,7 @@ def create_review_plan(underlying, spot_price, contracts, quote_rows, chart_cont
         "risk_cap": risk["risk_cap"],
         "risk_within_cap": risk_within_cap,
         "confidence": int(chart_context["score"]),
+        "rule_version": "TPS V2 strict — chart/volume/OI confirmation",
         "reasons": [
             f"{chart_context['decision']} ({chart_context['score']}/100)",
             f"Focused OI/PCR context: {chain_context.get('context', 'available')}",

@@ -353,6 +353,21 @@ class Database:
             status = "Recorded result does not validate increasing risk; review the rule and market regime."
         return {"samples": samples, "target_hits": target_hits, "stoploss_hits": stoploss_hits, "accuracy": accuracy, "status": status}
 
+    def get_rule_version_report(self) -> list[sqlite3.Row]:
+        """Compare recorded closed outcomes by the rule/setup version used."""
+        return self.cursor.execute(
+            """
+            SELECT COALESCE(NULLIF(setup, ''), 'Manual / unclassified') AS rule_version,
+                   COUNT(*) AS samples,
+                   SUM(CASE WHEN outcome = 'TARGET HIT' THEN 1 ELSE 0 END) AS target_hits,
+                   SUM(CASE WHEN outcome = 'STOP LOSS HIT' THEN 1 ELSE 0 END) AS stoploss_hits,
+                   ROUND(COALESCE(SUM(pnl), 0), 2) AS net_pnl
+            FROM trades WHERE status = 'CLOSED'
+            GROUP BY COALESCE(NULLIF(setup, ''), 'Manual / unclassified')
+            ORDER BY samples DESC, rule_version ASC
+            """
+        ).fetchall()
+
     def save_market_snapshot(self, snapshot: dict) -> bool:
         """Persist a timed, read-only market/option-chain observation."""
         columns = (

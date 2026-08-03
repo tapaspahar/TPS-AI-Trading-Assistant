@@ -51,6 +51,10 @@ class AIPage(QWidget):
                 volume_ratio=self._optional_number(self.capture_meta.get("volume_ratio")),
                 candle_direction=self.capture_meta.get("candle_direction"),
                 fake_breakout_risk=bool(self.capture_meta.get("fake_breakout_risk", False)),
+                previous_day_high=self._optional_number(self.capture_meta.get("previous_day_high")),
+                previous_day_low=self._optional_number(self.capture_meta.get("previous_day_low")),
+                opening_range_high=self._optional_number(self.capture_meta.get("opening_range_high")),
+                opening_range_low=self._optional_number(self.capture_meta.get("opening_range_low")),
             )
             candidate_option = "CE" if snapshot.price > snapshot.supertrend else "PE"
             self.option.setCurrentText(candidate_option)
