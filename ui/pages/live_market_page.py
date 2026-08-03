@@ -78,14 +78,6 @@ class LiveMarketPage(QWidget):
         self.overview_received.connect(self.show_overview)
         self.overview_error.connect(self.show_overview_error)
         self.selected_symbol = None
-        for symbol, future in self.future_contracts.items():
-            quote = quotes.get(future["token"])
-            if quote:
-                self.overview_cards[f"{symbol} FUT"].set_value(
-                    f"Future ₹{float(quote.get('ltp', 0) or 0):,.2f}\nExpires {future['expiry'].strftime('%d %b')}"
-                )
-            else:
-                self.overview_cards[f"{symbol} FUT"].set_value("Future quote unavailable")
         self.overview_loading = False
         self.future_contracts = {}
         self.overview_timer = QTimer(self)
@@ -257,6 +249,14 @@ class LiveMarketPage(QWidget):
             else:
                 bias = "Flat day bias"
             self.overview_cards[symbol].set_value(f"₹{price:,.2f}\n{bias} ({percent_change:+.2f}%)")
+        for symbol, future in self.future_contracts.items():
+            quote = quotes.get(future["token"])
+            if quote:
+                self.overview_cards[f"{symbol} FUT"].set_value(
+                    f"Future ₹{float(quote.get('ltp', 0) or 0):,.2f}\nExpires {future['expiry'].strftime('%d %b')}"
+                )
+            else:
+                self.overview_cards[f"{symbol} FUT"].set_value("Future quote unavailable")
         self.overview_loading = False
 
     def show_overview_error(self, _message):
