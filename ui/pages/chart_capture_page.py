@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QFileDialog, QFormLayout, QLabel, QLineEdit, QMess
 
 from services.chart_capture_service import ChartCaptureService, OCRUnavailableError
 from services.live_session import LiveSession
+from services.option_contract_service import OptionContractService
 from engine.live_setup_capture import INSTRUMENTS, TIMEFRAMES, build_live_capture
 
 
@@ -24,7 +25,8 @@ class ChartCapturePage(QWidget):
         choose = QPushButton("Choose Chart Screenshot")
         choose.clicked.connect(self.choose_screenshot)
         layout.addWidget(choose)
-        self.live_capture_button = QPushButton("Capture Live Setup from Angel One")
+        layout.addWidget(QLabel("Live mode uses the nearest-expiry index future for traded Volume/VWAP; option-chain OI remains a separate confirmation."))
+        self.live_capture_button = QPushButton("Capture Setup from Current-Month Future")
         self.live_capture_button.clicked.connect(self.capture_live_setup)
         layout.addWidget(self.live_capture_button)
         form = QFormLayout()
@@ -74,11 +76,12 @@ class ChartCapturePage(QWidget):
         Thread(target=self._capture_live_setup, args=(symbol, timeframe), daemon=True).start()
 
     def _capture_live_setup(self, symbol, timeframe):
-        exchange, token = INSTRUMENTS[symbol]
         interval, days = TIMEFRAMES[timeframe]
         try:
-            candles = LiveSession.client.get_recent_candles(exchange, token, interval, days)
-            self.live_capture_received.emit(build_live_capture(symbol, timeframe, candles))
+            future = OptionContractService().get_front_month_future(symbol)
+            candles = LiveSession.client.get_recent_candles(future["exchange"], future["token"], interval, days)
+            source = f"current-month future {future['symbol']} (expires {future['expiry'].strftime('%d %b %Y')})"
+            self.live_capture_received.emit(build_live_capture(symbol, timeframe, candles, source))
         except (RuntimeError, ValueError) as error:
             self.live_capture_error.emit(str(error))
 
@@ -87,12 +90,12 @@ class ChartCapturePage(QWidget):
             field.setText(str(capture.get(key, "")))
         self.raw_text.setPlainText(capture.get("raw_text", ""))
         self.live_capture_button.setEnabled(True)
-        self.live_capture_button.setText("Capture Live Setup from Angel One")
+        self.live_capture_button.setText("Capture Setup from Current-Month Future")
         self.analysis_ready.emit(capture)
 
     def show_live_capture_error(self, message):
         self.live_capture_button.setEnabled(True)
-        self.live_capture_button.setText("Capture Live Setup from Angel One")
+        self.live_capture_button.setText("Capture Setup from Current-Month Future")
         QMessageBox.warning(self, "Live capture", message)
 
     def send_symbol(self):

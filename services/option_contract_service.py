@@ -58,6 +58,29 @@ def parse_option_contracts(rows, underlying):
     return sorted(contracts, key=lambda item: (item["expiry"], item["strike"], item["option_type"]))
 
 
+def parse_front_month_future(rows, underlying):
+    """Return the nearest active index future used for traded-volume analysis."""
+    exchange = UNDERLYINGS[underlying]
+    futures = []
+    for row in rows:
+        if str(row.get("exch_seg", "")).upper() != exchange:
+            continue
+        if str(row.get("name", "")).upper() != underlying:
+            continue
+        if str(row.get("instrumenttype", "")).upper() != "FUTIDX":
+            continue
+        expiry = _expiry_date(row.get("expiry"))
+        if not expiry or expiry < date.today():
+            continue
+        futures.append({
+            "token": str(row["token"]), "symbol": str(row["symbol"]),
+            "exchange": exchange, "expiry": expiry,
+        })
+    if not futures:
+        raise RuntimeError(f"No active {underlying} index future was found in Angel One's instrument master.")
+    return min(futures, key=lambda item: item["expiry"])
+
+
 def buying_risk(premium, lot_size, capital, risk_percent):
     """Suggest the maximum whole lots within the user's configured premium-risk cap."""
     per_lot_risk = float(premium) * int(lot_size)
@@ -100,3 +123,8 @@ class OptionContractService:
         if not contracts:
             raise RuntimeError(f"No current {underlying} option contracts were found.")
         return contracts
+
+    def get_front_month_future(self, underlying):
+        if underlying not in UNDERLYINGS:
+            raise ValueError("Choose NIFTY, BANKNIFTY, or SENSEX.")
+        return parse_front_month_future(self._load_master(), underlying)

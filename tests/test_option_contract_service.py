@@ -1,7 +1,7 @@
 import unittest
 from datetime import date, timedelta
 
-from services.option_contract_service import buying_risk, contracts_near_spot, parse_option_contracts
+from services.option_contract_service import buying_risk, contracts_near_spot, parse_front_month_future, parse_option_contracts
 
 
 class OptionContractServiceTests(unittest.TestCase):
@@ -31,3 +31,15 @@ class OptionContractServiceTests(unittest.TestCase):
         focused = contracts_near_spot(contracts, spot_price=24510, wings=5)
         self.assertEqual(len({contract["strike"] for contract in focused}), 11)
         self.assertEqual(len(focused), 22)
+
+    def test_selects_nearest_active_index_future_for_volume_analysis(self):
+        near_expiry = (date.today() + timedelta(days=7)).strftime("%d%b%Y").upper()
+        far_expiry = (date.today() + timedelta(days=35)).strftime("%d%b%Y").upper()
+        rows = [
+            {"token": "near", "symbol": "NIFTY26AUGFUT", "name": "NIFTY", "expiry": near_expiry,
+             "instrumenttype": "FUTIDX", "exch_seg": "NFO"},
+            {"token": "far", "symbol": "NIFTY26SEPFUT", "name": "NIFTY", "expiry": far_expiry,
+             "instrumenttype": "FUTIDX", "exch_seg": "NFO"},
+        ]
+        future = parse_front_month_future(rows, "NIFTY")
+        self.assertEqual(future["token"], "near")

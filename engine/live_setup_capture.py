@@ -51,7 +51,7 @@ def _current_session_candles(candles):
         return candles
 
 
-def build_live_capture(symbol, timeframe, candles):
+def build_live_capture(symbol, timeframe, candles, analysis_source="Angel One candle data"):
     """Return fields compatible with Chart Capture and Decision Engine V1."""
     if len(candles) < 51:
         raise ValueError("At least 51 candles are needed for EMA 50 live capture.")
@@ -67,7 +67,7 @@ def build_live_capture(symbol, timeframe, candles):
         ) / session_volume
         volume = float(latest.get("volume", 0) or 0)
         volume_ema = ema(volumes[-20:], 20)
-        volume_note = "Volume and VWAP calculated from Angel One candle data."
+        volume_note = f"Volume and VWAP calculated from {analysis_source}."
     else:
         vwap = volume = volume_ema = None
         volume_note = "Angel One returned no index volume; Volume/VWAP are unavailable and must not be guessed."
@@ -84,5 +84,6 @@ def build_live_capture(symbol, timeframe, candles):
         "supertrend": number(trend),
         "supertrend_state": "Green / Bullish" if close >= trend else "Red / Bearish",
         "volume": number(volume), "volume_ema": number(volume_ema), "volume_ema_period": "20",
+        "analysis_source": analysis_source,
         "raw_text": f"Angel One live setup capture: {symbol} {timeframe}. {volume_note}",
     }
