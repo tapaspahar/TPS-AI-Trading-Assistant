@@ -1,3 +1,4 @@
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QHBoxLayout, QStackedWidget, QVBoxLayout, QWidget
 
 from ui.widgets.header import Header
@@ -49,6 +50,7 @@ class DashboardScreen(QWidget):
             button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
         body_layout.addWidget(self.stack)
         main_layout.addLayout(body_layout)
+        QTimer.singleShot(0, self.settingsPage.auto_connect_saved_credentials)
 
     def show_page(self, index: int):
         if index == 0:

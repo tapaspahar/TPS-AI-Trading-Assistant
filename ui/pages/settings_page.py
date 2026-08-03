@@ -1,3 +1,6 @@
+from threading import Thread
+
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QApplication, QComboBox, QFormLayout, QGroupBox, QLabel, QLineEdit, QMessageBox, QPushButton, QVBoxLayout, QWidget
 
 from core.settings_store import SettingsStore
@@ -8,6 +11,9 @@ from ui.themes.theme_manager import apply_theme
 
 
 class SettingsPage(QWidget):
+    auto_connection_succeeded = Signal(object, str)
+    auto_connection_failed = Signal(str)
+
     def __init__(self):
         super().__init__()
         self.store = SettingsStore()
@@ -50,6 +56,8 @@ class SettingsPage(QWidget):
         self.client_code.setText(saved_credentials.get("client_code", ""))
         self.mpin.setText(saved_credentials.get("mpin", ""))
         self.totp_secret.setText(saved_credentials.get("totp_secret", ""))
+        self.broker_status = QLabel("Connection status: not connected")
+        broker_form.addRow(self.broker_status)
         save_credentials = QPushButton("Save Credentials Securely")
         save_credentials.clicked.connect(self.save_angel_credentials)
         forget_credentials = QPushButton("Remove Saved Credentials")
@@ -60,6 +68,8 @@ class SettingsPage(QWidget):
         broker_form.addRow(connect)
         layout.addWidget(broker_box)
         layout.addStretch()
+        self.auto_connection_succeeded.connect(self.complete_auto_connection)
+        self.auto_connection_failed.connect(self.show_auto_connection_error)
 
     def save(self):
         try:
@@ -106,4 +116,38 @@ class SettingsPage(QWidget):
             QMessageBox.warning(self, "Angel One connection", str(error))
             return
         LiveSession.client = client
+        self.broker_status.setText("Connection status: connected (read-only)")
         QMessageBox.information(self, "Angel One", result["message"])
+
+    def auto_connect_saved_credentials(self):
+        """Restore a read-only session on startup when the user opted to save credentials."""
+        if LiveSession.connected():
+            return
+        try:
+            credentials = self.credential_store.load()
+        except RuntimeError as error:
+            self.broker_status.setText(f"Connection status: secure storage unavailable ({error})")
+            return
+        if not all(credentials.get(field) for field in ("api_key", "client_code", "mpin", "totp_secret")):
+            self.broker_status.setText("Connection status: save credentials once to enable auto-connect")
+            return
+        self.broker_status.setText("Connection status: connecting saved credentials…")
+        Thread(target=self._connect_saved_credentials, args=(credentials,), daemon=True).start()
+
+    def _connect_saved_credentials(self, credentials):
+        try:
+            client = AngelOneClient(
+                credentials["api_key"], credentials["client_code"], credentials["mpin"], credentials["totp_secret"],
+            )
+            result = client.connect()
+        except (ValueError, RuntimeError) as error:
+            self.auto_connection_failed.emit(str(error))
+            return
+        self.auto_connection_succeeded.emit(client, result["message"])
+
+    def complete_auto_connection(self, client, message):
+        LiveSession.client = client
+        self.broker_status.setText("Connection status: connected automatically (read-only)")
+
+    def show_auto_connection_error(self, message):
+        self.broker_status.setText(f"Connection status: auto-connect failed ({message})")
