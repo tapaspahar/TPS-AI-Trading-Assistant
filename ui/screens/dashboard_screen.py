@@ -59,4 +59,5 @@ class DashboardScreen(QWidget):
             self.reportsPage.refresh()
         elif index == 1:
             self.liveMarketPage.refresh_status()
+            self.liveMarketPage.start_market_overview()
         self.stack.setCurrentIndex(index)

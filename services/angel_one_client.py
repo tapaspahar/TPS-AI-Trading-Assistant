@@ -88,6 +88,15 @@ class AngelOneClient:
             raise RuntimeError(response.get("message", "Angel One option-chain data is unavailable."))
         return (response.get("data") or {}).get("fetched") or []
 
+    def get_market_quotes(self, exchange_tokens):
+        """Fetch read-only FULL quotes for a small mixed-exchange market overview."""
+        if not self.session:
+            raise RuntimeError("Connect Angel One before loading market overview data.")
+        response = self.session.getMarketData("FULL", exchange_tokens)
+        if not response.get("status"):
+            raise RuntimeError(response.get("message", "Angel One market overview is unavailable."))
+        return (response.get("data") or {}).get("fetched") or []
+
     def get_put_call_ratios(self):
         """Return Angel One's market-level PCR records when the endpoint is enabled."""
         if not self.session:

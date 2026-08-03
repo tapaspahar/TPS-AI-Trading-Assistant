@@ -1,7 +1,7 @@
 from threading import Thread
 
-from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QGridLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtCore import QTimer, Signal
+from PySide6.QtWidgets import QGridLayout, QGroupBox, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from services.angel_one_stream import AngelOneStream
 from services.live_session import LiveSession
@@ -18,6 +18,8 @@ class LiveMarketPage(QWidget):
     structure_error = Signal(str)
     multi_timeframe_received = Signal(dict)
     multi_timeframe_error = Signal(str)
+    overview_received = Signal(dict)
+    overview_error = Signal(str)
     # SmartAPI index mappings: (WebSocket exchange type, current index token).
     # Angel One uses exchange type 1 for NSE cash-market indices and 3 for BSE.
     INSTRUMENTS = {
@@ -51,18 +53,40 @@ class LiveMarketPage(QWidget):
         layout.addWidget(QLabel("Live feed values will auto-fill Decision Engine V2. This workspace is read-only and cannot place orders."))
         self.multi_timeframe_detail = QLabel("Select a live symbol, then run multi-timeframe chart analysis.")
         layout.addWidget(self.multi_timeframe_detail)
+        overview_box = QGroupBox("Live Market Overview")
+        overview_grid = QGridLayout(overview_box)
+        self.overview_cards = {
+            "BANKNIFTY": DashboardCard("BANKNIFTY", "Waiting for live data"),
+            "SENSEX": DashboardCard("SENSEX", "Waiting for live data"),
+        }
+        for index, card in enumerate(self.overview_cards.values()):
+            overview_grid.addWidget(card, 0, index)
+        layout.addWidget(overview_box)
         layout.addStretch()
-        self.refresh_status()
         self.tick_received.connect(self.show_tick)
         self.feed_status.connect(self.show_status)
         self.structure_received.connect(self.show_structure)
         self.structure_error.connect(self.show_structure_error)
         self.multi_timeframe_received.connect(self.show_multi_timeframe)
         self.multi_timeframe_error.connect(self.show_multi_timeframe_error)
+        self.overview_received.connect(self.show_overview)
+        self.overview_error.connect(self.show_overview_error)
         self.selected_symbol = None
+        self.overview_loading = False
+        self.overview_timer = QTimer(self)
+        self.overview_timer.timeout.connect(self.load_market_overview)
+        self.refresh_status()
+        self.start_market_overview()
 
     def refresh_status(self):
         self.status.setText("Angel One: Connected (read-only)" if LiveSession.connected() else "Angel One: Not connected — connect from Settings first")
+
+    def start_market_overview(self):
+        if not LiveSession.connected():
+            return
+        self.load_market_overview()
+        if not self.overview_timer.isActive():
+            self.overview_timer.start(10000)
 
     def select_symbol(self, symbol):
         self.refresh_status()
@@ -72,6 +96,7 @@ class LiveMarketPage(QWidget):
             LiveSession.stream.stop()
         exchange_type, token = self.INSTRUMENTS[symbol]
         self.selected_symbol = (symbol, exchange_type, token)
+        self.start_market_overview()
         LiveSession.stream = AngelOneStream(LiveSession.client, self.tick_received.emit, self.feed_status.emit)
         try:
             LiveSession.stream.start(exchange_type, token)
@@ -151,6 +176,43 @@ class LiveMarketPage(QWidget):
 
     def show_multi_timeframe_error(self, message):
         self.multi_timeframe_detail.setText(f"Multi-timeframe chart analysis unavailable: {message}")
+
+    def load_market_overview(self):
+        if not LiveSession.connected() or self.overview_loading:
+            return
+        self.overview_loading = True
+        Thread(target=self._load_market_overview, daemon=True).start()
+
+    def _load_market_overview(self):
+        try:
+            quotes = LiveSession.client.get_market_quotes({"NSE": ["99926009"], "BSE": ["99919000"]})
+            self.overview_received.emit({str(quote.get("symbolToken", quote.get("symboltoken", ""))): quote for quote in quotes})
+        except RuntimeError as error:
+            self.overview_error.emit(str(error))
+
+    def show_overview(self, quotes):
+        token_map = {"99926009": "BANKNIFTY", "99919000": "SENSEX"}
+        for token, symbol in token_map.items():
+            quote = quotes.get(token)
+            if not quote:
+                self.overview_cards[symbol].set_value("Live quote unavailable")
+                continue
+            price = float(quote.get("ltp", 0) or 0)
+            change = float(quote.get("netChange", 0) or 0)
+            percent_change = float(quote.get("percentChange", 0) or 0)
+            if change > 0:
+                bias = "Bullish day bias"
+            elif change < 0:
+                bias = "Bearish day bias"
+            else:
+                bias = "Flat day bias"
+            self.overview_cards[symbol].set_value(f"₹{price:,.2f}\n{bias} ({percent_change:+.2f}%)")
+        self.overview_loading = False
+
+    def show_overview_error(self, _message):
+        self.overview_loading = False
+        for card in self.overview_cards.values():
+            card.set_value("Overview temporarily unavailable")
 
     def show_status(self, status):
         self.status.setText(f"Angel One: {status}")
