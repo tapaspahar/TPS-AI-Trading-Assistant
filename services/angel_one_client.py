@@ -37,12 +37,28 @@ class AngelOneClient:
         except ImportError as error:
             raise RuntimeError("Angel One packages are not installed. Run the project requirements install.") from error
         client = SmartConnect(api_key=self.api_key)
-        response = client.generateSession(self.client_code, self.pin, pyotp.TOTP(self.totp_secret).now())
+        try:
+            response = client.generateSession(self.client_code, self.pin, pyotp.TOTP(self.totp_secret).now())
+        except Exception as error:
+            message = str(error).lower()
+            if "access rate" in message or "rate limit" in message:
+                raise RuntimeError(
+                    "Angel One has temporarily limited login requests. Wait 60 seconds, then open the app once "
+                    "or use Connect Live Data once. Do not repeatedly restart or reconnect."
+                ) from error
+            raise RuntimeError("Angel One login is temporarily unavailable. Check internet, then try once after a minute.") from error
         if not response.get("status"):
-            raise RuntimeError(response.get("message", "Angel One login failed."))
+            message = response.get("message", "Angel One login failed.")
+            if "access rate" in str(message).lower() or "rate limit" in str(message).lower():
+                raise RuntimeError("Angel One has temporarily limited login requests. Wait 60 seconds before trying once again.")
+            raise RuntimeError(message)
         self.session = client
         self.auth_token = response["data"]["jwtToken"]
-        self.feed_token = client.getfeedToken()
+        try:
+            self.feed_token = client.getfeedToken()
+        except Exception as error:
+            self.session = None
+            raise RuntimeError("Angel One login succeeded but the live-feed token is temporarily unavailable. Try once after a minute.") from error
         return {"connected": True, "message": "Connected for read-only market data."}
 
     def get_recent_candles(self, exchange: str, token: str, interval: str = "FIVE_MINUTE", days: int = 5):

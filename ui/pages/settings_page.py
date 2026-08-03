@@ -77,6 +77,7 @@ class SettingsPage(QWidget):
         layout.addStretch()
         self.auto_connection_succeeded.connect(self.complete_auto_connection)
         self.auto_connection_failed.connect(self.show_auto_connection_error)
+        self._auto_connection_started = False
 
     def save(self):
         try:
@@ -133,7 +134,7 @@ class SettingsPage(QWidget):
 
     def auto_connect_saved_credentials(self):
         """Restore a read-only session on startup when the user opted to save credentials."""
-        if LiveSession.connected():
+        if LiveSession.connected() or self._auto_connection_started:
             return
         try:
             credentials = self.credential_store.load()
@@ -144,6 +145,7 @@ class SettingsPage(QWidget):
             self.broker_status.setText("Connection status: save credentials once to enable auto-connect")
             return
         self.broker_status.setText("Connection status: connecting saved credentials…")
+        self._auto_connection_started = True
         Thread(target=self._connect_saved_credentials, args=(credentials,), daemon=True).start()
 
     def _connect_saved_credentials(self, credentials):
