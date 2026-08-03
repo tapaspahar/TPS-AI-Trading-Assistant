@@ -1,9 +1,10 @@
-from PySide6.QtWidgets import QFormLayout, QGroupBox, QLabel, QLineEdit, QMessageBox, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QComboBox, QFormLayout, QGroupBox, QLabel, QLineEdit, QMessageBox, QPushButton, QVBoxLayout, QWidget
 
 from core.settings_store import SettingsStore
 from services.angel_one_client import AngelOneClient
 from services.credential_store import AngelOneCredentialStore
 from services.live_session import LiveSession
+from ui.themes.theme_manager import apply_theme
 
 
 class SettingsPage(QWidget):
@@ -19,8 +20,13 @@ class SettingsPage(QWidget):
         self.risk_percent = QLineEdit(str(values["risk_percent"]))
         self.daily_loss_percent = QLineEdit(str(values["daily_loss_percent"]))
         self.max_trades = QLineEdit(str(values["max_trades_per_day"]))
+        self.theme = QComboBox()
+        self.theme.addItem("Dark theme", "dark")
+        self.theme.addItem("Light theme", "light")
+        self.theme.setCurrentIndex(0 if values["theme"] == "dark" else 1)
         for label, field in (("Account capital", self.capital), ("Risk per trade (%)", self.risk_percent),
-                             ("Daily loss limit (%)", self.daily_loss_percent), ("Maximum trades per day", self.max_trades)):
+                             ("Daily loss limit (%)", self.daily_loss_percent), ("Maximum trades per day", self.max_trades),
+                             ("Appearance", self.theme)):
             form.addRow(label, field)
         layout.addLayout(form)
         save = QPushButton("Save Settings")
@@ -60,11 +66,13 @@ class SettingsPage(QWidget):
             self.store.save({
                 "capital": self.capital.text(), "risk_percent": self.risk_percent.text(),
                 "daily_loss_percent": self.daily_loss_percent.text(), "max_trades_per_day": self.max_trades.text(),
+                "theme": self.theme.currentData(),
             })
         except ValueError as error:
             QMessageBox.warning(self, "Invalid settings", str(error))
             return
-        QMessageBox.information(self, "Settings saved", "Risk settings have been saved locally.")
+        apply_theme(QApplication.instance(), self.theme.currentData())
+        QMessageBox.information(self, "Settings saved", "Settings and theme have been saved locally.")
 
     def save_angel_credentials(self):
         try:

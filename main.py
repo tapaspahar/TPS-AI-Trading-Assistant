@@ -1,14 +1,15 @@
 import sys
 from core.database_manager import Database
+from core.settings_store import SettingsStore
 from PySide6.QtWidgets import QApplication
 
 from ui.screens.dashboard_screen import DashboardScreen
-from ui.themes.dark_theme import get_dark_theme
+from ui.themes.theme_manager import apply_theme
 
 
 app = QApplication(sys.argv)
 db = Database()
-app.setStyleSheet(get_dark_theme())
+apply_theme(app, SettingsStore().load()["theme"])
 
 window = DashboardScreen()
 window.resize(1300, 750)
