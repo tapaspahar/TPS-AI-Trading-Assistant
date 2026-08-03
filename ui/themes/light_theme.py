@@ -16,4 +16,5 @@ QPushButton#menuButton:pressed { background: #93c5fd; }
 QFrame#dashboardCard { background: #ffffff; border: 1px solid #cbd5e1; border-radius: 18px; padding: 15px; }
 QFrame#dashboardCard:hover { border: 2px solid #2563eb; }
 QLabel#cardValue { font-size: 30px; font-weight: bold; color: #102a43; }
+QLabel#cardValue[density="compact"] { font-size: 18px; }
 """

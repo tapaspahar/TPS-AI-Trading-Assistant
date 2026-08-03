@@ -140,10 +140,14 @@ class LiveMarketPage(QWidget):
 
     def show_multi_timeframe(self, result):
         patterns = " | ".join(f"{name}: {data['state'].replace(' structure', '')}, {data['pattern']}" for name, data in result["timeframes"].items())
-        self.cards["trend"].set_value(f"{result['context']}\n{result['alignment_score']}/100")
-        self.cards["support"].set_value(f"Multi-TF {result['support']:,.2f}")
-        self.cards["resistance"].set_value(f"Multi-TF {result['resistance']:,.2f}")
-        self.multi_timeframe_detail.setText(f"{result['symbol']}: {patterns}")
+        short_state = result["context"].replace(" multi-timeframe alignment", "").replace(" multi-timeframe structure — wait for confirmation", " / Wait")
+        self.cards["trend"].set_value(f"{short_state}\nAlignment: {result['alignment_score']}/100")
+        self.cards["support"].set_value(f"{result['support']:,.2f}")
+        self.cards["resistance"].set_value(f"{result['resistance']:,.2f}")
+        self.multi_timeframe_detail.setText(
+            f"{result['symbol']} multi-timeframe reading: {patterns}. "
+            "Use the chart patterns as context; wait for live breakout/breakdown confirmation before acting."
+        )
 
     def show_multi_timeframe_error(self, message):
         self.multi_timeframe_detail.setText(f"Multi-timeframe chart analysis unavailable: {message}")

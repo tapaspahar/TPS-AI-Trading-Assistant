@@ -14,7 +14,7 @@ class Header(QFrame):
 
         self.title = QLabel("TPS AI Trading Assistant")
         self.title.setObjectName("title")
-        self.subtitle = QLabel("Professional Trading Dashboard")
+        self.subtitle = QLabel("Professional Trading Dashboard • UI Design: Pooja Pandey (Cutie)")
         self.subtitle.setObjectName("subtitle")
         left = QVBoxLayout()
         left.addWidget(self.title)

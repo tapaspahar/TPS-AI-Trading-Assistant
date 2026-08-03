@@ -90,6 +90,12 @@ color:white;
 
 }
 
+QLabel#cardValue[density="compact"]{
+
+font-size:18px;
+
+}
+
 QPushButton#menuButton{
 
     background:transparent;
