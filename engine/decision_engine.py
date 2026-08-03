@@ -11,10 +11,10 @@ class ChartSnapshot:
     ema_5: float
     ema_20: float
     ema_50: float
-    vwap: float
+    vwap: float | None
     supertrend: float
-    volume: float
-    volume_ema: float
+    volume: float | None
+    volume_ema: float | None
 
 
 class DecisionEngine:
@@ -33,21 +33,27 @@ class DecisionEngine:
         else:
             warnings.append("EMA alignment does not confirm the trend")
 
-        above_vwap = snapshot.price > snapshot.vwap
-        if above_vwap == bullish:
-            score += 20
-            reasons.append("Price is on the confirming side of VWAP")
+        if snapshot.vwap is None:
+            warnings.append("VWAP is unavailable from the current data source")
         else:
-            warnings.append("VWAP does not confirm the trend")
+            above_vwap = snapshot.price > snapshot.vwap
+            if above_vwap == bullish:
+                score += 20
+                reasons.append("Price is on the confirming side of VWAP")
+            else:
+                warnings.append("VWAP does not confirm the trend")
 
         score += 20
         reasons.append(f"SuperTrend is {direction.lower()}")
 
-        if snapshot.volume > snapshot.volume_ema:
-            score += 15
-            reasons.append("Volume is above Volume EMA 20")
+        if snapshot.volume is None or snapshot.volume_ema is None:
+            warnings.append("Volume confirmation is unavailable from the current data source")
         else:
-            warnings.append("Volume is not above Volume EMA 20")
+            if snapshot.volume > snapshot.volume_ema:
+                score += 15
+                reasons.append("Volume is above Volume EMA 20")
+            else:
+                warnings.append("Volume is not above Volume EMA 20")
 
         option_type = option_type.upper()
         expected_option = "CE" if bullish else "PE"
@@ -63,8 +69,11 @@ class DecisionEngine:
             warnings.append(f"Psychology check: {psychology.title()}")
 
         score = min(score, 100)
+        missing_confirmation = snapshot.vwap is None or snapshot.volume is None or snapshot.volume_ema is None
         if score >= 85 and not warnings:
             decision = f"STRONG {expected_option} SETUP"
+        elif missing_confirmation and score >= 60:
+            decision = f"CONDITIONAL {expected_option} SETUP"
         elif score >= 65:
             decision = f"WATCH {expected_option}"
         else:

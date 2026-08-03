@@ -83,6 +83,6 @@ def build_live_capture(symbol, timeframe, candles):
         "ema_50": number(ema(closes[-100:], 50)), "vwap": number(vwap),
         "supertrend": number(trend),
         "supertrend_state": "Green / Bullish" if close >= trend else "Red / Bearish",
-        "volume": number(volume), "volume_ema_period": "20",
+        "volume": number(volume), "volume_ema": number(volume_ema), "volume_ema_period": "20",
         "raw_text": f"Angel One live setup capture: {symbol} {timeframe}. {volume_note}",
     }

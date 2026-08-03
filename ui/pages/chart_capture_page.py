@@ -29,7 +29,7 @@ class ChartCapturePage(QWidget):
         layout.addWidget(self.live_capture_button)
         form = QFormLayout()
         self.fields = {}
-        for key, label in (("symbol", "Symbol"), ("timeframe", "Timeframe"), ("open", "Open"), ("high", "High"), ("low", "Low"), ("close", "Close"), ("ema_5", "EMA 5 (Pink)"), ("ema_20", "EMA 20 (Violet)"), ("ema_50", "EMA 50 (White)"), ("vwap", "VWAP (Yellow)"), ("supertrend", "SuperTrend"), ("supertrend_state", "SuperTrend State"), ("volume", "Volume"), ("volume_ema_period", "Volume EMA")):
+        for key, label in (("symbol", "Symbol"), ("timeframe", "Timeframe"), ("open", "Open"), ("high", "High"), ("low", "Low"), ("close", "Close"), ("ema_5", "EMA 5 (Pink)"), ("ema_20", "EMA 20 (Violet)"), ("ema_50", "EMA 50 (White)"), ("vwap", "VWAP (Yellow)"), ("supertrend", "SuperTrend"), ("supertrend_state", "SuperTrend State"), ("volume", "Volume"), ("volume_ema", "Volume EMA 20 (Value)")):
             field = QLineEdit()
             self.fields[key] = field
             form.addRow(label, field)

@@ -6,7 +6,7 @@ class CaptureMappingTests(unittest.TestCase):
         mapping = {
             "close": "price", "ema_5": "ema_5", "ema_20": "ema_20",
             "ema_50": "ema_50", "vwap": "vwap", "supertrend": "supertrend",
-            "volume": "volume", "volume_ema_period": "volume_ema",
+            "volume": "volume", "volume_ema": "volume_ema",
         }
         self.assertEqual(mapping["close"], "price")
         self.assertEqual(len(mapping), 8)

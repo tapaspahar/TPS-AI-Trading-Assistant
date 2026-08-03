@@ -16,3 +16,9 @@ class DecisionEngineTests(unittest.TestCase):
         result = DecisionEngine().evaluate(snapshot, "PE", "FOMO")
         self.assertEqual(result["decision"], "NO TRADE")
         self.assertIn("PE conflicts", result["warnings"][-2])
+
+    def test_missing_index_volume_produces_conditional_setup(self):
+        snapshot = ChartSnapshot(price=110, ema_5=108, ema_20=105, ema_50=100, vwap=None, supertrend=102, volume=None, volume_ema=None)
+        result = DecisionEngine().evaluate(snapshot, "CE", "Calm")
+        self.assertEqual(result["decision"], "CONDITIONAL CE SETUP")
+        self.assertTrue(any("VWAP is unavailable" in warning for warning in result["warnings"]))

@@ -34,10 +34,18 @@ class AIPage(QWidget):
 
     def evaluate(self):
         try:
-            snapshot = ChartSnapshot(**{key: float(field.text()) for key, field in self.fields.items()})
+            required = ("price", "ema_5", "ema_20", "ema_50", "supertrend")
+            values = {}
+            for key, field in self.fields.items():
+                text = field.text().strip()
+                if key in required:
+                    values[key] = float(text)
+                else:
+                    values[key] = float(text) if text else None
+            snapshot = ChartSnapshot(**values)
             result = DecisionEngine().evaluate(snapshot, self.option.currentText(), self.psychology.currentText())
         except ValueError:
-            self.result.setText("Enter numeric values for every chart field.")
+            self.result.setText("Enter numeric values for price, EMA 5/20/50 and SuperTrend. VWAP/volume may be unavailable from index data.")
             return
         reason_text = "\n".join(f"✓ {item}" for item in result["reasons"])
         warning_text = "\n".join(f"⚠ {item}" for item in result["warnings"])
@@ -48,7 +56,7 @@ class AIPage(QWidget):
         field_mapping = {
             "close": "price", "ema_5": "ema_5", "ema_20": "ema_20",
             "ema_50": "ema_50", "vwap": "vwap", "supertrend": "supertrend",
-            "volume": "volume", "volume_ema_period": "volume_ema",
+            "volume": "volume", "volume_ema": "volume_ema",
         }
         missing = []
         for source_key, target_key in field_mapping.items():
