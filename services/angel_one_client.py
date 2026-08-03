@@ -7,6 +7,7 @@ Order placement is intentionally out of scope.
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import logging
 from threading import Lock
 from time import monotonic, sleep
 
@@ -17,6 +18,15 @@ class AngelOneClient:
     CANDLE_REQUEST_INTERVAL_SECONDS = 3.5
     CANDLE_CACHE_SECONDS = 30
     CANDLE_RATE_LIMIT_COOLDOWN_SECONDS = 20
+
+    @staticmethod
+    def _suppress_sensitive_smartapi_logs() -> None:
+        """SmartAPI logs full request headers on failures, including auth tokens."""
+        try:
+            import logzero
+            logzero.loglevel(logging.CRITICAL, update_custom_handlers=True)
+        except ImportError:
+            pass
 
     def __init__(self, api_key: str, client_code: str, pin: str, totp_secret: str):
         self.api_key = api_key.strip()
@@ -37,6 +47,7 @@ class AngelOneClient:
         except ImportError as error:
             raise RuntimeError("Angel One packages are not installed. Run the project requirements install.") from error
         client = SmartConnect(api_key=self.api_key)
+        self._suppress_sensitive_smartapi_logs()
         try:
             response = client.generateSession(self.client_code, self.pin, pyotp.TOTP(self.totp_secret).now())
         except Exception as error:
@@ -124,6 +135,7 @@ class AngelOneClient:
         """Fetch read-only FULL quote data for one selected option contract."""
         if not self.session:
             raise RuntimeError("Connect Angel One before loading option data.")
+        self._suppress_sensitive_smartapi_logs()
         try:
             response = self.session.getMarketData("FULL", {exchange: [str(token)]})
         except Exception as error:
@@ -139,6 +151,7 @@ class AngelOneClient:
         """Fetch read-only FULL quotes for the selected option-chain window (max 50 tokens)."""
         if not self.session:
             raise RuntimeError("Connect Angel One before loading option-chain data.")
+        self._suppress_sensitive_smartapi_logs()
         tokens = [str(token) for token in tokens]
         if not tokens:
             return []
@@ -156,6 +169,7 @@ class AngelOneClient:
         """Fetch read-only FULL quotes for a small mixed-exchange market overview."""
         if not self.session:
             raise RuntimeError("Connect Angel One before loading market overview data.")
+        self._suppress_sensitive_smartapi_logs()
         try:
             response = self.session.getMarketData("FULL", exchange_tokens)
         except Exception as error:
@@ -168,6 +182,7 @@ class AngelOneClient:
         """Return Angel One's market-level PCR records when the endpoint is enabled."""
         if not self.session:
             raise RuntimeError("Connect Angel One before loading PCR data.")
+        self._suppress_sensitive_smartapi_logs()
         try:
             response = self.session.putCallRatio()
         except Exception as error:

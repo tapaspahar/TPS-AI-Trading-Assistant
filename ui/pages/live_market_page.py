@@ -110,7 +110,10 @@ class LiveMarketPage(QWidget):
             return
         self.load_market_overview()
         if not self.overview_timer.isActive():
-            self.overview_timer.start(10000)
+            # WebSocket remains the live-price source; the larger overview is
+            # intentionally slower to avoid repeatedly timing out Angel One's
+            # REST quote endpoint.
+            self.overview_timer.start(30_000)
 
     def select_symbol(self, symbol):
         self.refresh_status()
