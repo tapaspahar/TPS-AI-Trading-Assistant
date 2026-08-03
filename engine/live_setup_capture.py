@@ -72,6 +72,47 @@ def _current_session_candles(candles):
         return candles
 
 
+def analyse_volume_candle(candles, period=20, heavy_ratio=1.5):
+    """Classify the latest traded candle without treating a wick as a breakout.
+
+    A large traded-volume candle is useful only when it closes near the edge of
+    its range.  This keeps a high-volume rejection wick from being called a
+    reliable buying/selling confirmation.
+    """
+    if len(candles) < period:
+        return {"volume_ratio": None, "volume_signal": "Volume history unavailable", "candle_direction": "NEUTRAL", "fake_breakout_risk": True}
+    latest = candles[-1]
+    volume = float(latest.get("volume", 0) or 0)
+    volume_ema = ema([float(candle.get("volume", 0) or 0) for candle in candles[-period:]], period)
+    if volume_ema <= 0:
+        return {"volume_ratio": None, "volume_signal": "Traded volume unavailable", "candle_direction": "NEUTRAL", "fake_breakout_risk": True}
+    high, low = float(latest["high"]), float(latest["low"])
+    opening, close = float(latest["open"]), float(latest["close"])
+    candle_range = max(high - low, 0.000001)
+    body_ratio = abs(close - opening) / candle_range
+    close_position = (close - low) / candle_range
+    volume_ratio = volume / volume_ema
+    heavy = volume_ratio >= heavy_ratio
+    bullish = close > opening
+    bearish = close < opening
+    bullish_quality = bullish and body_ratio >= 0.55 and close_position >= 0.70
+    bearish_quality = bearish and body_ratio >= 0.55 and close_position <= 0.30
+    if heavy and bullish_quality:
+        signal, fake_risk = "Heavy buying confirmation", False
+    elif heavy and bearish_quality:
+        signal, fake_risk = "Heavy selling confirmation", False
+    elif heavy:
+        signal, fake_risk = "High-volume rejection — fake-move risk", True
+    else:
+        signal, fake_risk = "Volume below heavy-confirmation threshold", True
+    return {
+        "volume_ratio": volume_ratio, "volume_signal": signal,
+        "candle_direction": "BULLISH" if bullish else "BEARISH" if bearish else "NEUTRAL",
+        "candle_body_ratio": body_ratio, "candle_close_position": close_position,
+        "fake_breakout_risk": fake_risk,
+    }
+
+
 def build_live_capture(symbol, timeframe, candles, analysis_source="Angel One candle data"):
     """Return fields compatible with Chart Capture and Decision Engine V1."""
     if len(candles) < 51:
@@ -94,6 +135,7 @@ def build_live_capture(symbol, timeframe, candles, analysis_source="Angel One ca
         volume_note = "Angel One returned no index volume; Volume/VWAP are unavailable and must not be guessed."
     trend = supertrend(candles[-60:])
     close = float(latest["close"])
+    volume_analysis = analyse_volume_candle(candles)
     number = lambda value: f"{value:.2f}" if value is not None else ""
     return {
         "symbol": symbol,
@@ -106,6 +148,12 @@ def build_live_capture(symbol, timeframe, candles, analysis_source="Angel One ca
         "supertrend": number(trend),
         "supertrend_state": "Green / Bullish" if close >= trend else "Red / Bearish",
         "volume": number(volume), "volume_ema": number(volume_ema), "volume_ema_period": "20",
+        "volume_ratio": number(volume_analysis.get("volume_ratio")),
+        "volume_signal": volume_analysis.get("volume_signal"),
+        "candle_direction": volume_analysis.get("candle_direction", "NEUTRAL"),
+        "candle_body_ratio": number(volume_analysis.get("candle_body_ratio")),
+        "candle_close_position": number(volume_analysis.get("candle_close_position")),
+        "fake_breakout_risk": bool(volume_analysis.get("fake_breakout_risk", True)),
         "analysis_source": analysis_source,
         "raw_text": f"Angel One live setup capture: {symbol} {timeframe}. {volume_note}",
     }

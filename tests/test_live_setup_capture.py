@@ -25,3 +25,17 @@ class LiveSetupCaptureTests(unittest.TestCase):
         result = build_live_capture("NIFTY", "5m", candles)
         self.assertEqual(result["vwap"], "")
         self.assertIn("unavailable", result["raw_text"])
+
+    def test_marks_a_high_volume_rejection_as_fake_move_risk(self):
+        start = datetime(2026, 8, 3, 9, 15)
+        candles = []
+        for index in range(70):
+            price = 24000 + index
+            candles.append({
+                "time": (start + timedelta(minutes=index * 5)).isoformat(), "open": price,
+                "high": price + 3, "low": price - 2, "close": price + 1, "volume": 100,
+            })
+        candles[-1].update({"open": 24070, "high": 24100, "low": 24060, "close": 24072, "volume": 300})
+        result = build_live_capture("NIFTY", "5m", candles)
+        self.assertIn("fake-move risk", result["volume_signal"])
+        self.assertTrue(result["fake_breakout_risk"])

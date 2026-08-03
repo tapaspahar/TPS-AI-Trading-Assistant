@@ -16,6 +16,7 @@ class AIPage(QWidget):
         form = QFormLayout()
         self.fields = {}
         self.loaded_symbol = ""
+        self.capture_meta = {}
         for key, label in (("price", "Current price"), ("ema_5", "EMA 5"), ("ema_20", "EMA 20"),
                            ("ema_50", "EMA 50"), ("vwap", "VWAP"), ("rsi_14", "RSI 14"), ("atr_14", "ATR 14"), ("supertrend", "SuperTrend"),
                            ("volume", "Volume"), ("volume_ema", "Volume EMA 20")):
@@ -45,7 +46,12 @@ class AIPage(QWidget):
                     values[key] = float(text)
                 else:
                     values[key] = float(text) if text else None
-            snapshot = ChartSnapshot(**values)
+            snapshot = ChartSnapshot(
+                **values,
+                volume_ratio=self._optional_number(self.capture_meta.get("volume_ratio")),
+                candle_direction=self.capture_meta.get("candle_direction"),
+                fake_breakout_risk=bool(self.capture_meta.get("fake_breakout_risk", False)),
+            )
             candidate_option = "CE" if snapshot.price > snapshot.supertrend else "PE"
             self.option.setCurrentText(candidate_option)
             result = DecisionEngine().evaluate(snapshot, candidate_option, self.psychology.currentText())
@@ -54,7 +60,9 @@ class AIPage(QWidget):
             return
         reason_text = "\n".join(f"✓ {item}" for item in result["reasons"])
         warning_text = "\n".join(f"⚠ {item}" for item in result["warnings"])
-        self.result.setText(f"Score: {result['score']}/100\nDirection: {result['direction']}\nDecision: {result['decision']}\n\n{reason_text}\n{warning_text}".strip())
+        signal = self.capture_meta.get("volume_signal")
+        signal_text = f"Future-volume signal: {signal}\n" if signal else ""
+        self.result.setText(f"{signal_text}Score: {result['score']}/100\nDirection: {result['direction']}\nDecision: {result['decision']}\n\n{reason_text}\n{warning_text}".strip())
         self.decision_ready.emit({
             "symbol": self.loaded_symbol,
             "score": result["score"], "direction": result["direction"], "decision": result["decision"],
@@ -69,6 +77,7 @@ class AIPage(QWidget):
             "ema_50": "ema_50", "vwap": "vwap", "rsi_14": "rsi_14", "atr_14": "atr_14", "supertrend": "supertrend",
             "volume": "volume", "volume_ema": "volume_ema",
         }
+        self.capture_meta = dict(capture)
         missing = []
         for source_key, target_key in field_mapping.items():
             value = str(capture.get(source_key, "")).strip()
@@ -79,3 +88,10 @@ class AIPage(QWidget):
         symbol = capture.get("symbol", "Unknown symbol")
         self.loaded_symbol = str(symbol).upper()
         self.evaluate()
+
+    @staticmethod
+    def _optional_number(value):
+        try:
+            return float(value) if value not in (None, "") else None
+        except (TypeError, ValueError):
+            return None

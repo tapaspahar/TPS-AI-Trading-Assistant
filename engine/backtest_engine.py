@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from engine.live_setup_capture import atr, ema, rsi, supertrend
+from engine.live_setup_capture import analyse_volume_candle, atr, ema, rsi, supertrend
 
 
 def _session_vwap(candles):
@@ -59,9 +59,10 @@ def run_tps_backtest(candles, max_holding_bars=12):
         rsi_value, atr_value = rsi(closes), atr(history[-20:])
         vwap_value = _session_vwap(history)
         volume_ema = ema(volumes[-20:], 20) if any(volumes[-20:]) else None
-        volume_ok = volume_ema is not None and volumes[-1] > volume_ema
-        long_signal = price > trend_line and ema_5 > ema_20 > ema_50 and 50 <= rsi_value <= 70 and volume_ok
-        short_signal = price < trend_line and ema_5 < ema_20 < ema_50 and 30 <= rsi_value <= 50 and volume_ok
+        volume_data = analyse_volume_candle(history)
+        volume_ok = not volume_data["fake_breakout_risk"] and volume_data["volume_ratio"] is not None and volume_data["volume_ratio"] >= 1.5
+        long_signal = price > trend_line and ema_5 > ema_20 > ema_50 and 50 <= rsi_value <= 70 and volume_ok and volume_data["candle_direction"] == "BULLISH"
+        short_signal = price < trend_line and ema_5 < ema_20 < ema_50 and 30 <= rsi_value <= 50 and volume_ok and volume_data["candle_direction"] == "BEARISH"
         if vwap_value is not None:
             long_signal = long_signal and price > vwap_value
             short_signal = short_signal and price < vwap_value
@@ -89,6 +90,7 @@ def run_tps_backtest(candles, max_holding_bars=12):
             "stoploss": round(stoploss, 2), "target": round(target, 2),
             "exit": round(exit_price, 2), "outcome": outcome, "pnl_points": round(pnl_points, 2),
             "rsi_14": round(rsi_value, 2), "atr_14": round(atr_value, 2),
+            "volume_ratio": round(volume_data["volume_ratio"], 2),
         })
         index = exit_index + 1
 

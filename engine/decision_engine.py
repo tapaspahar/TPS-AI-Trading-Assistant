@@ -17,6 +17,9 @@ class ChartSnapshot:
     volume_ema: float | None
     rsi_14: float | None = None
     atr_14: float | None = None
+    volume_ratio: float | None = None
+    candle_direction: str | None = None
+    fake_breakout_risk: bool = False
 
 
 class DecisionEngine:
@@ -52,12 +55,18 @@ class DecisionEngine:
         if snapshot.volume is None or snapshot.volume_ema is None:
             warnings.append("Volume confirmation is unavailable from the current data source")
         else:
-            if snapshot.volume > snapshot.volume_ema:
+            volume_ratio = snapshot.volume_ratio or (snapshot.volume / snapshot.volume_ema if snapshot.volume_ema else 0)
+            expected_candle = "BULLISH" if bullish else "BEARISH"
+            if volume_ratio >= 1.5 and snapshot.candle_direction == expected_candle and not snapshot.fake_breakout_risk:
                 volume_confirmed = True
                 score += 15
-                reasons.append("Volume is above Volume EMA 20")
+                reasons.append(f"Heavy {expected_candle.lower()} future candle: {volume_ratio:.2f}x Volume EMA 20")
+            elif volume_ratio >= 1.5 and snapshot.fake_breakout_risk:
+                warnings.append("High volume has a rejection-wick / fake-move risk")
+            elif volume_ratio >= 1.5:
+                warnings.append(f"Heavy volume candle conflicts with {direction.lower()} direction")
             else:
-                warnings.append("Volume is not above Volume EMA 20")
+                warnings.append("Volume is below the 1.5x heavy-confirmation threshold")
 
         if snapshot.rsi_14 is not None:
             if (bullish and 50 <= snapshot.rsi_14 <= 70) or (not bullish and 30 <= snapshot.rsi_14 <= 50):

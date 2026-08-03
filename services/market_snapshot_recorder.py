@@ -20,7 +20,8 @@ class MarketSnapshotRecorder:
         if symbol not in INSTRUMENTS:
             raise ValueError("Snapshots currently support NIFTY, BANKNIFTY, and SENSEX.")
         option_context = self._option_context(symbol)
-        exchange, token = INSTRUMENTS[symbol]
+        future = OptionContractService().get_front_month_future(symbol)
+        exchange, token = future["exchange"], future["token"]
         captured_at = datetime.now().replace(second=0, microsecond=0)
         database = Database()
         try:
@@ -28,7 +29,7 @@ class MarketSnapshotRecorder:
             for timeframe in timeframes:
                 interval, days = TIMEFRAMES[timeframe]
                 candles = self.client.get_recent_candles(exchange, token, interval, days)
-                data = build_live_capture(symbol, timeframe, candles, "Angel One index candle data")
+                data = build_live_capture(symbol, timeframe, candles, f"Angel One current-month {symbol} future")
                 latest = candles[-1]
                 snapshot = {
                     "captured_at": captured_at.isoformat(timespec="minutes"),

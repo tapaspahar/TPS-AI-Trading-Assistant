@@ -5,7 +5,7 @@ QWidget {
     background: #0b1220;
     color: #e7eefb;
     font-family: "Segoe UI";
-    font-size: 10.5pt;
+    font-size: 9.5pt;
 }
 QToolTip { background: #17233a; color: #f8fafc; border: 1px solid #334155; padding: 6px; }
 QFrame#header {
@@ -17,7 +17,7 @@ QFrame#sidebar {
     border-right: 1px solid #243552;
 }
 QLabel#title { color: #f8fafc; font-size: 23px; font-weight: 800; letter-spacing: .2px; }
-QLabel#subtitle { color: #8fa3c2; font-size: 10.5pt; }
+QLabel#subtitle { color: #8fa3c2; font-size: 9.5pt; }
 QLabel#appBadge { background: #2563eb; color: white; border: 1px solid #60a5fa; border-radius: 12px; font-size: 13pt; font-weight: 800; qproperty-alignment: AlignCenter; }
 QLabel#status {
     color: #5ee9a3;
@@ -47,7 +47,7 @@ QPushButton#menuButton {
     border-radius: 9px;
     padding: 11px 13px;
     text-align: left;
-    font-size: 10.5pt;
+    font-size: 9.5pt;
     font-weight: 600;
 }
 QPushButton#menuButton:hover { background: #172841; color: #f8fbff; border-color: #294363; }
@@ -87,8 +87,8 @@ QFrame#dashboardCard {
     padding: 14px;
 }
 QFrame#dashboardCard:hover { background: #162640; border: 1px solid #4f8cff; }
-QLabel#cardTitle { color: #91a8c7; font-size: 10.5pt; font-weight: 600; }
-QLabel#cardValue { color: #f8fbff; font-size: 29px; font-weight: 800; }
+QLabel#cardTitle { color: #91a8c7; font-size: 9.5pt; font-weight: 600; }
+QLabel#cardValue { color: #f8fbff; font-size: 25px; font-weight: 800; }
 QLabel#cardValue[density="compact"] { color: #d9e7ff; font-size: 18px; }
 QCheckBox { spacing: 8px; }
 QCheckBox::indicator { width: 16px; height: 16px; border: 1px solid #49617f; border-radius: 4px; background: #101a2d; }
