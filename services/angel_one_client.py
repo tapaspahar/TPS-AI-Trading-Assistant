@@ -73,3 +73,26 @@ class AngelOneClient:
         if not fetched:
             raise RuntimeError("No live quote was returned for this option contract.")
         return fetched[0]
+
+    def get_option_chain_quotes(self, exchange: str, tokens):
+        """Fetch read-only FULL quotes for the selected option-chain window (max 50 tokens)."""
+        if not self.session:
+            raise RuntimeError("Connect Angel One before loading option-chain data.")
+        tokens = [str(token) for token in tokens]
+        if not tokens:
+            return []
+        if len(tokens) > 50:
+            raise ValueError("Option-chain request exceeds Angel One's 50-token quote limit.")
+        response = self.session.getMarketData("FULL", {exchange: tokens})
+        if not response.get("status"):
+            raise RuntimeError(response.get("message", "Angel One option-chain data is unavailable."))
+        return (response.get("data") or {}).get("fetched") or []
+
+    def get_put_call_ratios(self):
+        """Return Angel One's market-level PCR records when the endpoint is enabled."""
+        if not self.session:
+            raise RuntimeError("Connect Angel One before loading PCR data.")
+        response = self.session.putCallRatio()
+        if not response.get("status"):
+            raise RuntimeError(response.get("message", "Angel One PCR data is unavailable."))
+        return response.get("data") or []

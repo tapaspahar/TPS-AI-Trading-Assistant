@@ -4,6 +4,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QComboBox, QFormLayout, QGroupBox, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
 
 from core.settings_store import SettingsStore
+from engine.option_chain_engine import analyze_option_chain
 from services.live_session import LiveSession
 from services.option_contract_service import UNDERLYING_QUOTES, OptionContractService, buying_risk, contracts_near_spot
 
@@ -14,6 +15,8 @@ class OptionsPage(QWidget):
     load_error = Signal(str)
     quote_loaded = Signal(object)
     quote_error = Signal(str)
+    chain_loaded = Signal(object)
+    chain_error = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -32,12 +35,15 @@ class OptionsPage(QWidget):
         load.clicked.connect(self.load_contracts)
         refresh = QPushButton("Refresh Selected Contract")
         refresh.clicked.connect(self.load_quote)
+        analyze_chain = QPushButton("Analyze Selected Expiry OI / PCR")
+        analyze_chain.clicked.connect(self.load_chain_analysis)
         form.addRow("Underlying", self.underlying)
         form.addRow(load)
         form.addRow("Expiry", self.expiry)
         form.addRow("Type", self.option_type)
         form.addRow("Strike", self.strike)
         form.addRow(refresh)
+        form.addRow(analyze_chain)
         layout.addWidget(selection)
 
         self.details = QLabel("Load current expiries to choose an option contract.")
@@ -50,6 +56,8 @@ class OptionsPage(QWidget):
         self.load_error.connect(self.show_error)
         self.quote_loaded.connect(self.show_quote)
         self.quote_error.connect(self.show_error)
+        self.chain_loaded.connect(self.show_chain_analysis)
+        self.chain_error.connect(self.show_error)
 
     def load_contracts(self):
         if not LiveSession.connected():
@@ -136,6 +144,48 @@ class OptionsPage(QWidget):
             f"{contract['option_type']} buying checklist: underlying must show {expected} structure, "
             "a confirmed 5m breakout/breakdown, and adequate option volume.\n"
             "If any condition is missing or lots within your risk cap are 0: avoid the entry."
+        )
+
+    def load_chain_analysis(self):
+        if not LiveSession.connected():
+            QMessageBox.warning(self, "Angel One", "Connect live data from Settings first.")
+            return
+        if not self.contracts or self.expiry.currentIndex() < 0:
+            QMessageBox.warning(self, "Options", "Load current expiries first.")
+            return
+        expiry = self.expiry.currentData()
+        contracts = [contract for contract in self.contracts if contract["expiry"] == expiry]
+        self.details.setText("Refreshing focused option-chain OI and PCR…")
+        Thread(target=self._load_chain_analysis, args=(contracts, self.underlying.currentText()), daemon=True).start()
+
+    def _load_chain_analysis(self, contracts, underlying):
+        try:
+            quotes = LiveSession.client.get_option_chain_quotes(contracts[0]["exchange"], [contract["token"] for contract in contracts])
+            analysis = analyze_option_chain(contracts, quotes)
+            try:
+                pcr_records = LiveSession.client.get_put_call_ratios()
+                official_pcr = next((record.get("pcr") for record in pcr_records if str(record.get("tradingSymbol", "")).upper().startswith(underlying.upper())), None)
+            except RuntimeError:
+                official_pcr = None
+            analysis["official_pcr"] = official_pcr
+            self.chain_loaded.emit(analysis)
+        except (RuntimeError, ValueError) as error:
+            self.chain_error.emit(str(error))
+
+    def show_chain_analysis(self, analysis):
+        def number(value):
+            return f"{float(value):.2f}" if value is not None else "unavailable"
+        self.details.setText(
+            f"Focused expiry analysis ({analysis['quoted_contracts']}/{analysis['total_contracts']} contracts quoted)\n"
+            f"Focused OI PCR: {number(analysis['pcr_oi'])} | Focused volume PCR: {number(analysis['pcr_volume'])}\n"
+            f"Angel One market PCR: {number(analysis['official_pcr'])}\n"
+            f"Put-OI support zone: {analysis['put_support'] or 'unavailable'} | "
+            f"Call-OI resistance zone: {analysis['call_resistance'] or 'unavailable'}\n"
+            f"Context: {analysis['context']}"
+        )
+        self.decision.setText(
+            "Use OI/PCR as context, not a standalone signal. Take a CE/PE decision only when the live underlying "
+            "structure, breakout/breakdown, option liquidity, and risk-limit checks all agree."
         )
 
     def show_error(self, message):
