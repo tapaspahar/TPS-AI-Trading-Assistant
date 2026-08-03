@@ -51,6 +51,7 @@ class DashboardScreen(QWidget):
         self.aiPage.decision_ready.connect(self.handle_ai_decision)
         self.optionsPage.trade_plan_ready.connect(self.journalPage.load_trade_plan)
         self.optionsPage.trade_plan_ready.connect(lambda _plan: self.show_page(4))
+        self.journalPage.open_backtesting.connect(lambda: self.show_page(10))
         self.optionsPage.open_chart_capture.connect(lambda: self.show_page(3))
         self.settingsPage.live_connected.connect(self.start_default_nifty)
         for button, index in ((self.sidebar.dashboardButton, 0), (self.sidebar.liveMarketButton, 1),

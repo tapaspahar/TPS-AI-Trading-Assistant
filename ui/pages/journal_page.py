@@ -1,8 +1,9 @@
 from datetime import datetime
 
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
+    QButtonGroup, QCheckBox, QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
     QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QRadioButton,
 )
 from PySide6.QtCore import Signal
 
@@ -14,6 +15,7 @@ from core.settings_store import SettingsStore
 class JournalPage(QWidget):
     """A focused form for recording completed option trades."""
     trade_saved = Signal()
+    open_backtesting = Signal()
 
     def __init__(self):
         super().__init__()
@@ -21,12 +23,11 @@ class JournalPage(QWidget):
         self.settings_store = SettingsStore()
         self.current_rule_version = "Manual / unclassified"
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Trade Journal"))
+        layout.addWidget(QLabel("Trade Journal - Plan, record entry, then close with the real outcome"))
         self.plan_summary = QLabel("No review plan loaded. Quantity can be entered manually for completed trades.")
         self.plan_summary.setWordWrap(True)
         layout.addWidget(self.plan_summary)
 
-        form = QFormLayout()
         self.date_input = QLineEdit(datetime.now().strftime("%d-%m-%Y"))
         self.time_input = QLineEdit(datetime.now().strftime("%H:%M"))
         self.symbol_input = QLineEdit()
@@ -38,14 +39,16 @@ class JournalPage(QWidget):
         self.quantity_input = QLineEdit()
         self.psychology_input = QComboBox()
         self.psychology_input.addItems(["Calm", "Confident", "Fear", "Greed", "FOMO", "Revenge"])
+        plan_box = QGroupBox("1. Trade Plan / Entry - fill before taking the manual Angel One trade")
+        plan_form = QFormLayout(plan_box)
         for label, widget in (
             ("Date", self.date_input), ("Time", self.time_input), ("Symbol", self.symbol_input),
             ("Strike", self.strike_input), ("Option", self.option_input), ("Entry", self.entry_input),
-            ("Exit", self.exit_input), ("Exit outcome", self.outcome_input), ("Stop loss", self.stoploss_input), ("Target", self.target_input),
-            ("Quantity", self.quantity_input), ("Psychology", self.psychology_input),
+            ("Stop loss", self.stoploss_input), ("Target", self.target_input), ("Quantity", self.quantity_input),
+            ("Psychology", self.psychology_input),
         ):
-            form.addRow(label, widget)
-        layout.addLayout(form)
+            plan_form.addRow(label, widget)
+        layout.addWidget(plan_box)
 
         confirmations = QGroupBox("Technical confirmations")
         confirmation_layout = QHBoxLayout(confirmations)
@@ -62,9 +65,33 @@ class JournalPage(QWidget):
         self.save_button = QPushButton("Save Open Trade")
         self.save_button.clicked.connect(self.save_open_trade)
         layout.addWidget(self.save_button)
-        self.close_button = QPushButton("Close Selected Trade (Save Actual Exit)")
+        exit_box = QGroupBox("2. When the trade is closed - select a saved OPEN trade below")
+        exit_form = QFormLayout(exit_box)
+        self.manual_exit_radio = QRadioButton("Manual exit - enter my actual exit price")
+        self.target_hit_radio = QRadioButton("Target hit - use planned target as exit")
+        self.stoploss_hit_radio = QRadioButton("Stop loss hit - use planned stop loss as exit")
+        self.exit_group = QButtonGroup(self)
+        for radio in (self.manual_exit_radio, self.target_hit_radio, self.stoploss_hit_radio):
+            self.exit_group.addButton(radio)
+        self.manual_exit_radio.setChecked(True)
+        self.manual_exit_radio.toggled.connect(lambda checked: checked and self.set_exit_outcome("Manual Exit"))
+        self.target_hit_radio.toggled.connect(lambda checked: checked and self.set_exit_outcome("Target Hit"))
+        self.stoploss_hit_radio.toggled.connect(lambda checked: checked and self.set_exit_outcome("Stop Loss Hit"))
+        exit_form.addRow("Exit outcome", self.outcome_input)
+        exit_form.addRow("Actual exit price", self.exit_input)
+        exit_form.addRow(self.manual_exit_radio)
+        exit_form.addRow(self.target_hit_radio)
+        exit_form.addRow(self.stoploss_hit_radio)
+        layout.addWidget(exit_box)
+        self.close_button = QPushButton("Close Selected Trade and Save Outcome")
         self.close_button.clicked.connect(self.close_selected_trade)
         layout.addWidget(self.close_button)
+        self.stoploss_review_button = QPushButton("Review Selected Stop-Loss Hit (market-data evidence)")
+        self.stoploss_review_button.clicked.connect(self.review_stoploss_hit)
+        layout.addWidget(self.stoploss_review_button)
+        self.stoploss_review = QLabel("After a Stop Loss Hit, review saved 5m/15m snapshots and run a historical backtest. A stop loss is evidence to investigate, not proof that any system can predict every move.")
+        self.stoploss_review.setWordWrap(True)
+        layout.addWidget(self.stoploss_review)
         self.delete_button = QPushButton("Delete Selected Trade")
         self.delete_button.clicked.connect(self.delete_selected_trade)
         layout.addWidget(self.delete_button)
@@ -100,7 +127,7 @@ class JournalPage(QWidget):
             QMessageBox.critical(self, "Could not save trade", str(error))
             return
 
-        QMessageBox.information(self, "Open trade saved", "Open trade saved. Select its row later, enter the actual exit price, then use Close Selected Trade.")
+        QMessageBox.information(self, "Open trade saved", "Open trade saved. When it closes, select its row, then mark Target Hit, Stop Loss Hit, or enter a Manual Exit price.")
         for field in (self.symbol_input, self.strike_input, self.entry_input, self.exit_input,
                       self.stoploss_input, self.target_input, self.quantity_input):
             field.clear()
@@ -116,8 +143,19 @@ class JournalPage(QWidget):
             QMessageBox.information(self, "Select an open trade", "Select the open trade row, enter its actual exit price, then close it.")
             return
         try:
-            exit_price = float(self.exit_input.text().strip())
             trade_id = int(self.table.item(row, 0).text())
+            trade = self.db.get_trade(trade_id)
+            if not trade or trade["status"] != "OPEN":
+                raise ValueError("Select an OPEN trade to save its exit outcome.")
+            outcome = self.outcome_input.currentText()
+            if outcome == "Target Hit":
+                exit_price = float(trade["target"])
+                self.exit_input.setText(f"{exit_price:.2f}")
+            elif outcome == "Stop Loss Hit":
+                exit_price = float(trade["stoploss"])
+                self.exit_input.setText(f"{exit_price:.2f}")
+            else:
+                exit_price = float(self.exit_input.text().strip())
             if not self.db.close_trade(trade_id, exit_price, self.outcome_input.currentText()):
                 QMessageBox.warning(self, "Trade not found", "The selected trade no longer exists. Refreshing the table.")
                 self.load_trades()
@@ -125,7 +163,9 @@ class JournalPage(QWidget):
         except ValueError as error:
             QMessageBox.warning(self, "Invalid exit", str(error))
             return
-        QMessageBox.information(self, "Trade closed", "Actual exit and outcome saved. P&L and R:R have been calculated for this trade.")
+        if self.outcome_input.currentText() == "Stop Loss Hit":
+            self.stoploss_review.setText("Stop loss recorded. Use the review button to inspect the saved 5m/15m evidence, then run historical backtesting before changing rules or risk.")
+        QMessageBox.information(self, "Trade closed", "Exit outcome saved. P&L and R:R have been calculated from the recorded exit.")
         self.load_trades()
         self.trade_saved.emit()
         self._show_daily_guardrail()
@@ -140,6 +180,34 @@ class JournalPage(QWidget):
         elif summary["pnl"] <= -loss_limit:
             QMessageBox.warning(self, "Daily loss warning", "Today's recorded loss exceeds your configured daily-loss limit.")
 
+    def set_exit_outcome(self, outcome: str) -> None:
+        """Keep the visible one-click outcome controls and stored value in sync."""
+        self.outcome_input.setCurrentText(outcome)
+        if outcome == "Target Hit" and self.target_input.text().strip():
+            self.exit_input.setText(self.target_input.text().strip())
+        elif outcome == "Stop Loss Hit" and self.stoploss_input.text().strip():
+            self.exit_input.setText(self.stoploss_input.text().strip())
+        elif outcome == "Manual Exit":
+            self.exit_input.clear()
+
+    def review_stoploss_hit(self) -> None:
+        row = self.table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Select a stop-loss trade", "Select a closed Stop Loss Hit row first.")
+            return
+        trade = self.db.get_trade(int(self.table.item(row, 0).text()))
+        if not trade or trade["outcome"] != "STOP LOSS HIT":
+            QMessageBox.information(self, "Stop-loss review", "Select a trade whose recorded outcome is Stop Loss Hit.")
+            return
+        snapshots = [snapshot for snapshot in self.db.get_market_snapshots(trade["trade_date"]) if snapshot["symbol"] == trade["symbol"]]
+        timeframes = ", ".join(sorted({snapshot["timeframe"] for snapshot in snapshots})) or "none"
+        self.stoploss_review.setText(
+            f"Review for {trade['symbol']} {trade['strike'] or ''} {trade['option_type']}: {len(snapshots)} saved same-day market snapshot(s) ({timeframes}). "
+            f"Recorded confirmations: trend={bool(trade['trend'])}, VWAP={bool(trade['vwap'])}, EMA={bool(trade['ema'])}, volume={bool(trade['volume'])}, OI={bool(trade['oi'])}. "
+            "Next: open Backtesting for the same underlying/timeframe and compare this rule version across many completed trades. Do not increase risk from one result."
+        )
+        self.open_backtesting.emit()
+
     def set_symbol_from_capture(self, symbol: str) -> None:
         self.symbol_input.setText(symbol)
 
@@ -152,6 +220,7 @@ class JournalPage(QWidget):
         self.strike_input.setText(f"{float(contract['strike']):.0f}")
         self.option_input.setCurrentText(plan["option_type"])
         self.outcome_input.setCurrentText("Manual Exit")
+        self.manual_exit_radio.setChecked(True)
         self.entry_input.setText(f"{plan['entry']:.2f}")
         self.exit_input.clear()
         self.stoploss_input.setText(f"{plan['stoploss']:.2f}")
@@ -202,10 +271,17 @@ class JournalPage(QWidget):
         if trade["status"] == "OPEN":
             self.exit_input.clear()
             self.outcome_input.setCurrentText("Manual Exit")
+            self.manual_exit_radio.setChecked(True)
             self.plan_summary.setText("Selected OPEN trade: enter the actual exit price above, then click Close Selected Trade.")
         else:
             self.exit_input.setText(f"{float(trade['exit']):.2f}")
             self.outcome_input.setCurrentText(str(trade["outcome"]).title())
+            if trade["outcome"] == "TARGET HIT":
+                self.target_hit_radio.setChecked(True)
+            elif trade["outcome"] == "STOP LOSS HIT":
+                self.stoploss_hit_radio.setChecked(True)
+            else:
+                self.manual_exit_radio.setChecked(True)
             self.plan_summary.setText("Selected CLOSED trade: exit, P&L and R:R have already been recorded.")
 
     def delete_selected_trade(self) -> None:
