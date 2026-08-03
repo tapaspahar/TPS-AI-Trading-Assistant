@@ -108,7 +108,10 @@ class AngelOneClient:
         """Fetch read-only FULL quote data for one selected option contract."""
         if not self.session:
             raise RuntimeError("Connect Angel One before loading option data.")
-        response = self.session.getMarketData("FULL", {exchange: [str(token)]})
+        try:
+            response = self.session.getMarketData("FULL", {exchange: [str(token)]})
+        except Exception as error:
+            raise RuntimeError("Angel One quote request timed out or is temporarily unavailable. TPS will retry on the next refresh.") from error
         if not response.get("status"):
             raise RuntimeError(response.get("message", "Angel One option quote is unavailable."))
         fetched = (response.get("data") or {}).get("fetched") or []
@@ -125,7 +128,10 @@ class AngelOneClient:
             return []
         if len(tokens) > 50:
             raise ValueError("Option-chain request exceeds Angel One's 50-token quote limit.")
-        response = self.session.getMarketData("FULL", {exchange: tokens})
+        try:
+            response = self.session.getMarketData("FULL", {exchange: tokens})
+        except Exception as error:
+            raise RuntimeError("Angel One option-chain request timed out or is temporarily unavailable. TPS will retry on the next refresh.") from error
         if not response.get("status"):
             raise RuntimeError(response.get("message", "Angel One option-chain data is unavailable."))
         return (response.get("data") or {}).get("fetched") or []
@@ -134,7 +140,10 @@ class AngelOneClient:
         """Fetch read-only FULL quotes for a small mixed-exchange market overview."""
         if not self.session:
             raise RuntimeError("Connect Angel One before loading market overview data.")
-        response = self.session.getMarketData("FULL", exchange_tokens)
+        try:
+            response = self.session.getMarketData("FULL", exchange_tokens)
+        except Exception as error:
+            raise RuntimeError("Angel One market-data request timed out or is temporarily unavailable. TPS will retry on the next refresh.") from error
         if not response.get("status"):
             raise RuntimeError(response.get("message", "Angel One market overview is unavailable."))
         return (response.get("data") or {}).get("fetched") or []
@@ -143,7 +152,10 @@ class AngelOneClient:
         """Return Angel One's market-level PCR records when the endpoint is enabled."""
         if not self.session:
             raise RuntimeError("Connect Angel One before loading PCR data.")
-        response = self.session.putCallRatio()
+        try:
+            response = self.session.putCallRatio()
+        except Exception as error:
+            raise RuntimeError("Angel One PCR request timed out or is temporarily unavailable. TPS will retry on the next refresh.") from error
         if not response.get("status"):
             raise RuntimeError(response.get("message", "Angel One PCR data is unavailable."))
         return response.get("data") or []

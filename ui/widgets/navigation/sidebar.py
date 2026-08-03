@@ -11,16 +11,36 @@ class Sidebar(QFrame):
         layout.setSpacing(5)
         self.dashboardButton = QPushButton("▦  Dashboard")
         self.liveMarketButton = QPushButton("◈  Market Snapshot")
-        self.optionsButton = QPushButton("◉  Options Workspace")
         self.chartCaptureButton = QPushButton("▣  Chart Capture")
+        self.aiButton = QPushButton("✦  AI Analysis")
+        self.optionsButton = QPushButton("◉  Options Workspace")
         self.journalButton = QPushButton("▤  Trade Journal")
         self.checklistButton = QPushButton("✓  Checklist")
-        self.aiButton = QPushButton("✦  AI Analysis")
         self.riskButton = QPushButton("◈  Risk Manager")
         self.reportButton = QPushButton("▥  Reports")
         self.settingsButton = QPushButton("⚙  Settings")
-        self.buttons = (self.dashboardButton, self.liveMarketButton, self.optionsButton, self.chartCaptureButton, self.journalButton,
-                        self.checklistButton, self.aiButton, self.riskButton, self.reportButton, self.settingsButton)
+        # Keep the visual journey in the same order a trader uses the app:
+        # market context -> chart confirmation -> AI evaluation -> option plan -> journal.
+        self.buttons = (
+            self.dashboardButton, self.liveMarketButton, self.chartCaptureButton,
+            self.aiButton, self.optionsButton, self.journalButton,
+            self.checklistButton, self.riskButton, self.reportButton, self.settingsButton,
+        )
+        # Stack page numbers intentionally remain stable even when the visual
+        # menu order changes.  This prevents the wrong sidebar item being
+        # highlighted after an automatic screen change.
+        self.page_buttons = {
+            0: self.dashboardButton,
+            1: self.liveMarketButton,
+            2: self.optionsButton,
+            3: self.chartCaptureButton,
+            4: self.journalButton,
+            5: self.checklistButton,
+            6: self.aiButton,
+            7: self.riskButton,
+            8: self.reportButton,
+            9: self.settingsButton,
+        }
         self.menu_group = QButtonGroup(self)
         self.menu_group.setExclusive(True)
         for index, button in enumerate(self.buttons):
@@ -32,6 +52,6 @@ class Sidebar(QFrame):
         self.dashboardButton.setChecked(True)
 
     def set_active(self, index: int):
-        button = self.menu_group.button(index)
+        button = self.page_buttons.get(index)
         if button:
             button.setChecked(True)

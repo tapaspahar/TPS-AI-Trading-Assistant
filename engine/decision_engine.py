@@ -15,6 +15,8 @@ class ChartSnapshot:
     supertrend: float
     volume: float | None
     volume_ema: float | None
+    rsi_14: float | None = None
+    atr_14: float | None = None
 
 
 class DecisionEngine:
@@ -54,6 +56,15 @@ class DecisionEngine:
                 reasons.append("Volume is above Volume EMA 20")
             else:
                 warnings.append("Volume is not above Volume EMA 20")
+
+        if snapshot.rsi_14 is not None:
+            if (bullish and 50 <= snapshot.rsi_14 <= 70) or (not bullish and 30 <= snapshot.rsi_14 <= 50):
+                score += 5
+                reasons.append("RSI 14 supports the trend without an extreme reading")
+            else:
+                warnings.append("RSI 14 is not in the preferred trend range")
+        if snapshot.atr_14 is not None:
+            reasons.append(f"ATR 14 available for volatility-aware stop planning ({snapshot.atr_14:.2f})")
 
         option_type = option_type.upper()
         expected_option = "CE" if bullish else "PE"

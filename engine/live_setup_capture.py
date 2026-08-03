@@ -41,8 +41,9 @@ def atr(candles, period=14):
     if len(candles) < period + 1:
         raise ValueError("At least 15 candles are needed for ATR 14.")
     ranges = []
-    for index, candle in enumerate(candles[-(period + 1):]):
-        previous = candles[-(period + 2) + index] if index else candle
+    window = candles[-(period + 1):]
+    for index, candle in enumerate(window):
+        previous = window[index - 1] if index else candle
         ranges.append(max(float(candle["high"]) - float(candle["low"]), abs(float(candle["high"]) - float(previous["close"])), abs(float(candle["low"]) - float(previous["close"]))))
     return sum(ranges[1:]) / period
 
