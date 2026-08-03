@@ -108,11 +108,14 @@ class AngelOneClient:
                 except Exception as error:
                     message = str(error)
                     limited = "access rate" in message.lower() or "rate limit" in message.lower()
-                    if limited and attempt == 0:
-                        sleep(self.CANDLE_RATE_LIMIT_COOLDOWN_SECONDS)
+                    retryable = limited or "timeout" in message.lower() or "connection" in message.lower()
+                    if retryable and attempt == 0:
+                        sleep(self.CANDLE_RATE_LIMIT_COOLDOWN_SECONDS if limited else 5)
                         continue
                     if limited:
                         raise RuntimeError("Angel One candle service is busy. TPS retried automatically; try again after 30 seconds.") from error
+                    if retryable:
+                        raise RuntimeError("Angel One historical candle service timed out after an automatic retry. Try again after 30 seconds.") from error
                     raise RuntimeError(f"Angel One candle request failed: {message}") from error
 
             if not response.get("status"):

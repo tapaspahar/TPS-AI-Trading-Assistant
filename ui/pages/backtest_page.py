@@ -17,10 +17,10 @@ class BacktestPage(QWidget):
     def __init__(self):
         super().__init__()
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Historical Backtesting — candle-based TPS rule validation (paper simulation only)"))
+        layout.addWidget(QLabel("Historical Backtesting — current-month future candle validation (paper simulation only)"))
         note = QLabel(
-            "Tests index candles using EMA 5/20/50, VWAP where volume is available, SuperTrend, RSI 14 and ATR 14. "
-            "Results exclude option premiums, slippage, brokerage, taxes and future performance."
+            "Tests current-month future candles using EMA 5/20/50, VWAP, SuperTrend, RSI 14, ATR 14, heavy volume and a fake-move filter. "
+            "Historical data can be tested after market hours; results exclude option premiums, slippage, brokerage, taxes and future performance."
         )
         note.setWordWrap(True)
         layout.addWidget(note)
@@ -66,7 +66,7 @@ class BacktestPage(QWidget):
 
     def show_result(self, result):
         self.run_button.setEnabled(True)
-        volume_note = "Volume confirmation applied." if result["volume_available"] else "Index volume unavailable: trade signals were blocked because high-volume confirmation is required."
+        volume_note = "Future-volume confirmation applied." if result["volume_available"] else "Future volume was unavailable: trade signals were blocked because high-volume confirmation is required."
         self.summary.setText(
             f"{result['symbol']} future ({result['future_symbol']}) {result['timeframe']} | {result['candles']} candles / {result['days']} days\n"
             f"Paper trades: {result['total_trades']} | Wins: {result['wins']} | Losses: {result['losses']} | "
@@ -88,4 +88,11 @@ class BacktestPage(QWidget):
 
     def show_error(self, message):
         self.run_button.setEnabled(True)
-        self.summary.setText(f"Backtest unavailable: {message}")
+        lower = str(message).lower()
+        if "timeout" in lower or "connection" in lower:
+            self.summary.setText(
+                "Historical data request timed out at Angel One. This is not caused by market close. "
+                "TPS retried once; wait 30 seconds and run the backtest again."
+            )
+        else:
+            self.summary.setText(f"Backtest unavailable: {message}")

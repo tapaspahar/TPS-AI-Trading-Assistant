@@ -318,12 +318,12 @@ class LiveMarketPage(QWidget):
                 bias = "Bearish day bias"
             else:
                 bias = "Flat day bias"
-            self.overview_cards[symbol].set_value(f"₹{price:,.2f}\n{bias} ({percent_change:+.2f}%)")
+            self.overview_cards[symbol].set_value(f"{price:,.2f} points\n{bias} ({percent_change:+.2f}%)")
         for symbol, future in self.future_contracts.items():
             quote = quotes.get(future["token"])
             if quote:
                 self.overview_cards[f"{symbol} FUT"].set_value(
-                    f"Future ₹{float(quote.get('ltp', 0) or 0):,.2f}\nExpires {future['expiry'].strftime('%d %b')}"
+                    f"Future {float(quote.get('ltp', 0) or 0):,.2f} points\nExpires {future['expiry'].strftime('%d %b')}"
                 )
             else:
                 self.overview_cards[f"{symbol} FUT"].set_value("Future quote unavailable")
@@ -342,4 +342,4 @@ class LiveMarketPage(QWidget):
         if value is None:
             return
         price = float(value) / 100 if float(value) > 100000 else float(value)
-        self.cards["ltp"].set_value(f"₹{price:,.2f}")
+        self.cards["ltp"].set_value(f"{price:,.2f} points")
