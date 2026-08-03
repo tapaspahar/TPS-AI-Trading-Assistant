@@ -96,6 +96,8 @@ def run_tps_backtest(candles, max_holding_bars=12):
 
     wins = sum(1 for trade in trades if trade["pnl_points"] > 0)
     losses = sum(1 for trade in trades if trade["pnl_points"] < 0)
+    gross_profit = sum(trade["pnl_points"] for trade in trades if trade["pnl_points"] > 0)
+    gross_loss = abs(sum(trade["pnl_points"] for trade in trades if trade["pnl_points"] < 0))
     equity, peak, max_drawdown = 0.0, 0.0, 0.0
     for trade in trades:
         equity += trade["pnl_points"]
@@ -106,5 +108,19 @@ def run_tps_backtest(candles, max_holding_bars=12):
         "win_rate": round((wins / len(trades)) * 100, 1) if trades else 0.0,
         "net_points": round(sum(trade["pnl_points"] for trade in trades), 2),
         "max_drawdown_points": round(max_drawdown, 2),
+        "profit_factor": round(gross_profit / gross_loss, 2) if gross_loss else (99.0 if gross_profit else 0.0),
+        "research_status": _research_status(len(trades), wins, losses, gross_profit, gross_loss),
         "volume_available": any(float(candle.get("volume", 0) or 0) > 0 for candle in candles),
     }
+
+
+def _research_status(total, wins, losses, gross_profit, gross_loss):
+    """State evidence quality; deliberately never turn a backtest into a guarantee."""
+    decisive = wins + losses
+    win_rate = (wins / decisive) * 100 if decisive else 0
+    profit_factor = gross_profit / gross_loss if gross_loss else (99 if gross_profit else 0)
+    if total < 30:
+        return "Insufficient sample: collect at least 30 paper signals before judging the rule."
+    if win_rate >= 55 and profit_factor >= 1.2:
+        return "Promising historical sample only: forward-test with small risk; no win-rate guarantee."
+    return "Historical rules are not validated for this sample: do not increase risk."

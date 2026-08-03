@@ -31,6 +31,9 @@ class MarketSnapshotRecorder:
                 candles = self.client.get_recent_candles(exchange, token, interval, days)
                 data = build_live_capture(symbol, timeframe, candles, f"Angel One current-month {symbol} future")
                 latest = candles[-1]
+                previous = database.get_latest_market_snapshot(symbol, timeframe)
+                oi_change = self._change(option_context.get("oi_pcr"), previous["oi_pcr"] if previous else None)
+                volume_pcr_change = self._change(option_context.get("volume_pcr"), previous["volume_pcr"] if previous else None)
                 snapshot = {
                     "captured_at": captured_at.isoformat(timespec="minutes"),
                     "trade_date": captured_at.strftime("%d-%m-%Y"),
@@ -38,6 +41,7 @@ class MarketSnapshotRecorder:
                     "open": float(latest["open"]), "high": float(latest["high"]),
                     "low": float(latest["low"]), "close": float(latest["close"]),
                     **{key: self._number(data.get(key)) for key in ("volume", "volume_ema", "ema_5", "ema_20", "ema_50", "vwap", "supertrend", "rsi_14", "atr_14")},
+                    "oi_pcr_change": oi_change, "volume_pcr_change": volume_pcr_change,
                     **option_context,
                 }
                 saved += int(database.save_market_snapshot(snapshot))
@@ -73,3 +77,8 @@ class MarketSnapshotRecorder:
             return float(value) if value not in (None, "") else None
         except (TypeError, ValueError):
             return None
+
+    @classmethod
+    def _change(cls, current, previous):
+        current, previous = cls._number(current), cls._number(previous)
+        return round(current - previous, 4) if current is not None and previous is not None else None

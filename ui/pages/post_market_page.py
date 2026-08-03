@@ -39,6 +39,7 @@ class PostMarketPage(QWidget):
         latest = snapshots[-1]
         oi_text = (
             f"Latest OI PCR: {float(latest['oi_pcr']):.2f} | Volume PCR: {float(latest['volume_pcr']):.2f} | "
+            f"OI PCR change: {float(latest['oi_pcr_change'] or 0):+.4f} | Volume PCR change: {float(latest['volume_pcr_change'] or 0):+.4f}\n"
             f"Put-OI support: {latest['put_support'] or 'unavailable'} | Call-OI resistance: {latest['call_resistance'] or 'unavailable'}"
             if latest["oi_pcr"] is not None else
             "Latest option-chain OI/PCR was unavailable; candle snapshot was still saved."
@@ -48,7 +49,7 @@ class PostMarketPage(QWidget):
             f"Latest {latest['symbol']} close: {float(latest['close']):,.2f} | RSI 14: {float(latest['rsi_14'] or 0):.2f} | "
             f"ATR 14: {float(latest['atr_14'] or 0):.2f}\n{oi_text}"
         )
-        headers = ["Captured", "Symbol", "TF", "Close", "Volume", "EMA 5", "EMA 20", "EMA 50", "VWAP", "SuperTrend", "RSI", "ATR", "OI PCR", "Vol PCR", "Put Support", "Call Resistance"]
+        headers = ["Captured", "Symbol", "TF", "Close", "Volume", "EMA 5", "EMA 20", "EMA 50", "VWAP", "SuperTrend", "RSI", "ATR", "OI PCR", "OI PCR Change", "Vol PCR", "Vol PCR Change", "Put Support", "Call Resistance"]
         self.table.setColumnCount(len(headers))
         self.table.setHorizontalHeaderLabels(headers)
         self.table.setRowCount(len(snapshots))
@@ -56,7 +57,7 @@ class PostMarketPage(QWidget):
             values = (
                 snapshot["captured_at"], snapshot["symbol"], snapshot["timeframe"], snapshot["close"], snapshot["volume"],
                 snapshot["ema_5"], snapshot["ema_20"], snapshot["ema_50"], snapshot["vwap"], snapshot["supertrend"],
-                snapshot["rsi_14"], snapshot["atr_14"], snapshot["oi_pcr"], snapshot["volume_pcr"],
+                snapshot["rsi_14"], snapshot["atr_14"], snapshot["oi_pcr"], snapshot["oi_pcr_change"], snapshot["volume_pcr"], snapshot["volume_pcr_change"],
                 snapshot["put_support"], snapshot["call_resistance"],
             )
             for column, value in enumerate(values):

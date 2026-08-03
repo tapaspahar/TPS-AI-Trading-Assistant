@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QComboBox, QFormLayout, QLabel, QMessageBox, QPush
 from engine.backtest_engine import run_tps_backtest
 from engine.live_setup_capture import INSTRUMENTS, TIMEFRAMES
 from services.live_session import LiveSession
+from services.option_contract_service import OptionContractService
 
 
 class BacktestPage(QWidget):
@@ -53,11 +54,12 @@ class BacktestPage(QWidget):
 
     def _run_backtest(self, symbol, timeframe, days):
         try:
-            exchange, token = INSTRUMENTS[symbol]
+            future = OptionContractService().get_front_month_future(symbol)
+            exchange, token = future["exchange"], future["token"]
             interval = TIMEFRAMES[timeframe][0]
             candles = LiveSession.client.get_recent_candles(exchange, token, interval, days)
             result = run_tps_backtest(candles)
-            result.update({"symbol": symbol, "timeframe": timeframe, "days": days, "candles": len(candles)})
+            result.update({"symbol": symbol, "timeframe": timeframe, "days": days, "candles": len(candles), "future_symbol": future["symbol"]})
             self.result_ready.emit(result)
         except (RuntimeError, ValueError) as error:
             self.run_error.emit(str(error))
@@ -66,10 +68,11 @@ class BacktestPage(QWidget):
         self.run_button.setEnabled(True)
         volume_note = "Volume confirmation applied." if result["volume_available"] else "Index volume unavailable: trade signals were blocked because high-volume confirmation is required."
         self.summary.setText(
-            f"{result['symbol']} {result['timeframe']} | {result['candles']} candles / {result['days']} days\n"
+            f"{result['symbol']} future ({result['future_symbol']}) {result['timeframe']} | {result['candles']} candles / {result['days']} days\n"
             f"Paper trades: {result['total_trades']} | Wins: {result['wins']} | Losses: {result['losses']} | "
             f"Win rate: {result['win_rate']:.1f}%\nNet points: {result['net_points']:,.2f} | "
-            f"Max drawdown: {result['max_drawdown_points']:,.2f}\n{volume_note}\n"
+            f"Max drawdown: {result['max_drawdown_points']:,.2f} | Profit factor: {result['profit_factor']:.2f}\n"
+            f"Evidence check: {result['research_status']}\n{volume_note}\n"
             "Use this to compare rule versions; it is not a promise of live profit."
         )
         headers = ["Time", "Direction", "Entry", "Stop", "Target", "Exit", "Outcome", "P&L Points", "RSI 14", "ATR 14"]

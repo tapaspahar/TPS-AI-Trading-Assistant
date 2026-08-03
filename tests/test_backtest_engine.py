@@ -26,6 +26,8 @@ class BacktestEngineTests(unittest.TestCase):
         self.assertEqual(result["total_trades"], len(result["trades"]))
         self.assertTrue(result["volume_available"])
         self.assertIn("net_points", result)
+        self.assertIn("profit_factor", result)
+        self.assertIn("research_status", result)
 
 
 if __name__ == "__main__":

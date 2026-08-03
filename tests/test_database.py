@@ -91,6 +91,16 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(summary["pnl"], 1775.0)
         self.assertEqual(summary["win_rate"], 50.0)
 
+    def test_validation_report_uses_only_fully_confirmed_closed_trades(self):
+        trade_id = self.db.save_open_trade(sample_trade(exit=0.0))
+        self.db.close_trade(trade_id, 145.0, "Target Hit")
+        self.db.save_trade(sample_trade(trend=False, symbol="BANKNIFTY"))
+
+        report = self.db.get_validation_report()
+        self.assertEqual((report["samples"], report["target_hits"], report["stoploss_hits"]), (1, 1, 0))
+        self.assertEqual(report["accuracy"], 100.0)
+        self.assertIn("30", report["status"])
+
     def test_day_summary_filters_by_journal_date(self):
         self.db.save_trade(sample_trade())
         self.db.save_trade(sample_trade(trade_date="02-08-2026", symbol="FINNIFTY"))

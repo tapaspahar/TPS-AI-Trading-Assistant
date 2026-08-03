@@ -112,6 +112,8 @@ class Database:
                 atr_14 REAL,
                 oi_pcr REAL,
                 volume_pcr REAL,
+                oi_pcr_change REAL,
+                volume_pcr_change REAL,
                 put_support REAL,
                 call_resistance REAL,
                 option_contracts INTEGER,
@@ -119,6 +121,11 @@ class Database:
             )
             """
         )
+        snapshot_columns = {row["name"] for row in self.cursor.execute("PRAGMA table_info(market_snapshots)")}
+        if "oi_pcr_change" not in snapshot_columns:
+            self.cursor.execute("ALTER TABLE market_snapshots ADD COLUMN oi_pcr_change REAL")
+        if "volume_pcr_change" not in snapshot_columns:
+            self.cursor.execute("ALTER TABLE market_snapshots ADD COLUMN volume_pcr_change REAL")
         self.connection.commit()
 
     @staticmethod
@@ -321,12 +328,37 @@ class Database:
             "target_vs_stop_accuracy": round((target_hits / decisive) * 100, 1) if decisive else 0.0,
         }
 
+    def get_validation_report(self) -> dict[str, float | int | str]:
+        """Summarise fully-confirmed closed journal trades as evidence, not a forecast."""
+        row = self.cursor.execute(
+            """
+            SELECT COUNT(*) AS samples,
+                   SUM(CASE WHEN outcome = 'TARGET HIT' THEN 1 ELSE 0 END) AS target_hits,
+                   SUM(CASE WHEN outcome = 'STOP LOSS HIT' THEN 1 ELSE 0 END) AS stoploss_hits
+            FROM trades
+            WHERE status = 'CLOSED' AND trend = 1 AND vwap = 1 AND ema = 1 AND volume = 1 AND oi = 1
+            """
+        ).fetchone()
+        samples = int(row["samples"] or 0)
+        target_hits, stoploss_hits = int(row["target_hits"] or 0), int(row["stoploss_hits"] or 0)
+        decisive = target_hits + stoploss_hits
+        accuracy = round(target_hits * 100 / decisive, 1) if decisive else 0.0
+        if samples < 30:
+            status = "Insufficient live sample: record at least 30 fully-confirmed closed trades."
+        elif decisive < 20:
+            status = "Too few target/stop outcomes to assess this setup reliably."
+        elif accuracy >= 60:
+            status = "Promising recorded sample; keep fixed risk and continue forward validation."
+        else:
+            status = "Recorded result does not validate increasing risk; review the rule and market regime."
+        return {"samples": samples, "target_hits": target_hits, "stoploss_hits": stoploss_hits, "accuracy": accuracy, "status": status}
+
     def save_market_snapshot(self, snapshot: dict) -> bool:
         """Persist a timed, read-only market/option-chain observation."""
         columns = (
             "captured_at", "trade_date", "symbol", "timeframe", "open", "high", "low", "close",
             "volume", "volume_ema", "ema_5", "ema_20", "ema_50", "vwap", "supertrend",
-            "rsi_14", "atr_14", "oi_pcr", "volume_pcr", "put_support", "call_resistance", "option_contracts",
+            "rsi_14", "atr_14", "oi_pcr", "volume_pcr", "oi_pcr_change", "volume_pcr_change", "put_support", "call_resistance", "option_contracts",
         )
         values = tuple(snapshot.get(column) for column in columns)
         result = self.cursor.execute(
@@ -343,6 +375,12 @@ class Database:
                 (trade_date,),
             ).fetchall()
         return self.cursor.execute("SELECT * FROM market_snapshots ORDER BY captured_at DESC, timeframe ASC").fetchall()
+
+    def get_latest_market_snapshot(self, symbol: str, timeframe: str) -> sqlite3.Row | None:
+        return self.cursor.execute(
+            "SELECT * FROM market_snapshots WHERE symbol = ? AND timeframe = ? ORDER BY captured_at DESC LIMIT 1",
+            (str(symbol).upper(), str(timeframe)),
+        ).fetchone()
 
     def get_open_trades(self, symbol: str | None = None) -> list[sqlite3.Row]:
         query, values = "SELECT * FROM trades WHERE status = 'OPEN'", ()
