@@ -48,10 +48,11 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(open_trade["status"], "OPEN")
         self.assertEqual(open_trade["pnl"], 0.0)
 
-        self.assertTrue(self.db.close_trade(trade_id, 145.0))
+        self.assertTrue(self.db.close_trade(trade_id, 145.0, "Target Hit"))
         closed_trade = self.db.get_trade(trade_id)
         self.assertEqual(closed_trade["status"], "CLOSED")
         self.assertEqual((closed_trade["exit"], closed_trade["pnl"], closed_trade["rr_ratio"]), (145.0, 1875.0, 3.0))
+        self.assertEqual(closed_trade["outcome"], "TARGET HIT")
 
     def test_summary_aggregates_saved_trades(self):
         self.db.save_trade(sample_trade())

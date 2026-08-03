@@ -61,6 +61,7 @@ class Database:
                 notes TEXT,
                 screenshot TEXT,
                 status TEXT NOT NULL DEFAULT 'CLOSED',
+                outcome TEXT NOT NULL DEFAULT 'MANUAL EXIT',
                 closed_at TEXT,
                 created_at TEXT NOT NULL
             )
@@ -70,6 +71,8 @@ class Database:
         columns = {row["name"] for row in self.cursor.execute("PRAGMA table_info(trades)")}
         if "status" not in columns:
             self.cursor.execute("ALTER TABLE trades ADD COLUMN status TEXT NOT NULL DEFAULT 'CLOSED'")
+        if "outcome" not in columns:
+            self.cursor.execute("ALTER TABLE trades ADD COLUMN outcome TEXT NOT NULL DEFAULT 'MANUAL EXIT'")
         if "closed_at" not in columns:
             self.cursor.execute("ALTER TABLE trades ADD COLUMN closed_at TEXT")
         self.connection.commit()
@@ -104,7 +107,7 @@ class Database:
             int(trade.trend), int(trade.vwap), int(trade.ema), int(trade.volume), int(trade.oi),
             trade.psychology_before, trade.psychology_after, trade.mistake, trade.confidence,
             trade.ai_score, trade.ai_decision, trade.ai_review, trade.notes, trade.screenshot,
-            "CLOSED", datetime.now().isoformat(timespec="seconds"), datetime.now().isoformat(timespec="seconds"),
+            "CLOSED", "MANUAL EXIT", datetime.now().isoformat(timespec="seconds"), datetime.now().isoformat(timespec="seconds"),
         )
         self.cursor.execute(
             """
@@ -113,8 +116,8 @@ class Database:
                 entry, exit, stoploss, target, quantity, pnl, rr_ratio, setup,
                 trend, vwap, ema, volume, oi, psychology_before, psychology_after,
                 mistake, confidence, ai_score, ai_decision, ai_review, notes,
-                screenshot, status, closed_at, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                screenshot, status, outcome, closed_at, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             values,
         )
@@ -138,7 +141,7 @@ class Database:
             int(trade.trend), int(trade.vwap), int(trade.ema), int(trade.volume), int(trade.oi),
             trade.psychology_before, trade.psychology_after, trade.mistake, trade.confidence,
             analysis["score"], analysis["decision"], ", ".join(analysis["reasons"]) or "No technical confirmations recorded.",
-            trade.notes, trade.screenshot, "OPEN", None, datetime.now().isoformat(timespec="seconds"),
+            trade.notes, trade.screenshot, "OPEN", "PENDING", None, datetime.now().isoformat(timespec="seconds"),
         )
         self.cursor.execute(
             """
@@ -147,18 +150,21 @@ class Database:
                 entry, exit, stoploss, target, quantity, pnl, rr_ratio, setup,
                 trend, vwap, ema, volume, oi, psychology_before, psychology_after,
                 mistake, confidence, ai_score, ai_decision, ai_review, notes,
-                screenshot, status, closed_at, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                screenshot, status, outcome, closed_at, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             values,
         )
         self.connection.commit()
         return int(self.cursor.lastrowid)
 
-    def close_trade(self, trade_id: int, exit_price: float) -> bool:
+    def close_trade(self, trade_id: int, exit_price: float, outcome: str = "MANUAL EXIT") -> bool:
         """Record the actual exit for one previously saved open trade."""
         if exit_price <= 0:
             raise ValueError("Enter an actual exit price greater than zero.")
+        outcome = str(outcome).upper()
+        if outcome not in {"TARGET HIT", "STOP LOSS HIT", "MANUAL EXIT"}:
+            raise ValueError("Choose Target Hit, Stop Loss Hit, or Manual Exit.")
         row = self.cursor.execute("SELECT entry, stoploss, target, quantity, status FROM trades WHERE id = ?", (int(trade_id),)).fetchone()
         if not row:
             return False
@@ -169,8 +175,8 @@ class Database:
         reward = abs(float(row["target"]) - float(row["entry"]))
         rr_ratio = round(reward / risk, 2) if risk else 0.0
         result = self.cursor.execute(
-            "UPDATE trades SET exit = ?, pnl = ?, rr_ratio = ?, status = 'CLOSED', closed_at = ? WHERE id = ? AND status = 'OPEN'",
-            (float(exit_price), pnl, rr_ratio, datetime.now().isoformat(timespec="seconds"), int(trade_id)),
+            "UPDATE trades SET exit = ?, pnl = ?, rr_ratio = ?, status = 'CLOSED', outcome = ?, closed_at = ? WHERE id = ? AND status = 'OPEN'",
+            (float(exit_price), pnl, rr_ratio, outcome, datetime.now().isoformat(timespec="seconds"), int(trade_id)),
         )
         self.connection.commit()
         return result.rowcount == 1
@@ -191,7 +197,7 @@ class Database:
         """Return rows with IDs for display and safe deletion in the journal."""
         return self.cursor.execute(
             """
-            SELECT id, trade_date, trade_time, symbol, strike, option_type, entry, stoploss, target, exit, status,
+            SELECT id, trade_date, trade_time, symbol, strike, option_type, entry, stoploss, target, exit, status, outcome,
                    quantity, pnl, rr_ratio, psychology_before, ai_score, ai_decision
             FROM trades ORDER BY id DESC
             """
@@ -208,7 +214,7 @@ class Database:
         rows = self.cursor.execute(
             """
             SELECT trade_date, trade_time, market, symbol, expiry, strike, option_type,
-                   entry, exit, stoploss, target, quantity, pnl, rr_ratio, setup,
+                   entry, exit, stoploss, target, quantity, pnl, rr_ratio, setup, status, outcome, closed_at,
                    psychology_before, psychology_after, mistake, confidence, ai_score,
                    ai_decision, ai_review, notes, created_at
             FROM trades ORDER BY id DESC
@@ -240,6 +246,31 @@ class Database:
             "average_ai": round(float(row["average_ai"]), 1),
             "winning_trades": wins,
             "win_rate": round((wins / trades) * 100, 1) if trades else 0.0,
+        }
+
+    def get_ai_outcome_report(self) -> dict[str, float | int]:
+        """Summarise closed AI-reviewed trades without treating it as proof of future performance."""
+        row = self.cursor.execute(
+            """
+            SELECT
+                SUM(CASE WHEN status = 'OPEN' THEN 1 ELSE 0 END) AS open_trades,
+                SUM(CASE WHEN status = 'CLOSED' THEN 1 ELSE 0 END) AS closed_trades,
+                SUM(CASE WHEN status = 'CLOSED' AND outcome = 'TARGET HIT' THEN 1 ELSE 0 END) AS target_hits,
+                SUM(CASE WHEN status = 'CLOSED' AND outcome = 'STOP LOSS HIT' THEN 1 ELSE 0 END) AS stoploss_hits,
+                SUM(CASE WHEN status = 'CLOSED' AND outcome = 'MANUAL EXIT' THEN 1 ELSE 0 END) AS manual_exits
+            FROM trades
+            """
+        ).fetchone()
+        target_hits = int(row["target_hits"] or 0)
+        stoploss_hits = int(row["stoploss_hits"] or 0)
+        decisive = target_hits + stoploss_hits
+        return {
+            "open_trades": int(row["open_trades"] or 0),
+            "closed_trades": int(row["closed_trades"] or 0),
+            "target_hits": target_hits,
+            "stoploss_hits": stoploss_hits,
+            "manual_exits": int(row["manual_exits"] or 0),
+            "target_vs_stop_accuracy": round((target_hits / decisive) * 100, 1) if decisive else 0.0,
         }
 
     def get_day_summary(self, trade_date: str) -> dict[str, float | int]:

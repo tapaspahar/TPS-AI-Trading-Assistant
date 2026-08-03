@@ -23,13 +23,19 @@ class ReportsPage(QWidget):
 
     def refresh(self):
         summary = self.db.get_summary()
+        outcomes = self.db.get_ai_outcome_report()
         self.report.setText(
             f"Recorded trades: {summary['trades']}\n"
             f"Net P&L: ₹{summary['pnl']:,.2f}\n"
             f"Winning trades: {summary['winning_trades']}\n"
             f"Win rate: {summary['win_rate']:.1f}%\n"
-            f"Average AI confidence: {summary['average_ai']:.1f}%"
-        )
+            f"Average AI confidence: {summary['average_ai']:.1f}%\n\n"
+            f"AI Outcome Review\n"
+            f"Open trades: {outcomes['open_trades']} | Closed trades: {outcomes['closed_trades']}\n"
+            f"Target hit: {outcomes['target_hits']} | Stop loss hit: {outcomes['stoploss_hits']} | Manual exit: {outcomes['manual_exits']}\n"
+            f"Target vs stop-loss accuracy: {outcomes['target_vs_stop_accuracy']:.1f}%\n"
+            "A stop loss does not prove the AI was wrong; review the chart, timing, volatility, news, liquidity and execution before changing the rules."
+       )
 
     def export_csv(self):
         path, _ = QFileDialog.getSaveFileName(self, "Export Trade Journal", "trade_journal.csv", "CSV files (*.csv)")

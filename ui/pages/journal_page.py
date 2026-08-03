@@ -32,6 +32,7 @@ class JournalPage(QWidget):
         self.strike_input = QLineEdit()
         self.option_input = QComboBox(); self.option_input.addItems(["CE", "PE"])
         self.entry_input, self.exit_input = QLineEdit(), QLineEdit()
+        self.outcome_input = QComboBox(); self.outcome_input.addItems(["Manual Exit", "Target Hit", "Stop Loss Hit"])
         self.stoploss_input, self.target_input = QLineEdit(), QLineEdit()
         self.quantity_input = QLineEdit()
         self.psychology_input = QComboBox()
@@ -39,7 +40,7 @@ class JournalPage(QWidget):
         for label, widget in (
             ("Date", self.date_input), ("Time", self.time_input), ("Symbol", self.symbol_input),
             ("Strike", self.strike_input), ("Option", self.option_input), ("Entry", self.entry_input),
-            ("Exit", self.exit_input), ("Stop loss", self.stoploss_input), ("Target", self.target_input),
+            ("Exit", self.exit_input), ("Exit outcome", self.outcome_input), ("Stop loss", self.stoploss_input), ("Target", self.target_input),
             ("Quantity", self.quantity_input), ("Psychology", self.psychology_input),
         ):
             form.addRow(label, widget)
@@ -116,14 +117,14 @@ class JournalPage(QWidget):
         try:
             exit_price = float(self.exit_input.text().strip())
             trade_id = int(self.table.item(row, 0).text())
-            if not self.db.close_trade(trade_id, exit_price):
+            if not self.db.close_trade(trade_id, exit_price, self.outcome_input.currentText()):
                 QMessageBox.warning(self, "Trade not found", "The selected trade no longer exists. Refreshing the table.")
                 self.load_trades()
                 return
         except ValueError as error:
             QMessageBox.warning(self, "Invalid exit", str(error))
             return
-        QMessageBox.information(self, "Trade closed", "Actual exit saved. P&L and R:R have been calculated for this trade.")
+        QMessageBox.information(self, "Trade closed", "Actual exit and outcome saved. P&L and R:R have been calculated for this trade.")
         self.load_trades()
         self.trade_saved.emit()
         self._show_daily_guardrail()
@@ -149,6 +150,7 @@ class JournalPage(QWidget):
         self.symbol_input.setText(plan["underlying"])
         self.strike_input.setText(f"{float(contract['strike']):.0f}")
         self.option_input.setCurrentText(plan["option_type"])
+        self.outcome_input.setCurrentText("Manual Exit")
         self.entry_input.setText(f"{plan['entry']:.2f}")
         self.exit_input.clear()
         self.stoploss_input.setText(f"{plan['stoploss']:.2f}")
@@ -166,7 +168,7 @@ class JournalPage(QWidget):
         )
 
     def load_trades(self) -> None:
-        headers = ["ID", "Date", "Time", "Symbol", "Strike", "Option", "Entry", "Stop Loss", "Target", "Exit", "Status", "Qty", "P&L", "R:R", "Psychology", "AI", "Decision"]
+        headers = ["ID", "Date", "Time", "Symbol", "Strike", "Option", "Entry", "Stop Loss", "Target", "Exit", "Status", "Outcome", "Qty", "P&L", "R:R", "Psychology", "AI", "Decision"]
         data = self.db.get_journal_rows()
         self.table.setColumnCount(len(headers))
         self.table.setHorizontalHeaderLabels(headers)
@@ -197,9 +199,11 @@ class JournalPage(QWidget):
         self.quantity_input.setText(str(trade["quantity"]))
         if trade["status"] == "OPEN":
             self.exit_input.clear()
+            self.outcome_input.setCurrentText("Manual Exit")
             self.plan_summary.setText("Selected OPEN trade: enter the actual exit price above, then click Close Selected Trade.")
         else:
             self.exit_input.setText(f"{float(trade['exit']):.2f}")
+            self.outcome_input.setCurrentText(str(trade["outcome"]).title())
             self.plan_summary.setText("Selected CLOSED trade: exit, P&L and R:R have already been recorded.")
 
     def delete_selected_trade(self) -> None:
