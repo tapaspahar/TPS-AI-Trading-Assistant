@@ -69,6 +69,16 @@ class Database:
         )
         self.cursor.execute(
             """
+            CREATE TABLE IF NOT EXISTS paper_trade_links (
+                trade_id INTEGER PRIMARY KEY,
+                exchange TEXT NOT NULL,
+                token TEXT NOT NULL,
+                contract_symbol TEXT NOT NULL
+            )
+            """
+        )
+        self.cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS trade_alerts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 trade_id INTEGER NOT NULL,
@@ -208,6 +218,43 @@ class Database:
         )
         self.connection.commit()
         return int(self.cursor.lastrowid)
+
+    def save_paper_trade(self, plan: dict) -> int:
+        """Store a simulated one-lot/selected-lot plan; never send a broker order."""
+        contract = plan["contract"]
+        trade = Trade(
+            trade_date=datetime.now().strftime("%d-%m-%Y"), trade_time=datetime.now().strftime("%H:%M"),
+            market="PAPER OPTIONS", symbol=plan["underlying"], expiry=str(contract.get("expiry", "")),
+            strike=f"{float(contract['strike']):.0f}", option=plan["option_type"], entry=float(plan["entry"]),
+            exit=0.0, stoploss=float(plan["stoploss"]), target=float(plan["target"]), quantity=int(plan["quantity"]),
+            setup=plan.get("rule_version", "TPS paper trade"), confidence=int(plan.get("confidence", 0)),
+            trend=True, vwap=True, ema=True, volume=True, oi=True, psychology_before="Paper simulation",
+            notes="TPS PAPER TRADE: automatically monitored from Angel One option LTP; no broker order was sent.",
+        )
+        trade_id = self.save_open_trade(trade)
+        self.cursor.execute(
+            "INSERT INTO paper_trade_links (trade_id, exchange, token, contract_symbol) VALUES (?, ?, ?, ?)",
+            (trade_id, str(contract["exchange"]), str(contract["token"]), str(contract["symbol"])),
+        )
+        self.connection.commit()
+        return trade_id
+
+    def monitor_paper_trades(self, client) -> list[dict]:
+        """Close simulated trades on a verified option quote only; no order API is used."""
+        rows = self.cursor.execute(
+            """SELECT t.*, p.exchange, p.token, p.contract_symbol FROM trades t
+               JOIN paper_trade_links p ON p.trade_id = t.id WHERE t.status = 'OPEN'"""
+        ).fetchall()
+        closed = []
+        for row in rows:
+            quote = client.get_option_quote(row["exchange"], row["token"])
+            ltp = float(quote.get("ltp", 0) or 0)
+            if ltp <= 0:
+                continue
+            outcome = "TARGET HIT" if ltp >= float(row["target"]) else "STOP LOSS HIT" if ltp <= float(row["stoploss"]) else None
+            if outcome and self.close_trade(int(row["id"]), ltp, outcome):
+                closed.append({"trade_id": int(row["id"]), "symbol": row["contract_symbol"], "ltp": ltp, "outcome": outcome})
+        return closed
 
     def close_trade(self, trade_id: int, exit_price: float, outcome: str = "MANUAL EXIT") -> bool:
         """Record the actual exit for one previously saved open trade."""

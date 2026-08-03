@@ -52,6 +52,11 @@ class DashboardScreen(QWidget):
         self.optionsPage.trade_plan_ready.connect(self.journalPage.load_trade_plan)
         self.optionsPage.trade_plan_ready.connect(lambda _plan: self.show_page(4))
         self.journalPage.open_backtesting.connect(lambda: self.show_page(10))
+        self.optionsPage.paper_trade_captured.connect(lambda _plan: self.journalPage.load_trades())
+        self.optionsPage.paper_trade_captured.connect(lambda _plan: self.dashboardPage.refresh())
+        self.optionsPage.paper_trade_closed.connect(lambda _closed: self.journalPage.load_trades())
+        self.optionsPage.paper_trade_closed.connect(lambda _closed: self.dashboardPage.refresh())
+        self.optionsPage.paper_trade_closed.connect(lambda _closed: self.reportsPage.refresh())
         self.optionsPage.open_chart_capture.connect(lambda: self.show_page(3))
         self.settingsPage.live_connected.connect(self.start_default_nifty)
         for button, index in ((self.sidebar.dashboardButton, 0), (self.sidebar.liveMarketButton, 1),

@@ -23,6 +23,9 @@ class OptionsPage(QWidget):
     chain_error = Signal(str)
     trade_plan_ready = Signal(dict)
     open_chart_capture = Signal()
+    paper_trade_captured = Signal(dict)
+    paper_trade_closed = Signal(object)
+    paper_trade_error = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -33,6 +36,7 @@ class OptionsPage(QWidget):
         self.current_plan = None
         self.chain_loading = False
         self.auto_refresh_pending = False
+        self.paper_monitoring = False
         self.service = OptionContractService()
         self.db = Database()
         layout = QVBoxLayout(self)
@@ -85,6 +89,10 @@ class OptionsPage(QWidget):
         self.create_plan_button.clicked.connect(self.create_trade_plan)
         self.create_plan_button.setEnabled(False)
         layout.addWidget(self.create_plan_button)
+        self.paper_button = QPushButton("Capture Paper Trade (ATM, 1 Lot - no broker order)")
+        self.paper_button.clicked.connect(self.capture_paper_trade)
+        self.paper_button.setEnabled(False)
+        layout.addWidget(self.paper_button)
         self.send_plan_button = QPushButton("Send Review Plan to Journal")
         self.send_plan_button.clicked.connect(self.send_plan_to_journal)
         self.send_plan_button.setEnabled(False)
@@ -97,6 +105,11 @@ class OptionsPage(QWidget):
         self.quote_error.connect(self.show_error)
         self.chain_loaded.connect(self.show_chain_analysis)
         self.chain_error.connect(self.show_error)
+        self.paper_trade_captured.connect(self.show_paper_trade_captured)
+        self.paper_trade_closed.connect(self.show_paper_trade_closed)
+        self.paper_trade_error.connect(self.show_paper_trade_error)
+        self.paper_monitor_timer = QTimer(self)
+        self.paper_monitor_timer.timeout.connect(self.monitor_paper_trades)
 
     def load_contracts(self):
         if not LiveSession.connected():
@@ -334,12 +347,17 @@ class OptionsPage(QWidget):
             f"{'✓ Score 95+ with high-volume confirmation' if chart_ready else '• Score 95+ and Volume > Volume EMA 20 required'}  |  "
             f"{chain_text}  |  {event_text}  |  {open_text}"
         )
-        self.create_plan_button.setEnabled(chart_ready and chain_ready and event_ready and not open_trade)
+        ready = chart_ready and chain_ready and event_ready and not open_trade
+        self.create_plan_button.setEnabled(ready)
+        self.paper_button.setEnabled(ready)
 
     def prepare_live_workspace(self):
         """Open with current expiry/ATM data already loading when a live session exists."""
         if LiveSession.connected() and not self.contracts:
             self.load_contracts()
+        if LiveSession.connected() and not self.paper_monitor_timer.isActive():
+            self.paper_monitor_timer.start(30_000)
+            self.monitor_paper_trades()
 
     def create_trade_plan(self):
         if not self.contracts or self.spot_price is None:
@@ -374,6 +392,67 @@ class OptionsPage(QWidget):
             + "\n".join(f"• {reason}" for reason in plan["reasons"]) + f"\n\n{plan['warning']}"
         )
         self.send_plan_button.setEnabled(True)
+
+    def capture_paper_trade(self):
+        """Create a one-lot paper position and begin quote-only monitoring."""
+        if not self.contracts or self.spot_price is None or not self.chain_context:
+            QMessageBox.warning(self, "Paper trade", "Load the ATM expiry and complete chart plus OI/PCR checks first.")
+            return
+        expiry = self.expiry.currentData()
+        if self.chain_context.get("expiry") != expiry:
+            QMessageBox.warning(self, "Paper trade", "Refresh the selected expiry OI/PCR data first.")
+            return
+        try:
+            contracts = [contract for contract in self.contracts if contract["expiry"] == expiry]
+            plan = create_review_plan(
+                self.underlying.currentText(), self.spot_price, contracts, self.chain_context["quote_rows"],
+                self.chart_context, self.chain_context, SettingsStore().load(), requested_lots=1,
+            )
+            database = Database()
+            try:
+                trade_id = database.save_paper_trade(plan)
+            finally:
+                database.close()
+            plan["trade_id"] = trade_id
+            self.paper_trade_captured.emit(plan)
+        except (ValueError, RuntimeError) as error:
+            QMessageBox.warning(self, "Paper trade", str(error))
+
+    def show_paper_trade_captured(self, plan):
+        self.details.setText(
+            f"PAPER TRADE CAPTURED - no Angel One order was sent.\n{plan['contract']['symbol']} | ATM / 1 lot | "
+            f"Entry {plan['entry']:.2f} | Stop {plan['stoploss']:.2f} | Target {plan['target']:.2f}.\n"
+            "TPS will check the live option LTP every 30 seconds and book the first hit in the Trade Journal."
+        )
+        if not self.paper_monitor_timer.isActive():
+            self.paper_monitor_timer.start(30_000)
+        self.update_plan_readiness()
+
+    def monitor_paper_trades(self):
+        if self.paper_monitoring or not LiveSession.connected():
+            return
+        self.paper_monitoring = True
+        Thread(target=self._monitor_paper_trades, daemon=True).start()
+
+    def _monitor_paper_trades(self):
+        database = Database()
+        try:
+            closed = database.monitor_paper_trades(LiveSession.client)
+            if closed:
+                self.paper_trade_closed.emit(closed)
+        except (RuntimeError, ValueError) as error:
+            self.paper_trade_error.emit(str(error))
+        finally:
+            database.close()
+            self.paper_monitoring = False
+
+    def show_paper_trade_closed(self, closed):
+        summary = "; ".join(f"{item['symbol']} {item['outcome']} at {item['ltp']:.2f}" for item in closed)
+        self.details.setText(f"PAPER TRADE AUTO-BOOKED: {summary}. It has been saved in Trade Journal; review the result before using any real-money plan.")
+        self.update_plan_readiness()
+
+    def show_paper_trade_error(self, message):
+        self.details.setText(f"Paper-trade monitor paused: {message}. No broker order was sent; retry after Angel One data is available.")
 
     def send_plan_to_journal(self):
         if not self.current_plan:
