@@ -19,6 +19,7 @@ class Header(QFrame):
         badge.setFixedSize(46, 46)
         self.subtitle = QLabel("Professional Trading Dashboard • UI Design: Pooja Pandey (Cutie)")
         self.subtitle.setObjectName("subtitle")
+        self.subtitle.setText("Professional Trading Dashboard")
         left = QVBoxLayout()
         left.addWidget(self.title)
         left.addWidget(self.subtitle)

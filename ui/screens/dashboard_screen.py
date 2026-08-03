@@ -2,6 +2,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QHBoxLayout, QStackedWidget, QVBoxLayout, QWidget
 
 from ui.widgets.header import Header
+from ui.widgets.information_panel import InformationPanel
 from ui.widgets.navigation.sidebar import Sidebar
 from ui.pages.dashboard_page import DashboardPage
 from ui.pages.live_market_page import LiveMarketPage
@@ -67,7 +68,8 @@ class DashboardScreen(QWidget):
                               (self.sidebar.backtestButton, 10), (self.sidebar.postMarketButton, 11), (self.sidebar.replayButton, 12)):
             button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
         body_layout.addWidget(self.stack)
-        main_layout.addLayout(body_layout)
+        main_layout.addLayout(body_layout, 1)
+        main_layout.addWidget(InformationPanel())
         QTimer.singleShot(0, self.settingsPage.auto_connect_saved_credentials)
 
     def show_page(self, index: int):

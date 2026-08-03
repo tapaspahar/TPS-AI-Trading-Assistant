@@ -18,6 +18,10 @@ QFrame#sidebar {
 }
 QLabel#title { color: #f8fafc; font-size: 23px; font-weight: 800; letter-spacing: .2px; }
 QLabel#subtitle { color: #8fa3c2; font-size: 9.5pt; }
+QFrame#informationPanel { background: #101b30; border-top: 1px solid #294366; }
+QLabel#informationLabel { color: #d8e7ff; font-size: 9pt; font-weight: 600; }
+QLabel#informationDivider { color: #6f8eb8; }
+QLabel#informationBrand { color: #7fa7da; font-size: 8.5pt; }
 QLabel#appBadge { background: #2563eb; color: white; border: 1px solid #60a5fa; border-radius: 12px; font-size: 13pt; font-weight: 800; qproperty-alignment: AlignCenter; }
 QLabel#status {
     color: #5ee9a3;

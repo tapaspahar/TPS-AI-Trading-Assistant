@@ -6,6 +6,10 @@ QFrame#header { background: #ffffff; border-bottom: 1px solid #d7e1ef; }
 QFrame#sidebar { background: #edf3fa; border-right: 1px solid #d7e1ef; }
 QLabel#title { color: #102a43; font-size: 23px; font-weight: 800; }
 QLabel#subtitle { color: #58708c; font-size: 9.5pt; }
+QFrame#informationPanel { background: #eef4fb; border-top: 1px solid #c7d7eb; }
+QLabel#informationLabel { color: #24466f; font-size: 9pt; font-weight: 600; }
+QLabel#informationDivider { color: #6d84a0; }
+QLabel#informationBrand { color: #587697; font-size: 8.5pt; }
 QLabel#appBadge { background: #2563eb; color: white; border: 1px solid #60a5fa; border-radius: 12px; font-size: 13pt; font-weight: 800; qproperty-alignment: AlignCenter; }
 QLabel#status { color: #087443; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 7px 11px; min-width: 245px; }
 QLabel#clock { color: #075985; font-weight: 700; }
