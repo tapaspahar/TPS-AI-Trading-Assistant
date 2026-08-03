@@ -17,6 +17,7 @@ from ui.pages.backtest_page import BacktestPage
 from ui.pages.post_market_page import PostMarketPage
 from ui.pages.replay_page import ReplayPage
 from ui.pages.settings_page import SettingsPage
+from ui.pages.equity_page import EquityPage
 
 
 class DashboardScreen(QWidget):
@@ -41,8 +42,9 @@ class DashboardScreen(QWidget):
         self.postMarketPage = PostMarketPage()
         self.replayPage = ReplayPage()
         self.settingsPage = SettingsPage()
+        self.equityPage = EquityPage()
         for page in (self.dashboardPage, self.liveMarketPage, self.optionsPage, self.chartCapturePage, self.journalPage,
-                     self.checklistPage, self.aiPage, self.riskPage, self.reportsPage, self.settingsPage, self.backtestPage, self.postMarketPage, self.replayPage):
+                     self.checklistPage, self.aiPage, self.riskPage, self.reportsPage, self.settingsPage, self.backtestPage, self.postMarketPage, self.replayPage, self.equityPage):
             self.stack.addWidget(page)
         self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
         self.journalPage.trade_saved.connect(self.reportsPage.refresh)
@@ -65,7 +67,8 @@ class DashboardScreen(QWidget):
                               (self.sidebar.journalButton, 4), (self.sidebar.checklistButton, 5),
                               (self.sidebar.aiButton, 6), (self.sidebar.riskButton, 7),
                               (self.sidebar.reportButton, 8), (self.sidebar.settingsButton, 9),
-                              (self.sidebar.backtestButton, 10), (self.sidebar.postMarketButton, 11), (self.sidebar.replayButton, 12)):
+                              (self.sidebar.backtestButton, 10), (self.sidebar.postMarketButton, 11), (self.sidebar.replayButton, 12),
+                              (self.sidebar.equityButton, 13)):
             button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
         body_layout.addWidget(self.stack)
         main_layout.addLayout(body_layout, 1)

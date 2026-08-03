@@ -1,0 +1,99 @@
+from threading import Thread
+
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import (QComboBox, QFormLayout, QGridLayout, QLabel, QMessageBox,
+                               QPushButton, QScrollArea, QVBoxLayout, QWidget)
+
+from engine.equity_analysis import analyze_equity
+from engine.live_setup_capture import TIMEFRAMES
+from services.equity_service import EquityInstrumentService
+from services.live_session import LiveSession
+from ui.widgets.cards.dashboard_card import DashboardCard
+
+
+class EquityPage(QWidget):
+    """NSE cash-equity research page; planning only, never broker order execution."""
+    instruments_loaded = Signal(list)
+    analysis_ready = Signal(dict)
+    load_error = Signal(str)
+
+    def __init__(self):
+        super().__init__()
+        outer = QVBoxLayout(self)
+        scroll = QScrollArea(); scroll.setWidgetResizable(True); outer.addWidget(scroll)
+        content = QWidget(); scroll.setWidget(content)
+        layout = QVBoxLayout(content)
+        layout.addWidget(QLabel("Equity Research Workspace - historical chart planning for NSE listed shares"))
+        note = QLabel("Load the Angel One NSE equity list once, choose a share, then analyse historical candles. This is long-only decision support; it does not place orders or guarantee returns.")
+        note.setWordWrap(True); layout.addWidget(note)
+
+        form = QFormLayout()
+        self.share = QComboBox(); self.share.setEditable(True); self.share.setInsertPolicy(QComboBox.NoInsert)
+        self.share.setPlaceholderText("Load NSE shares, then type to search")
+        self.timeframe = QComboBox(); self.timeframe.addItems(("1D", "1h", "15m", "5m"))
+        self.days = QComboBox(); self.days.addItems(("90", "180", "365"))
+        form.addRow("NSE share", self.share); form.addRow("Analysis timeframe", self.timeframe); form.addRow("History days", self.days)
+        layout.addLayout(form)
+        self.load_button = QPushButton("Load Listed NSE Shares"); self.load_button.clicked.connect(self.load_instruments); layout.addWidget(self.load_button)
+        self.analyze_button = QPushButton("Analyze Selected Share"); self.analyze_button.clicked.connect(self.analyze_selected); layout.addWidget(self.analyze_button)
+        self.company_detail = QLabel("Company details will appear here after selecting a share."); self.company_detail.setWordWrap(True); layout.addWidget(self.company_detail)
+
+        grid = QGridLayout()
+        self.cards = {key: DashboardCard(title, "Waiting") for key, title in (("price", "Last Candle Close"), ("state", "Chart Structure"), ("score", "Research Score"), ("support", "Support"), ("resistance", "Resistance"), ("entry", "Long Entry Trigger"), ("stop", "Protective Stop"), ("target1", "Target 1"), ("target2", "Target 2"))}
+        for index, card in enumerate(self.cards.values()):
+            card.set_compact(True); grid.addWidget(card, index // 3, index % 3)
+        layout.addLayout(grid)
+        self.summary = QLabel("Load a share list to begin equity research."); self.summary.setWordWrap(True); layout.addWidget(self.summary)
+        layout.addStretch()
+        self.equities = []
+        self.instruments_loaded.connect(self.show_instruments); self.analysis_ready.connect(self.show_analysis); self.load_error.connect(self.show_error)
+        self.share.currentIndexChanged.connect(self.show_selected_company)
+
+    def load_instruments(self):
+        self.load_button.setEnabled(False); self.summary.setText("Downloading today's Angel One NSE equity list…")
+        Thread(target=self._load_instruments, daemon=True).start()
+
+    def _load_instruments(self):
+        try:
+            self.instruments_loaded.emit(EquityInstrumentService().get_equities())
+        except RuntimeError as error:
+            self.load_error.emit(str(error))
+
+    def show_instruments(self, equities):
+        self.load_button.setEnabled(True); self.equities = equities; self.share.blockSignals(True); self.share.clear()
+        for item in equities:
+            self.share.addItem(f"{item['symbol']} - {item['company']}", item)
+        self.share.blockSignals(False)
+        self.summary.setText(f"Loaded {len(equities):,} NSE equity shares from Angel One. Type a symbol or company name to search.")
+        self.show_selected_company()
+
+    def show_selected_company(self):
+        item = self.share.currentData()
+        if item:
+            self.company_detail.setText(f"Company: {item['company']} | Trading symbol: {item['symbol']} | Exchange: NSE | Angel One token: {item['token']}")
+
+    def analyze_selected(self):
+        item = self.share.currentData()
+        if not item:
+            QMessageBox.information(self, "Equity research", "Load the NSE share list and select a share first."); return
+        if not LiveSession.connected():
+            QMessageBox.warning(self, "Angel One", "Connect read-only Angel One data from Settings before analysing share history."); return
+        self.analyze_button.setEnabled(False); self.summary.setText("Downloading historical equity candles and calculating the research plan…")
+        Thread(target=self._analyze, args=(item, self.timeframe.currentText(), int(self.days.currentText())), daemon=True).start()
+
+    def _analyze(self, item, timeframe, days):
+        try:
+            candles = LiveSession.client.get_recent_candles(item["exchange"], item["token"], TIMEFRAMES[timeframe][0], days)
+            result = analyze_equity(candles); result.update({"company": item["company"], "symbol": item["symbol"], "timeframe": timeframe, "days": days})
+            self.analysis_ready.emit(result)
+        except (RuntimeError, ValueError) as error:
+            self.load_error.emit(str(error))
+
+    def show_analysis(self, result):
+        self.analyze_button.setEnabled(True)
+        values = (("price", f"{result['price']:,.2f}"), ("state", result["state"]), ("score", f"{result['score']}/100"), ("support", f"{result['support']:,.2f}"), ("resistance", f"{result['resistance']:,.2f}"), ("entry", f"{result['entry']:,.2f}"), ("stop", f"{result['stop_loss']:,.2f}"), ("target1", f"{result['target_1']:,.2f}"), ("target2", f"{result['target_2']:,.2f}"))
+        for key, value in values: self.cards[key].set_value(value)
+        self.summary.setText(f"{result['company']} ({result['symbol']}) | {result['timeframe']} | {result['candle_count']} candles\nPlan: {result['plan_state']} | {result['plan_note']}\nRSI 14: {result['rsi_14']:.2f} | ATR 14: {result['atr_14']:.2f} | {result['volume_signal']}\nLevels are chart-based study levels, not a recommendation or guarantee.")
+
+    def show_error(self, message):
+        self.load_button.setEnabled(True); self.analyze_button.setEnabled(True); self.summary.setText(f"Equity analysis unavailable: {message}")

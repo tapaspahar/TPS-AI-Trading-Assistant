@@ -22,10 +22,11 @@ class Sidebar(QFrame):
         self.backtestButton = QPushButton("Backtesting")
         self.replayButton = QPushButton("Candle Replay")
         self.postMarketButton = QPushButton("Post-Market Report")
+        self.equityButton = QPushButton("Equity Research")
         # Keep the visual journey in the same order a trader uses the app:
         # market context -> chart confirmation -> AI evaluation -> option plan -> journal.
         self.buttons = (
-            self.dashboardButton, self.liveMarketButton, self.chartCaptureButton,
+            self.dashboardButton, self.liveMarketButton, self.equityButton, self.chartCaptureButton,
             self.aiButton, self.optionsButton, self.journalButton,
             self.checklistButton, self.riskButton, self.reportButton, self.backtestButton, self.replayButton, self.postMarketButton, self.settingsButton,
         )
@@ -46,6 +47,7 @@ class Sidebar(QFrame):
             10: self.backtestButton,
             11: self.postMarketButton,
             12: self.replayButton,
+            13: self.equityButton,
         }
         self.menu_group = QButtonGroup(self)
         self.menu_group.setExclusive(True)
