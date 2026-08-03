@@ -10,22 +10,22 @@ from services.option_contract_service import buying_risk
 
 def create_review_plan(underlying, spot_price, contracts, quote_rows, chart_context, chain_context, settings):
     """Select a liquid near-ATM contract only when every required context agrees."""
-    if not chart_context or chart_context.get("score", 0) < 65 or str(chart_context.get("decision", "")) == "NO TRADE":
-        raise ValueError("Run a fresh chart evaluation with score 65 or higher before creating a review plan.")
+    if not chart_context or chart_context.get("score", 0) <= 75 or str(chart_context.get("decision", "")) == "NO TRADE":
+        raise ValueError("Trade Plan requires a fresh chart score above 75/100.")
     if str(chart_context.get("symbol", "")).upper() != str(underlying).upper():
         raise ValueError("The latest chart evaluation is for a different underlying. Capture and evaluate this symbol first.")
     if not chain_context:
         raise ValueError("Run the selected-expiry OI / PCR analysis before creating a trade plan.")
 
     option_type = "CE" if chart_context["direction"] == "BULLISH" else "PE"
-    quote_by_token = {str(row.get("symbolToken", row.get("symboltoken", ""))): row for row in quote_rows}
+    quote_by_token = {str(row.get("token", row.get("symbolToken", row.get("symboltoken", "")))): row for row in quote_rows}
     candidates = []
     for contract in contracts:
         if contract["option_type"] != option_type:
             continue
         quote = quote_by_token.get(str(contract["token"]), {})
         premium = float(quote.get("ltp", 0) or 0)
-        volume = float(quote.get("tradeVolume", 0) or 0)
+        volume = float(quote.get("volume", quote.get("tradeVolume", 0)) or 0)
         if premium > 0 and volume > 0:
             candidates.append((contract, quote, premium, volume))
     if not candidates:
