@@ -8,7 +8,8 @@ from pathlib import Path
 from urllib.request import urlopen
 
 
-MASTER_URL = "https://margincalculator.angelone.com/OpenAPI_File/files/OpenAPIScripMaster.json"
+# The current Angel One host resolves on normal Windows/Python installations.
+MASTER_URL = "https://margincalculator.angelone.in/OpenAPI_File/files/OpenAPIScripMaster.json"
 UNDERLYINGS = {
     "NIFTY": "NFO",
     "BANKNIFTY": "NFO",
