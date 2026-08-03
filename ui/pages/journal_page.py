@@ -67,6 +67,8 @@ class JournalPage(QWidget):
         self.load_trades()
 
     def _build_trade(self) -> Trade:
+        if not self.exit_input.text().strip():
+            raise ValueError("Exit price is blank. This is an open trade plan; enter the actual exit price only after you close the trade.")
         return Trade(
             trade_date=self.date_input.text().strip(), trade_time=self.time_input.text().strip(),
             market="OPTIONS", symbol=self.symbol_input.text().strip(), expiry="",
