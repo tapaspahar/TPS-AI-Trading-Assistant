@@ -295,7 +295,9 @@ class OptionsPage(QWidget):
         chart_ready = bool(
             self.chart_context
             and self.chart_context.get("symbol") == underlying
-            and self.chart_context.get("score", 0) > 75
+            and self.chart_context.get("score", 0) >= 95
+            and bool(self.chart_context.get("volume_confirmed"))
+            and bool(self.chart_context.get("trade_ready"))
             and str(self.chart_context.get("decision", "")) != "NO TRADE"
         )
         chain_ready = bool(self.chain_context and self.chain_context.get("underlying") == underlying)
@@ -306,10 +308,13 @@ class OptionsPage(QWidget):
         score_text = f"Trade Plan Score: {score}/100" if score is not None else "Trade Plan Score: waiting for chart"
         chart_text = "✓ Score above 75" if chart_ready else "• Score above 75 required"
         chain_text = "✓ OI/PCR analysis ready" if chain_ready else "• Selected-expiry OI/PCR analysis required"
-        self.plan_status.setText(f"{score_text} (minimum: >75)  |  {chart_text}  |  {chain_text}")
         open_trade = self.db.has_open_trade(underlying)
         open_text = "â€¢ Close/review the active open trade before a new plan" if open_trade else "âœ“ No active open trade for this underlying"
-        self.plan_status.setText(f"{score_text} (minimum: >75)  |  {chart_text}  |  {chain_text}  |  {open_text}")
+        self.plan_status.setText(
+            f"{score_text} (minimum: 95)  |  "
+            f"{'✓ Score 95+ with high-volume confirmation' if chart_ready else '• Score 95+ and Volume > Volume EMA 20 required'}  |  "
+            f"{chain_text}  |  {open_text}"
+        )
         self.create_plan_button.setEnabled(chart_ready and chain_ready and not open_trade)
 
     def prepare_live_workspace(self):

@@ -10,8 +10,12 @@ from services.option_contract_service import buying_risk
 
 def create_review_plan(underlying, spot_price, contracts, quote_rows, chart_context, chain_context, settings, requested_lots=None):
     """Select a liquid near-ATM contract only when every required context agrees."""
-    if not chart_context or chart_context.get("score", 0) <= 75 or str(chart_context.get("decision", "")) == "NO TRADE":
-        raise ValueError("Trade Plan requires a fresh chart score above 75/100.")
+    if (
+        not chart_context or chart_context.get("score", 0) < 95
+        or not chart_context.get("volume_confirmed") or not chart_context.get("trade_ready")
+        or str(chart_context.get("decision", "")) == "NO TRADE"
+    ):
+        raise ValueError("Trade Plan requires score 95/100 or above with Volume above Volume EMA 20.")
     if str(chart_context.get("symbol", "")).upper() != str(underlying).upper():
         raise ValueError("The latest chart evaluation is for a different underlying. Capture and evaluate this symbol first.")
     if not chain_context:

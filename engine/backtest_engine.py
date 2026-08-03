@@ -59,7 +59,7 @@ def run_tps_backtest(candles, max_holding_bars=12):
         rsi_value, atr_value = rsi(closes), atr(history[-20:])
         vwap_value = _session_vwap(history)
         volume_ema = ema(volumes[-20:], 20) if any(volumes[-20:]) else None
-        volume_ok = volume_ema is None or volumes[-1] > volume_ema
+        volume_ok = volume_ema is not None and volumes[-1] > volume_ema
         long_signal = price > trend_line and ema_5 > ema_20 > ema_50 and 50 <= rsi_value <= 70 and volume_ok
         short_signal = price < trend_line and ema_5 < ema_20 < ema_50 and 30 <= rsi_value <= 50 and volume_ok
         if vwap_value is not None:

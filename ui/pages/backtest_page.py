@@ -64,7 +64,7 @@ class BacktestPage(QWidget):
 
     def show_result(self, result):
         self.run_button.setEnabled(True)
-        volume_note = "Volume confirmation applied." if result["volume_available"] else "Index volume unavailable: volume condition was kept neutral."
+        volume_note = "Volume confirmation applied." if result["volume_available"] else "Index volume unavailable: trade signals were blocked because high-volume confirmation is required."
         self.summary.setText(
             f"{result['symbol']} {result['timeframe']} | {result['candles']} candles / {result['days']} days\n"
             f"Paper trades: {result['total_trades']} | Wins: {result['wins']} | Losses: {result['losses']} | "

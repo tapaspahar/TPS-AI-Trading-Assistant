@@ -50,7 +50,7 @@ class AIPage(QWidget):
             self.option.setCurrentText(candidate_option)
             result = DecisionEngine().evaluate(snapshot, candidate_option, self.psychology.currentText())
         except ValueError:
-            self.result.setText("Enter numeric values for price, EMA 5/20/50 and SuperTrend. VWAP/volume may be unavailable from index data.")
+            self.result.setText("Enter numeric values for price, EMA 5/20/50 and SuperTrend. A trade plan needs verified Volume and Volume EMA 20.")
             return
         reason_text = "\n".join(f"✓ {item}" for item in result["reasons"])
         warning_text = "\n".join(f"⚠ {item}" for item in result["warnings"])
@@ -59,6 +59,7 @@ class AIPage(QWidget):
             "symbol": self.loaded_symbol,
             "score": result["score"], "direction": result["direction"], "decision": result["decision"],
             "reasons": result["reasons"], "warnings": result["warnings"],
+            "volume_confirmed": result["volume_confirmed"], "trade_ready": result["trade_ready"],
         })
 
     def load_chart_capture(self, capture: dict):

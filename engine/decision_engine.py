@@ -48,10 +48,12 @@ class DecisionEngine:
         score += 20
         reasons.append(f"SuperTrend is {direction.lower()}")
 
+        volume_confirmed = False
         if snapshot.volume is None or snapshot.volume_ema is None:
             warnings.append("Volume confirmation is unavailable from the current data source")
         else:
             if snapshot.volume > snapshot.volume_ema:
+                volume_confirmed = True
                 score += 15
                 reasons.append("Volume is above Volume EMA 20")
             else:
@@ -80,13 +82,13 @@ class DecisionEngine:
             warnings.append(f"Psychology check: {psychology.title()}")
 
         score = min(score, 100)
-        missing_confirmation = snapshot.vwap is None or snapshot.volume is None or snapshot.volume_ema is None
-        if score >= 85 and not warnings:
+        trade_ready = score >= 95 and volume_confirmed and not warnings
+        if trade_ready:
             decision = f"STRONG {expected_option} SETUP"
-        elif missing_confirmation and score >= 60:
-            decision = f"CONDITIONAL {expected_option} SETUP"
-        elif score >= 65:
-            decision = f"WATCH {expected_option}"
         else:
             decision = "NO TRADE"
-        return {"score": score, "direction": direction, "decision": decision, "reasons": reasons, "warnings": warnings}
+        return {
+            "score": score, "direction": direction, "decision": decision,
+            "reasons": reasons, "warnings": warnings,
+            "volume_confirmed": volume_confirmed, "trade_ready": trade_ready,
+        }

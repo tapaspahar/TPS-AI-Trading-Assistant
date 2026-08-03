@@ -5,7 +5,7 @@ from engine.decision_engine import ChartSnapshot, DecisionEngine
 
 class DecisionEngineTests(unittest.TestCase):
     def test_strong_bullish_ce_setup(self):
-        snapshot = ChartSnapshot(price=110, ema_5=108, ema_20=105, ema_50=100, vwap=106, supertrend=102, volume=200, volume_ema=100)
+        snapshot = ChartSnapshot(price=110, ema_5=108, ema_20=105, ema_50=100, vwap=106, supertrend=102, volume=200, volume_ema=100, rsi_14=60, atr_14=2)
         result = DecisionEngine().evaluate(snapshot, "CE", "Calm")
         self.assertEqual(result["direction"], "BULLISH")
         self.assertEqual(result["decision"], "STRONG CE SETUP")
@@ -17,8 +17,8 @@ class DecisionEngineTests(unittest.TestCase):
         self.assertEqual(result["decision"], "NO TRADE")
         self.assertIn("PE conflicts", result["warnings"][-2])
 
-    def test_missing_index_volume_produces_conditional_setup(self):
+    def test_missing_index_volume_blocks_trade_setup(self):
         snapshot = ChartSnapshot(price=110, ema_5=108, ema_20=105, ema_50=100, vwap=None, supertrend=102, volume=None, volume_ema=None)
         result = DecisionEngine().evaluate(snapshot, "CE", "Calm")
-        self.assertEqual(result["decision"], "CONDITIONAL CE SETUP")
+        self.assertEqual(result["decision"], "NO TRADE")
         self.assertTrue(any("VWAP is unavailable" in warning for warning in result["warnings"]))
