@@ -2,7 +2,7 @@ from datetime import datetime
 
 from PySide6.QtWidgets import (
     QButtonGroup, QCheckBox, QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
-    QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QPushButton, QScrollArea, QSizePolicy, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
     QRadioButton,
 )
 from PySide6.QtCore import Signal
@@ -22,7 +22,19 @@ class JournalPage(QWidget):
         self.db = Database()
         self.settings_store = SettingsStore()
         self.current_rule_version = "Manual / unclassified"
-        layout = QVBoxLayout(self)
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QScrollArea.NoFrame)
+        content = QWidget()
+        content.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(14, 12, 14, 18)
+        layout.setSpacing(10)
+        layout.setSizeConstraint(QVBoxLayout.SetMinimumSize)
+        self.scroll.setWidget(content)
+        outer_layout.addWidget(self.scroll)
         layout.addWidget(QLabel("Trade Journal - Plan, record entry, then close with the real outcome"))
         self.plan_summary = QLabel("No review plan loaded. Quantity can be entered manually for completed trades.")
         self.plan_summary.setWordWrap(True)
@@ -41,6 +53,7 @@ class JournalPage(QWidget):
         self.psychology_input.addItems(["Calm", "Confident", "Fear", "Greed", "FOMO", "Revenge"])
         plan_box = QGroupBox("1. Trade Plan / Entry - fill before taking the manual Angel One trade")
         plan_form = QFormLayout(plan_box)
+        plan_form.setVerticalSpacing(8)
         for label, widget in (
             ("Date", self.date_input), ("Time", self.time_input), ("Symbol", self.symbol_input),
             ("Strike", self.strike_input), ("Option", self.option_input), ("Entry", self.entry_input),
@@ -48,6 +61,9 @@ class JournalPage(QWidget):
             ("Psychology", self.psychology_input),
         ):
             plan_form.addRow(label, widget)
+        for control in (self.date_input, self.time_input, self.symbol_input, self.strike_input, self.option_input,
+                        self.entry_input, self.stoploss_input, self.target_input, self.quantity_input, self.psychology_input):
+            control.setMinimumHeight(32)
         layout.addWidget(plan_box)
 
         confirmations = QGroupBox("Technical confirmations")
@@ -67,6 +83,7 @@ class JournalPage(QWidget):
         layout.addWidget(self.save_button)
         exit_box = QGroupBox("2. When the trade is closed - select a saved OPEN trade below")
         exit_form = QFormLayout(exit_box)
+        exit_form.setVerticalSpacing(8)
         self.manual_exit_radio = QRadioButton("Manual exit - enter my actual exit price")
         self.target_hit_radio = QRadioButton("Target hit - use planned target as exit")
         self.stoploss_hit_radio = QRadioButton("Stop loss hit - use planned stop loss as exit")
@@ -99,6 +116,7 @@ class JournalPage(QWidget):
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.itemSelectionChanged.connect(self.load_selected_trade)
+        self.table.setMinimumHeight(230)
         layout.addWidget(self.table)
         self.load_trades()
 

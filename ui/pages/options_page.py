@@ -2,7 +2,7 @@ from datetime import date
 from threading import Thread
 
 from PySide6.QtCore import QTimer, Signal
-from PySide6.QtWidgets import QCheckBox, QComboBox, QFormLayout, QGroupBox, QLabel, QMessageBox, QPushButton, QSpinBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QCheckBox, QComboBox, QFormLayout, QGroupBox, QLabel, QMessageBox, QPushButton, QScrollArea, QSizePolicy, QSpinBox, QVBoxLayout, QWidget
 
 from core.settings_store import SettingsStore
 from core.database_manager import Database
@@ -44,11 +44,24 @@ class OptionsPage(QWidget):
         self.last_auto_paper_bucket = None
         self.service = OptionContractService()
         self.db = Database()
-        layout = QVBoxLayout(self)
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QScrollArea.NoFrame)
+        content = QWidget()
+        content.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(14, 12, 14, 18)
+        layout.setSpacing(10)
+        layout.setSizeConstraint(QVBoxLayout.SetMinimumSize)
+        self.scroll.setWidget(content)
+        outer_layout.addWidget(self.scroll)
         layout.addWidget(QLabel("Options Decision Workspace — verify every condition before placing a manual broker order."))
 
         selection = QGroupBox("1. Choose a contract")
         form = QFormLayout(selection)
+        form.setVerticalSpacing(8)
         self.underlying = QComboBox(); self.underlying.addItems(("NIFTY", "BANKNIFTY", "SENSEX"))
         self.underlying.currentTextChanged.connect(lambda _symbol: self.update_plan_readiness())
         self.expiry = QComboBox(); self.expiry.currentIndexChanged.connect(self.populate_strikes)
@@ -57,6 +70,8 @@ class OptionsPage(QWidget):
         self.strike.currentIndexChanged.connect(self.update_lot_quantity)
         self.lots = QSpinBox(); self.lots.setRange(1, 100); self.lots.setValue(1); self.lots.valueChanged.connect(self.update_lot_quantity)
         self.event_check = QComboBox(); self.event_check.addItems(("Review news / event risk", "No known high-impact event", "High-impact event or expiry-day risk")); self.event_check.currentIndexChanged.connect(self.update_plan_readiness)
+        for control in (self.underlying, self.expiry, self.option_type, self.strike, self.lots, self.event_check):
+            control.setMinimumHeight(32)
         self.quantity_preview = QLabel("Quantity: load a contract")
         self.auto_refresh_timer = QTimer(self)
         self.auto_refresh_timer.setSingleShot(True)
