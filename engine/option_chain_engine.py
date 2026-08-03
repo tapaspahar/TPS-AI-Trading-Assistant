@@ -38,4 +38,5 @@ def analyze_option_chain(contracts, quotes):
         "quoted_contracts": sum(1 for row in rows if row["ltp"] > 0),
         "total_contracts": len(rows),
         "context": context,
+        "quote_rows": rows,
     }

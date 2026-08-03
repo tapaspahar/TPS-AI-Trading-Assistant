@@ -1,3 +1,4 @@
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QComboBox, QFormLayout, QLabel, QLineEdit, QPushButton, QVBoxLayout, QWidget
 
 from engine.decision_engine import ChartSnapshot, DecisionEngine
@@ -5,6 +6,7 @@ from engine.decision_engine import ChartSnapshot, DecisionEngine
 
 class AIPage(QWidget):
     """Decision Engine V1 for the permanent TPS indicator profile."""
+    decision_ready = Signal(dict)
 
     def __init__(self):
         super().__init__()
@@ -13,6 +15,7 @@ class AIPage(QWidget):
         layout.addWidget(QLabel("EMA 5 Pink | EMA 20 Violet | EMA 50 White | VWAP Yellow | SuperTrend | Volume EMA 20"))
         form = QFormLayout()
         self.fields = {}
+        self.loaded_symbol = ""
         for key, label in (("price", "Current price"), ("ema_5", "EMA 5"), ("ema_20", "EMA 20"),
                            ("ema_50", "EMA 50"), ("vwap", "VWAP"), ("supertrend", "SuperTrend"),
                            ("volume", "Volume"), ("volume_ema", "Volume EMA 20")):
@@ -21,7 +24,7 @@ class AIPage(QWidget):
             form.addRow(label, field)
         self.option = QComboBox(); self.option.addItems(["CE", "PE"])
         self.psychology = QComboBox(); self.psychology.addItems(["Calm", "Confident", "Fear", "Greed", "FOMO", "Revenge"])
-        form.addRow("Option", self.option)
+        form.addRow("Candidate option (auto)", self.option)
         form.addRow("Psychology", self.psychology)
         layout.addLayout(form)
         button = QPushButton("Evaluate Setup")
@@ -43,13 +46,19 @@ class AIPage(QWidget):
                 else:
                     values[key] = float(text) if text else None
             snapshot = ChartSnapshot(**values)
-            result = DecisionEngine().evaluate(snapshot, self.option.currentText(), self.psychology.currentText())
+            candidate_option = "CE" if snapshot.price > snapshot.supertrend else "PE"
+            self.option.setCurrentText(candidate_option)
+            result = DecisionEngine().evaluate(snapshot, candidate_option, self.psychology.currentText())
         except ValueError:
             self.result.setText("Enter numeric values for price, EMA 5/20/50 and SuperTrend. VWAP/volume may be unavailable from index data.")
             return
         reason_text = "\n".join(f"✓ {item}" for item in result["reasons"])
         warning_text = "\n".join(f"⚠ {item}" for item in result["warnings"])
         self.result.setText(f"Score: {result['score']}/100\nDirection: {result['direction']}\nDecision: {result['decision']}\n\n{reason_text}\n{warning_text}".strip())
+        self.decision_ready.emit({
+            "symbol": self.loaded_symbol,
+            "score": result["score"], "direction": result["direction"], "decision": result["decision"],
+        })
 
     def load_chart_capture(self, capture: dict):
         """Pre-fill Decision Engine fields from local Chart Capture OCR."""
@@ -66,6 +75,7 @@ class AIPage(QWidget):
             else:
                 missing.append(target_key.replace("_", " "))
         symbol = capture.get("symbol", "Unknown symbol")
+        self.loaded_symbol = str(symbol).upper()
         if missing:
             self.result.setText(f"Chart Capture loaded for {symbol}. Verify or enter: {', '.join(missing)}.")
         else:

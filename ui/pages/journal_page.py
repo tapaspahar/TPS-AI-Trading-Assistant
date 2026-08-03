@@ -111,6 +111,26 @@ class JournalPage(QWidget):
     def set_symbol_from_capture(self, symbol: str) -> None:
         self.symbol_input.setText(symbol)
 
+    def load_trade_plan(self, plan: dict) -> None:
+        """Pre-fill a review draft; it remains unsaved until actual execution is recorded."""
+        contract = plan["contract"]
+        self.date_input.setText(datetime.now().strftime("%d-%m-%Y"))
+        self.time_input.setText(datetime.now().strftime("%H:%M"))
+        self.symbol_input.setText(plan["underlying"])
+        self.strike_input.setText(f"{float(contract['strike']):.0f}")
+        self.option_input.setCurrentText(plan["option_type"])
+        self.entry_input.setText(f"{plan['entry']:.2f}")
+        self.exit_input.clear()
+        self.stoploss_input.setText(f"{plan['stoploss']:.2f}")
+        self.target_input.setText(f"{plan['target']:.2f}")
+        self.quantity_input.setText(str(plan["quantity"]))
+        for checkbox in (self.trend_check, self.vwap_check, self.ema_check, self.volume_check, self.oi_check):
+            checkbox.setChecked(True)
+        QMessageBox.information(
+            self, "Review trade plan",
+            "Draft pre-filled. TPS did not place or save an order. Verify the live Angel One premium and enter the actual exit later before saving the journal entry.",
+        )
+
     def load_trades(self) -> None:
         headers = ["ID", "Date", "Time", "Symbol", "Option", "Entry", "Exit", "Qty", "P&L", "R:R", "Psychology", "AI", "Decision"]
         data = self.db.get_journal_rows()

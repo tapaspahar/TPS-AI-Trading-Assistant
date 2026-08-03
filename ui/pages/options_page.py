@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QComboBox, QFormLayout, QGroupBox, QLabel, QMessag
 
 from core.settings_store import SettingsStore
 from engine.option_chain_engine import analyze_option_chain
+from engine.trade_plan_engine import create_review_plan
 from services.live_session import LiveSession
 from services.option_contract_service import UNDERLYING_QUOTES, OptionContractService, buying_risk, contracts_near_spot
 
@@ -17,10 +18,15 @@ class OptionsPage(QWidget):
     quote_error = Signal(str)
     chain_loaded = Signal(object)
     chain_error = Signal(str)
+    trade_plan_ready = Signal(dict)
 
     def __init__(self):
         super().__init__()
         self.contracts = []
+        self.spot_price = None
+        self.chart_context = None
+        self.chain_context = None
+        self.current_plan = None
         self.service = OptionContractService()
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Options Decision Workspace — verify every condition before placing a manual broker order."))
@@ -50,6 +56,13 @@ class OptionsPage(QWidget):
         layout.addWidget(self.details)
         self.decision = QLabel("Buying only: CE needs bullish underlying confirmation; PE needs bearish underlying confirmation.\nNaked option selling is intentionally not available in this version.")
         layout.addWidget(self.decision)
+        self.create_plan_button = QPushButton("Create Review Trade Plan (Auto-select CE / PE)")
+        self.create_plan_button.clicked.connect(self.create_trade_plan)
+        layout.addWidget(self.create_plan_button)
+        self.send_plan_button = QPushButton("Send Review Plan to Journal")
+        self.send_plan_button.clicked.connect(self.send_plan_to_journal)
+        self.send_plan_button.setEnabled(False)
+        layout.addWidget(self.send_plan_button)
         layout.addWidget(QLabel("TPS only analyses data. It does not place, modify, or cancel an Angel One order."))
         layout.addStretch()
         self.contracts_loaded.connect(self.show_contracts)
@@ -81,6 +94,10 @@ class OptionsPage(QWidget):
 
     def show_contracts(self, result):
         self.contracts = result["contracts"]
+        self.spot_price = result["spot_price"]
+        self.chain_context = None
+        self.current_plan = None
+        self.send_plan_button.setEnabled(False)
         self.expiry.blockSignals(True)
         self.expiry.clear()
         for expiry in sorted({contract["expiry"] for contract in self.contracts}):
@@ -168,11 +185,14 @@ class OptionsPage(QWidget):
             except RuntimeError:
                 official_pcr = None
             analysis["official_pcr"] = official_pcr
+            analysis["underlying"] = underlying
             self.chain_loaded.emit(analysis)
         except (RuntimeError, ValueError) as error:
             self.chain_error.emit(str(error))
 
     def show_chain_analysis(self, analysis):
+        analysis["expiry"] = self.expiry.currentData()
+        self.chain_context = analysis
         def number(value):
             return f"{float(value):.2f}" if value is not None else "unavailable"
         self.details.setText(
@@ -187,6 +207,53 @@ class OptionsPage(QWidget):
             "Use OI/PCR as context, not a standalone signal. Take a CE/PE decision only when the live underlying "
             "structure, breakout/breakdown, option liquidity, and risk-limit checks all agree."
         )
+
+    def set_chart_context(self, context: dict):
+        """Receive the last explicit Decision Engine evaluation for plan gating."""
+        self.chart_context = context
+        symbol = context.get("symbol") or "unknown symbol"
+        self.decision.setText(
+            f"Chart evaluation received for {symbol}: {context['decision']} ({context['score']}/100). "
+            "Run expiry OI/PCR analysis, then create a review plan."
+        )
+
+    def create_trade_plan(self):
+        if not self.contracts or self.spot_price is None:
+            QMessageBox.warning(self, "Trade plan", "Load current expiries first.")
+            return
+        expiry = self.expiry.currentData()
+        if not self.chain_context or self.chain_context.get("expiry") != expiry:
+            QMessageBox.warning(self, "Trade plan", "Run OI / PCR analysis for the selected expiry first.")
+            return
+        contracts = [contract for contract in self.contracts if contract["expiry"] == expiry]
+        try:
+            plan = create_review_plan(
+                self.underlying.currentText(), self.spot_price, contracts,
+                self.chain_context["quote_rows"], self.chart_context, self.chain_context, SettingsStore().load(),
+            )
+        except ValueError as error:
+            QMessageBox.warning(self, "Trade plan", str(error))
+            return
+        self.current_plan = plan
+        self.option_type.setCurrentText(plan["option_type"])
+        self.populate_strikes()
+        for index in range(self.strike.count()):
+            candidate = self.strike.itemData(index)
+            if candidate and candidate["token"] == plan["contract"]["token"]:
+                self.strike.setCurrentIndex(index)
+                break
+        self.decision.setText(
+            f"REVIEW PLAN — {plan['contract']['symbol']}\n"
+            f"Entry reference: ₹{plan['entry']:,.2f} | Stop: ₹{plan['stoploss']:,.2f} | Target: ₹{plan['target']:,.2f}\n"
+            f"Quantity: {plan['quantity']} ({plan['quantity'] // plan['contract']['lot_size']} lot(s))\n"
+            + "\n".join(f"• {reason}" for reason in plan["reasons"]) + f"\n\n{plan['warning']}"
+        )
+        self.send_plan_button.setEnabled(True)
+
+    def send_plan_to_journal(self):
+        if not self.current_plan:
+            return
+        self.trade_plan_ready.emit(self.current_plan)
 
     def show_error(self, message):
         self.details.setText(f"Options data unavailable: {message}")
