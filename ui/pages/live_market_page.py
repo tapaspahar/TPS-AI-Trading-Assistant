@@ -59,6 +59,7 @@ class LiveMarketPage(QWidget):
             ("resistance", "Resistance Zone"), ("breakout", "Breakout Condition"), ("breakdown", "Breakdown Condition"),
         )}
         for index, card in enumerate(self.cards.values()):
+            card.set_compact(True)
             grid.addWidget(card, index // 3, index % 3)
         layout.addLayout(grid)
         layout.addWidget(QLabel("Live feed values will auto-fill Decision Engine V2. This workspace is read-only and cannot place orders."))
@@ -318,12 +319,12 @@ class LiveMarketPage(QWidget):
                 bias = "Bearish day bias"
             else:
                 bias = "Flat day bias"
-            self.overview_cards[symbol].set_value(f"{price:,.2f} points\n{bias} ({percent_change:+.2f}%)")
+            self.overview_cards[symbol].set_value(f"{price:,.2f}\n{bias} ({percent_change:+.2f}%)")
         for symbol, future in self.future_contracts.items():
             quote = quotes.get(future["token"])
             if quote:
                 self.overview_cards[f"{symbol} FUT"].set_value(
-                    f"Future {float(quote.get('ltp', 0) or 0):,.2f} points\nExpires {future['expiry'].strftime('%d %b')}"
+                    f"{float(quote.get('ltp', 0) or 0):,.2f}\nExpires {future['expiry'].strftime('%d %b')}"
                 )
             else:
                 self.overview_cards[f"{symbol} FUT"].set_value("Future quote unavailable")
@@ -342,4 +343,4 @@ class LiveMarketPage(QWidget):
         if value is None:
             return
         price = float(value) / 100 if float(value) > 100000 else float(value)
-        self.cards["ltp"].set_value(f"{price:,.2f} points")
+        self.cards["ltp"].set_value(f"{price:,.2f}")

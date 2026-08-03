@@ -30,11 +30,11 @@ QTableWidget { gridline-color: #dce5ef; alternate-background-color: #f8fbff; }
 QScrollBar:vertical { background: #eef3f9; width: 10px; margin: 2px; }
 QScrollBar::handle:vertical { background: #9cb7d6; min-height: 25px; border-radius: 5px; }
 QScrollBar::handle:vertical:hover { background: #608fc8; }
-QFrame#dashboardCard { background: #ffffff; border: 1px solid #d1ddeb; border-radius: 15px; padding: 14px; }
+QFrame#dashboardCard { background: #ffffff; border: 1px solid #d1ddeb; border-radius: 11px; padding: 7px; }
 QFrame#dashboardCard:hover { background: #fbfdff; border: 1px solid #4f8cff; }
 QLabel#cardTitle { color: #6380a0; font-size: 9.5pt; font-weight: 600; }
-QLabel#cardValue { color: #102f55; font-size: 25px; font-weight: 800; }
-QLabel#cardValue[density="compact"] { color: #173f70; font-size: 18px; }
+QLabel#cardValue { color: #102f55; font-size: 22px; font-weight: 800; }
+QLabel#cardValue[density="compact"] { color: #173f70; font-size: 16px; }
 QCheckBox { spacing: 8px; }
 QCheckBox::indicator { width: 16px; height: 16px; border: 1px solid #91a8c2; border-radius: 4px; background: white; }
 QCheckBox::indicator:checked { background: #2563eb; border-color: #2563eb; }

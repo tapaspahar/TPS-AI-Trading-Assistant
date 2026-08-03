@@ -12,6 +12,8 @@ class DashboardCard(QFrame):
         self.compact = False
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 7, 10, 7)
+        layout.setSpacing(3)
 
         titleLabel = QLabel(title)
         titleLabel.setObjectName("cardTitle")
@@ -37,4 +39,8 @@ class DashboardCard(QFrame):
     def set_compact(self, enabled=True):
         self.compact = enabled
         if enabled:
-            self.setFixedHeight(92)
+            self.setFixedHeight(76)
+        else:
+            self.setMinimumHeight(0)
+            self.setMaximumHeight(16777215)
+        self.set_value(self.value_label.text())
