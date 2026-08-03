@@ -14,8 +14,9 @@ from time import monotonic, sleep
 class AngelOneClient:
     # Historical candle requests have a stricter SmartAPI limit than quotes.
     # Serialising them also avoids several UI pages exhausting the limit together.
-    CANDLE_REQUEST_INTERVAL_SECONDS = 1.25
-    CANDLE_CACHE_SECONDS = 15
+    CANDLE_REQUEST_INTERVAL_SECONDS = 3.5
+    CANDLE_CACHE_SECONDS = 30
+    CANDLE_RATE_LIMIT_COOLDOWN_SECONDS = 20
 
     def __init__(self, api_key: str, client_code: str, pin: str, totp_secret: str):
         self.api_key = api_key.strip()
@@ -60,28 +61,32 @@ class AngelOneClient:
             if cached and monotonic() - cached[0] < self.CANDLE_CACHE_SECONDS:
                 return cached[1]
 
-            wait_seconds = self.CANDLE_REQUEST_INTERVAL_SECONDS - (monotonic() - self._last_candle_request_at)
-            if wait_seconds > 0:
-                sleep(wait_seconds)
-
-            end = datetime.now()
-            start = end - timedelta(days=days)
-            self._last_candle_request_at = monotonic()
-            try:
-                response = self.session.getCandleData({
-                    "exchange": exchange,
-                    "symboltoken": str(token),
-                    "interval": interval,
-                    "fromdate": start.strftime("%Y-%m-%d %H:%M"),
-                    "todate": end.strftime("%Y-%m-%d %H:%M"),
-                })
-            except Exception as error:
-                message = str(error)
-                if "access rate" in message.lower() or "rate limit" in message.lower():
-                    raise RuntimeError(
-                        "Angel One candle limit reached. TPS has slowed requests; wait 15 seconds and try once."
-                    ) from error
-                raise RuntimeError(f"Angel One candle request failed: {message}") from error
+            response = None
+            for attempt in range(2):
+                wait_seconds = self.CANDLE_REQUEST_INTERVAL_SECONDS - (monotonic() - self._last_candle_request_at)
+                if wait_seconds > 0:
+                    sleep(wait_seconds)
+                end = datetime.now()
+                start = end - timedelta(days=days)
+                self._last_candle_request_at = monotonic()
+                try:
+                    response = self.session.getCandleData({
+                        "exchange": exchange,
+                        "symboltoken": str(token),
+                        "interval": interval,
+                        "fromdate": start.strftime("%Y-%m-%d %H:%M"),
+                        "todate": end.strftime("%Y-%m-%d %H:%M"),
+                    })
+                    break
+                except Exception as error:
+                    message = str(error)
+                    limited = "access rate" in message.lower() or "rate limit" in message.lower()
+                    if limited and attempt == 0:
+                        sleep(self.CANDLE_RATE_LIMIT_COOLDOWN_SECONDS)
+                        continue
+                    if limited:
+                        raise RuntimeError("Angel One candle service is busy. TPS retried automatically; try again after 30 seconds.") from error
+                    raise RuntimeError(f"Angel One candle request failed: {message}") from error
 
             if not response.get("status"):
                 raise RuntimeError(response.get("message", "Angel One candle data is unavailable."))
