@@ -1,19 +1,29 @@
 import sys
+import multiprocessing
 from core.database_manager import Database
 from core.settings_store import SettingsStore
 from PySide6.QtWidgets import QApplication
 
+from release_info import APP_NAME, DISPLAY_VERSION
 from ui.screens.dashboard_screen import DashboardScreen
 from ui.themes.theme_manager import apply_theme
 
 
-app = QApplication(sys.argv)
-db = Database()
-apply_theme(app, SettingsStore().load()["theme"])
+def main():
+    app = QApplication(sys.argv)
+    app.setApplicationName(APP_NAME)
+    app.setApplicationVersion(DISPLAY_VERSION)
+    Database()
+    apply_theme(app, SettingsStore().load()["theme"])
 
-window = DashboardScreen()
-window.resize(1300, 750)
-window.setWindowTitle("TPS AI Trading Assistant")
-window.show()
+    window = DashboardScreen()
+    window.resize(1300, 750)
+    window.setWindowTitle(f"{APP_NAME} — {DISPLAY_VERSION}")
+    window.show()
 
-sys.exit(app.exec())
+    return app.exec()
+
+
+if __name__ == "__main__":
+    multiprocessing.freeze_support()
+    sys.exit(main())

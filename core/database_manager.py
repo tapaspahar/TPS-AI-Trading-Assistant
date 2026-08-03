@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import sqlite3
 import csv
+import os
+import shutil
 from datetime import datetime
 from pathlib import Path
 from engine.tps_engine import TPSEngine
@@ -18,9 +20,14 @@ class Database:
     """
 
     def __init__(self, db_path: str | Path | None = None):
-        default_path = Path(__file__).resolve().parents[1] / "database" / "tps_ai.db"
+        app_data = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "TPS AI Trading Assistant"
+        default_path = app_data / "tps_ai.db"
         self.db_path = Path(db_path) if db_path else default_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        if db_path is None and not self.db_path.exists():
+            legacy_path = Path(__file__).resolve().parents[1] / "database" / "tps_ai.db"
+            if legacy_path.exists() and legacy_path != self.db_path:
+                shutil.copy2(legacy_path, self.db_path)
         self.connection = sqlite3.connect(self.db_path)
         self.connection.row_factory = sqlite3.Row
         self.cursor = self.connection.cursor()

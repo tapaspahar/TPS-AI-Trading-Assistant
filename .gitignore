@@ -12,5 +12,11 @@ venv/
 # Logs
 *.log
 
+# Release build output
+build/
+dist/
+release/
+*.spec
+
 # Never commit broker credentials
 .env
