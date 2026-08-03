@@ -10,7 +10,13 @@ class LiveMarketPage(QWidget):
     """Read-only live decision workspace; no order controls are provided."""
     tick_received = Signal(dict)
     feed_status = Signal(str)
-    INSTRUMENTS = {"NIFTY": (1, "26000"), "BANKNIFTY": (1, "26009")}
+    # SmartAPI index mappings: (WebSocket exchange type, current index token).
+    # Angel One uses exchange type 1 for NSE cash-market indices and 3 for BSE.
+    INSTRUMENTS = {
+        "NIFTY": (1, "99926000"),
+        "BANKNIFTY": (1, "99926009"),
+        "SENSEX": (3, "99919000"),
+    }
 
     def __init__(self):
         super().__init__()
@@ -43,9 +49,6 @@ class LiveMarketPage(QWidget):
     def select_symbol(self, symbol):
         self.refresh_status()
         if not LiveSession.connected():
-            return
-        if symbol not in self.INSTRUMENTS:
-            self.status.setText(f"{symbol}: token mapping needs configuration before subscription")
             return
         if LiveSession.stream:
             LiveSession.stream.stop()
