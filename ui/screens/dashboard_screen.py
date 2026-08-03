@@ -12,6 +12,7 @@ from ui.pages.checklist_page import ChecklistPage
 from ui.pages.ai_page import AIPage
 from ui.pages.risk_page import RiskPage
 from ui.pages.reports_page import ReportsPage
+from ui.pages.backtest_page import BacktestPage
 from ui.pages.settings_page import SettingsPage
 
 
@@ -33,9 +34,10 @@ class DashboardScreen(QWidget):
         self.aiPage = AIPage()
         self.riskPage = RiskPage()
         self.reportsPage = ReportsPage()
+        self.backtestPage = BacktestPage()
         self.settingsPage = SettingsPage()
         for page in (self.dashboardPage, self.liveMarketPage, self.optionsPage, self.chartCapturePage, self.journalPage,
-                     self.checklistPage, self.aiPage, self.riskPage, self.reportsPage, self.settingsPage):
+                     self.checklistPage, self.aiPage, self.riskPage, self.reportsPage, self.settingsPage, self.backtestPage):
             self.stack.addWidget(page)
         self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
         self.journalPage.trade_saved.connect(self.reportsPage.refresh)
@@ -50,7 +52,8 @@ class DashboardScreen(QWidget):
                               (self.sidebar.optionsButton, 2), (self.sidebar.chartCaptureButton, 3),
                               (self.sidebar.journalButton, 4), (self.sidebar.checklistButton, 5),
                               (self.sidebar.aiButton, 6), (self.sidebar.riskButton, 7),
-                              (self.sidebar.reportButton, 8), (self.sidebar.settingsButton, 9)):
+                              (self.sidebar.reportButton, 8), (self.sidebar.settingsButton, 9),
+                              (self.sidebar.backtestButton, 10)):
             button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
         body_layout.addWidget(self.stack)
         main_layout.addLayout(body_layout)
