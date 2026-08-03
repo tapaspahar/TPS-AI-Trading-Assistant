@@ -137,8 +137,8 @@ class LiveMarketPage(QWidget):
         self.cards["trend"].set_value("Connecting live feed…")
         self.cards["support"].set_value("Waiting for candles")
         self.cards["resistance"].set_value("Waiting for candles")
-        self.cards["breakout"].set_value("5m close + volume confirmation")
-        self.cards["breakdown"].set_value("5m close + volume confirmation")
+        self.cards["breakout"].set_value("Selected-TF close + volume")
+        self.cards["breakdown"].set_value("Selected-TF close + volume")
         Thread(target=self.load_market_structure, args=(symbol, exchange_type, token), daemon=True).start()
         self.load_selected_timeframe()
 
@@ -216,23 +216,24 @@ class LiveMarketPage(QWidget):
         try:
             candles = LiveSession.client.get_recent_candles(exchange, token)
             result = analyze_candles(candles)
-            result["symbol"] = symbol
+            result.update({"symbol": symbol, "timeframe": "5m"})
         except (RuntimeError, ValueError) as error:
             self.structure_error.emit(str(error))
             return
         self.structure_received.emit(result)
 
     def show_structure(self, result):
+        timeframe = result.get("timeframe", "5m")
         self.cards["trend"].set_value(result["state"])
         self.cards["support"].set_value(f"{result['support']:,.2f}")
         self.cards["resistance"].set_value(f"{result['resistance']:,.2f}")
         self.cards["breakout"].set_value(
-            f"5m close > {result['breakout_level']:,.2f}\n{result['volume_condition']}"
+            f"{timeframe} close > {result['breakout_level']:,.2f}\n{result['volume_condition']}"
         )
         self.cards["breakdown"].set_value(
-            f"5m close < {result['breakdown_level']:,.2f}\n{result['volume_condition']}"
+            f"{timeframe} close < {result['breakdown_level']:,.2f}\n{result['volume_condition']}"
         )
-        self.status.setText(f"Angel One: {result['symbol']} levels refreshed from {result['candle_count']} 5m candles")
+        self.status.setText(f"Angel One: {result['symbol']} {timeframe} levels refreshed from {result['candle_count']} candles")
         if result.get("timeframe"):
             self.multi_timeframe_detail.setText(
                 f"{result['symbol']} {result['timeframe']} analysis: {result['state']}. "
@@ -274,6 +275,8 @@ class LiveMarketPage(QWidget):
         self.cards["trend"].set_value(f"{short_state}\nAlignment: {result['alignment_score']}/100")
         self.cards["support"].set_value(f"{result['support']:,.2f}")
         self.cards["resistance"].set_value(f"{result['resistance']:,.2f}")
+        self.cards["breakout"].set_value("Select 5m / 15m\nfor entry confirmation")
+        self.cards["breakdown"].set_value("Select 5m / 15m\nfor entry confirmation")
         self.multi_timeframe_detail.setText(
             f"{result['symbol']} multi-timeframe reading: {patterns}. "
             "Use the chart patterns as context; wait for live breakout/breakdown confirmation before acting."
