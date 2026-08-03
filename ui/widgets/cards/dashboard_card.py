@@ -40,7 +40,10 @@ class DashboardCard(QFrame):
         self.compact = enabled
         if enabled:
             self.setFixedHeight(76)
+            # A compact market card can still contain price + one signal line.
+            self.value_label.setMinimumHeight(34)
         else:
             self.setMinimumHeight(0)
             self.setMaximumHeight(16777215)
+            self.value_label.setMinimumHeight(0)
         self.set_value(self.value_label.text())

@@ -89,9 +89,9 @@ QFrame#dashboardCard {
     padding: 7px;
 }
 QFrame#dashboardCard:hover { background: #162640; border: 1px solid #4f8cff; }
-QLabel#cardTitle { color: #91a8c7; font-size: 9.5pt; font-weight: 600; }
+QLabel#cardTitle { color: #91a8c7; font-size: 8.5pt; font-weight: 600; }
 QLabel#cardValue { color: #f8fbff; font-size: 22px; font-weight: 800; }
-QLabel#cardValue[density="compact"] { color: #d9e7ff; font-size: 16px; }
+QLabel#cardValue[density="compact"] { color: #d9e7ff; font-size: 13px; font-weight: 700; }
 QCheckBox { spacing: 8px; }
 QCheckBox::indicator { width: 16px; height: 16px; border: 1px solid #49617f; border-radius: 4px; background: #101a2d; }
 QCheckBox::indicator:checked { background: #2563eb; border-color: #60a5fa; }
