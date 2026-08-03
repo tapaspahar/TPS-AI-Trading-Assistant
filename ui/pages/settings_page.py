@@ -30,6 +30,7 @@ class SettingsPage(QWidget):
         broker_box = QGroupBox("Angel One live data")
         broker_form = QFormLayout(broker_box)
         self.api_key = QLineEdit()
+        self.api_key.setEchoMode(QLineEdit.Password)
         self.client_code = QLineEdit()
         self.mpin = QLineEdit(); self.mpin.setEchoMode(QLineEdit.Password)
         self.totp_secret = QLineEdit(); self.totp_secret.setEchoMode(QLineEdit.Password)
