@@ -60,10 +60,18 @@ class Database:
                 ai_review TEXT,
                 notes TEXT,
                 screenshot TEXT,
+                status TEXT NOT NULL DEFAULT 'CLOSED',
+                closed_at TEXT,
                 created_at TEXT NOT NULL
             )
             """
         )
+        # Migrate journals created before open-trade tracking was introduced.
+        columns = {row["name"] for row in self.cursor.execute("PRAGMA table_info(trades)")}
+        if "status" not in columns:
+            self.cursor.execute("ALTER TABLE trades ADD COLUMN status TEXT NOT NULL DEFAULT 'CLOSED'")
+        if "closed_at" not in columns:
+            self.cursor.execute("ALTER TABLE trades ADD COLUMN closed_at TEXT")
         self.connection.commit()
 
     @staticmethod
@@ -96,7 +104,7 @@ class Database:
             int(trade.trend), int(trade.vwap), int(trade.ema), int(trade.volume), int(trade.oi),
             trade.psychology_before, trade.psychology_after, trade.mistake, trade.confidence,
             trade.ai_score, trade.ai_decision, trade.ai_review, trade.notes, trade.screenshot,
-            datetime.now().isoformat(timespec="seconds"),
+            "CLOSED", datetime.now().isoformat(timespec="seconds"), datetime.now().isoformat(timespec="seconds"),
         )
         self.cursor.execute(
             """
@@ -105,13 +113,70 @@ class Database:
                 entry, exit, stoploss, target, quantity, pnl, rr_ratio, setup,
                 trend, vwap, ema, volume, oi, psychology_before, psychology_after,
                 mistake, confidence, ai_score, ai_decision, ai_review, notes,
-                screenshot, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                screenshot, status, closed_at, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             values,
         )
         self.connection.commit()
         return int(self.cursor.lastrowid)
+
+    def save_open_trade(self, trade: Trade) -> int:
+        """Persist a planned/manual entry that has no exit yet."""
+        if not trade.symbol.strip():
+            raise ValueError("Symbol is required.")
+        if trade.entry <= 0 or trade.stoploss < 0 or trade.target < 0:
+            raise ValueError("Entry must be greater than zero and stop loss/target must be non-negative.")
+        if trade.quantity <= 0:
+            raise ValueError("Quantity must be greater than zero.")
+
+        analysis = TPSEngine().calculate(trade)
+        values = (
+            trade.trade_date, trade.trade_time, trade.market, trade.symbol.upper(),
+            trade.expiry, trade.strike, trade.option, trade.entry, 0.0,
+            trade.stoploss, trade.target, trade.quantity, 0.0, 0.0, trade.setup,
+            int(trade.trend), int(trade.vwap), int(trade.ema), int(trade.volume), int(trade.oi),
+            trade.psychology_before, trade.psychology_after, trade.mistake, trade.confidence,
+            analysis["score"], analysis["decision"], ", ".join(analysis["reasons"]) or "No technical confirmations recorded.",
+            trade.notes, trade.screenshot, "OPEN", None, datetime.now().isoformat(timespec="seconds"),
+        )
+        self.cursor.execute(
+            """
+            INSERT INTO trades (
+                trade_date, trade_time, market, symbol, expiry, strike, option_type,
+                entry, exit, stoploss, target, quantity, pnl, rr_ratio, setup,
+                trend, vwap, ema, volume, oi, psychology_before, psychology_after,
+                mistake, confidence, ai_score, ai_decision, ai_review, notes,
+                screenshot, status, closed_at, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            values,
+        )
+        self.connection.commit()
+        return int(self.cursor.lastrowid)
+
+    def close_trade(self, trade_id: int, exit_price: float) -> bool:
+        """Record the actual exit for one previously saved open trade."""
+        if exit_price <= 0:
+            raise ValueError("Enter an actual exit price greater than zero.")
+        row = self.cursor.execute("SELECT entry, stoploss, target, quantity, status FROM trades WHERE id = ?", (int(trade_id),)).fetchone()
+        if not row:
+            return False
+        if row["status"] != "OPEN":
+            raise ValueError("This trade is already closed.")
+        pnl = round((float(exit_price) - float(row["entry"])) * int(row["quantity"]), 2)
+        risk = abs(float(row["entry"]) - float(row["stoploss"]))
+        reward = abs(float(row["target"]) - float(row["entry"]))
+        rr_ratio = round(reward / risk, 2) if risk else 0.0
+        result = self.cursor.execute(
+            "UPDATE trades SET exit = ?, pnl = ?, rr_ratio = ?, status = 'CLOSED', closed_at = ? WHERE id = ? AND status = 'OPEN'",
+            (float(exit_price), pnl, rr_ratio, datetime.now().isoformat(timespec="seconds"), int(trade_id)),
+        )
+        self.connection.commit()
+        return result.rowcount == 1
+
+    def get_trade(self, trade_id: int) -> sqlite3.Row | None:
+        return self.cursor.execute("SELECT * FROM trades WHERE id = ?", (int(trade_id),)).fetchone()
 
     def get_all_trades(self) -> list[sqlite3.Row]:
         return self.cursor.execute(
@@ -126,7 +191,7 @@ class Database:
         """Return rows with IDs for display and safe deletion in the journal."""
         return self.cursor.execute(
             """
-            SELECT id, trade_date, trade_time, symbol, strike, option_type, entry, stoploss, target, exit,
+            SELECT id, trade_date, trade_time, symbol, strike, option_type, entry, stoploss, target, exit, status,
                    quantity, pnl, rr_ratio, psychology_before, ai_score, ai_decision
             FROM trades ORDER BY id DESC
             """

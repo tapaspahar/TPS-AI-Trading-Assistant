@@ -57,35 +57,40 @@ class JournalPage(QWidget):
         confirmation_layout.addStretch()
         layout.addWidget(confirmations)
 
-        self.save_button = QPushButton("Save Trade")
-        self.save_button.clicked.connect(self.save_trade)
+        self.save_button = QPushButton("Save Open Trade")
+        self.save_button.clicked.connect(self.save_open_trade)
         layout.addWidget(self.save_button)
+        self.close_button = QPushButton("Close Selected Trade (Save Actual Exit)")
+        self.close_button.clicked.connect(self.close_selected_trade)
+        layout.addWidget(self.close_button)
         self.delete_button = QPushButton("Delete Selected Trade")
         self.delete_button.clicked.connect(self.delete_selected_trade)
         layout.addWidget(self.delete_button)
         self.table = QTableWidget()
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.itemSelectionChanged.connect(self.load_selected_trade)
         layout.addWidget(self.table)
         self.load_trades()
 
-    def _build_trade(self) -> Trade:
-        if not self.exit_input.text().strip():
-            raise ValueError("Exit price is blank. This is an open trade plan; enter the actual exit price only after you close the trade.")
+    def _build_trade(self, require_exit: bool = False) -> Trade:
+        exit_text = self.exit_input.text().strip()
+        if require_exit and not exit_text:
+            raise ValueError("Enter the actual exit price after the trade is closed.")
         return Trade(
             trade_date=self.date_input.text().strip(), trade_time=self.time_input.text().strip(),
             market="OPTIONS", symbol=self.symbol_input.text().strip(), expiry="",
             strike=self.strike_input.text().strip(), option=self.option_input.currentText(),
-            entry=float(self.entry_input.text()), exit=float(self.exit_input.text()),
+            entry=float(self.entry_input.text()), exit=float(exit_text) if exit_text else 0.0,
             stoploss=float(self.stoploss_input.text()), target=float(self.target_input.text()),
             quantity=int(self.quantity_input.text()), psychology_before=self.psychology_input.currentText(),
             trend=self.trend_check.isChecked(), vwap=self.vwap_check.isChecked(),
             ema=self.ema_check.isChecked(), volume=self.volume_check.isChecked(), oi=self.oi_check.isChecked(),
         )
 
-    def save_trade(self) -> None:
+    def save_open_trade(self) -> None:
         try:
-            self.db.save_trade(self._build_trade())
+            self.db.save_open_trade(self._build_trade())
         except ValueError as error:
             QMessageBox.warning(self, "Invalid trade", str(error))
             return
@@ -93,12 +98,32 @@ class JournalPage(QWidget):
             QMessageBox.critical(self, "Could not save trade", str(error))
             return
 
-        QMessageBox.information(self, "Saved", "Trade saved successfully.")
+        QMessageBox.information(self, "Open trade saved", "Open trade saved. Select its row later, enter the actual exit price, then use Close Selected Trade.")
         for field in (self.symbol_input, self.strike_input, self.entry_input, self.exit_input,
                       self.stoploss_input, self.target_input, self.quantity_input):
             field.clear()
         for checkbox in (self.trend_check, self.vwap_check, self.ema_check, self.volume_check, self.oi_check):
             checkbox.setChecked(False)
+        self.load_trades()
+        self.trade_saved.emit()
+        self._show_daily_guardrail()
+
+    def close_selected_trade(self) -> None:
+        row = self.table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Select an open trade", "Select the open trade row, enter its actual exit price, then close it.")
+            return
+        try:
+            exit_price = float(self.exit_input.text().strip())
+            trade_id = int(self.table.item(row, 0).text())
+            if not self.db.close_trade(trade_id, exit_price):
+                QMessageBox.warning(self, "Trade not found", "The selected trade no longer exists. Refreshing the table.")
+                self.load_trades()
+                return
+        except ValueError as error:
+            QMessageBox.warning(self, "Invalid exit", str(error))
+            return
+        QMessageBox.information(self, "Trade closed", "Actual exit saved. P&L and R:R have been calculated for this trade.")
         self.load_trades()
         self.trade_saved.emit()
         self._show_daily_guardrail()
@@ -141,7 +166,7 @@ class JournalPage(QWidget):
         )
 
     def load_trades(self) -> None:
-        headers = ["ID", "Date", "Time", "Symbol", "Strike", "Option", "Entry", "Stop Loss", "Target", "Exit", "Qty", "P&L", "R:R", "Psychology", "AI", "Decision"]
+        headers = ["ID", "Date", "Time", "Symbol", "Strike", "Option", "Entry", "Stop Loss", "Target", "Exit", "Status", "Qty", "P&L", "R:R", "Psychology", "AI", "Decision"]
         data = self.db.get_journal_rows()
         self.table.setColumnCount(len(headers))
         self.table.setHorizontalHeaderLabels(headers)
@@ -150,6 +175,32 @@ class JournalPage(QWidget):
             for column, value in enumerate(trade):
                 self.table.setItem(row, column, QTableWidgetItem(str(value)))
         self.table.resizeColumnsToContents()
+
+    def load_selected_trade(self) -> None:
+        row = self.table.currentRow()
+        if row < 0:
+            return
+        item = self.table.item(row, 0)
+        if not item:
+            return
+        trade = self.db.get_trade(int(item.text()))
+        if not trade:
+            return
+        self.date_input.setText(trade["trade_date"])
+        self.time_input.setText(trade["trade_time"])
+        self.symbol_input.setText(trade["symbol"])
+        self.strike_input.setText(trade["strike"] or "")
+        self.option_input.setCurrentText(trade["option_type"] or "CE")
+        self.entry_input.setText(f"{float(trade['entry']):.2f}")
+        self.stoploss_input.setText(f"{float(trade['stoploss']):.2f}")
+        self.target_input.setText(f"{float(trade['target']):.2f}")
+        self.quantity_input.setText(str(trade["quantity"]))
+        if trade["status"] == "OPEN":
+            self.exit_input.clear()
+            self.plan_summary.setText("Selected OPEN trade: enter the actual exit price above, then click Close Selected Trade.")
+        else:
+            self.exit_input.setText(f"{float(trade['exit']):.2f}")
+            self.plan_summary.setText("Selected CLOSED trade: exit, P&L and R:R have already been recorded.")
 
     def delete_selected_trade(self) -> None:
         row = self.table.currentRow()

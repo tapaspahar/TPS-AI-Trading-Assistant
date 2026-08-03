@@ -42,6 +42,17 @@ class DatabaseTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Quantity"):
             self.db.save_trade(sample_trade(quantity=0))
 
+    def test_open_trade_can_be_closed_later(self):
+        trade_id = self.db.save_open_trade(sample_trade(exit=0.0))
+        open_trade = self.db.get_trade(trade_id)
+        self.assertEqual(open_trade["status"], "OPEN")
+        self.assertEqual(open_trade["pnl"], 0.0)
+
+        self.assertTrue(self.db.close_trade(trade_id, 145.0))
+        closed_trade = self.db.get_trade(trade_id)
+        self.assertEqual(closed_trade["status"], "CLOSED")
+        self.assertEqual((closed_trade["exit"], closed_trade["pnl"], closed_trade["rr_ratio"]), (145.0, 1875.0, 3.0))
+
     def test_summary_aggregates_saved_trades(self):
         self.db.save_trade(sample_trade())
         self.db.save_trade(sample_trade(symbol="BANKNIFTY", entry=100, exit=90, stoploss=80, target=140, quantity=10))
