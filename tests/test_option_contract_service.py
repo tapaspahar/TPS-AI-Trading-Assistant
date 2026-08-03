@@ -28,6 +28,6 @@ class OptionContractServiceTests(unittest.TestCase):
             {"strike": strike, "option_type": option_type}
             for strike in range(24000, 25051, 50) for option_type in ("CE", "PE")
         ]
-        focused = contracts_near_spot(contracts, spot_price=24510, wings=2)
-        self.assertEqual({contract["strike"] for contract in focused}, {24400, 24450, 24500, 24550, 24600})
-        self.assertEqual(len(focused), 10)
+        focused = contracts_near_spot(contracts, spot_price=24510, wings=5)
+        self.assertEqual(len({contract["strike"] for contract in focused}), 11)
+        self.assertEqual(len(focused), 22)

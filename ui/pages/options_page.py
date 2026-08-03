@@ -66,7 +66,7 @@ class OptionsPage(QWidget):
             spot_price = float(quote.get("ltp", 0) or 0)
             if spot_price <= 0:
                 raise RuntimeError("Angel One did not return a usable spot price.")
-            focused = contracts_near_spot(contracts, spot_price, wings=20)
+            focused = contracts_near_spot(contracts, spot_price, wings=5)
             self.contracts_loaded.emit({"contracts": focused, "spot_price": spot_price})
         except (RuntimeError, ValueError) as error:
             self.load_error.emit(str(error))
@@ -81,7 +81,7 @@ class OptionsPage(QWidget):
         self.populate_strikes()
         self.details.setText(
             f"Live spot: {result['spot_price']:,.2f}. {len(self.contracts)} focused contracts loaded: "
-            "ATM plus 20 strikes on each side. Select expiry, CE/PE and strike."
+            "ATM plus 5 strikes on each side. Select expiry, CE/PE and strike."
         )
 
     def populate_strikes(self):
