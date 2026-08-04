@@ -70,19 +70,20 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             volume_ratio=float(capture["volume_ratio"]) if capture["volume_ratio"] else None, candle_direction=capture.get("candle_direction"),
             fake_breakout_risk=bool(capture.get("fake_breakout_risk", True)),
         )
-        candidate = "CE" if snapshot.price > snapshot.supertrend else "PE"
-        legacy_chart = DecisionEngine().evaluate(snapshot, candidate, "Calm")
+        legacy_candidate = "CE" if snapshot.price > snapshot.supertrend else "PE"
+        legacy_chart = DecisionEngine().evaluate(snapshot, legacy_candidate, "Calm")
         spot_config = UNDERLYING_QUOTES[symbol]
         spot = float(client.get_option_quote(spot_config["exchange"], spot_config["token"]).get("ltp", 0) or 0)
         if spot <= 0:
             reason = "Usable underlying spot quote is unavailable"
-            result = _attempt(f"No paper trade: {reason.lower()}.", checked_at, capture=capture, chart=legacy_chart, candidate=candidate, future=future, blockers=[reason])
+            result = _attempt(f"No paper trade: {reason.lower()}.", checked_at, capture=capture, chart=legacy_chart, candidate=None, future=future, blockers=[reason])
             return _record(database, symbol, result)
         contracts = contracts_near_spot(service.get_contracts(symbol), spot, wings=5)
         expiry = min(contract["expiry"] for contract in contracts)
         contracts = [contract for contract in contracts if contract["expiry"] == expiry]
         chain = analyze_option_chain(contracts, client.get_option_chain_quotes(contracts[0]["exchange"], [contract["token"] for contract in contracts]))
         strategy = evaluate_tps_entry_v2(candles, capture, chain)
+        candidate = strategy["candidate"]
         chart = {
             "symbol": symbol, "score": strategy["score"], "direction": strategy["direction"],
             "decision": strategy["decision"], "trade_ready": strategy["trade_ready"],
