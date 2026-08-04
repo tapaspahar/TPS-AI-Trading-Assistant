@@ -18,26 +18,21 @@ def _scrolling_text(html: str) -> QScrollArea:
     return scroll
 
 
-class AboutHelpPage(QWidget):
-    """Offline bilingual product information and operating help."""
+class AboutPage(QWidget):
+    """Product information, attribution and safety scope."""
 
     def __init__(self):
         super().__init__()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 16, 18, 18)
         layout.setSpacing(10)
-        title = QLabel("About & Help")
+        title = QLabel("About TPS")
         title.setObjectName("pageTitle")
         layout.addWidget(title)
-        subtitle = QLabel("Application information and an offline guide in English and Roman (phonetic) Hindi.")
+        subtitle = QLabel("Application purpose, capabilities, credits and safety information.")
         subtitle.setWordWrap(True)
         layout.addWidget(subtitle)
-
-        tabs = QTabWidget()
-        tabs.addTab(_scrolling_text(self._about_html()), "About")
-        tabs.addTab(_scrolling_text(self._english_help()), "Help — English")
-        tabs.addTab(_scrolling_text(self._hindi_help()), "Help — Roman Hindi")
-        layout.addWidget(tabs, 1)
+        layout.addWidget(_scrolling_text(self._about_html()), 1)
 
     @staticmethod
     def _about_html() -> str:
@@ -135,3 +130,23 @@ class AboutHelpPage(QWidget):
         <p>TPS analysis aur learning ke liye hai. Profit guarantee nahi karta aur financial advice nahi hai.
         Application broker order place, modify ya cancel nahi karti. Manual trade se pehle har value khud verify kijiye.</p>
         """
+
+
+class HelpPage(QWidget):
+    """Offline operating guide in English and Roman Hindi."""
+
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 16, 18, 18)
+        layout.setSpacing(10)
+        title = QLabel("Help Center")
+        title.setObjectName("pageTitle")
+        layout.addWidget(title)
+        subtitle = QLabel("Step-by-step application guide available offline in two languages.")
+        subtitle.setWordWrap(True)
+        layout.addWidget(subtitle)
+        tabs = QTabWidget()
+        tabs.addTab(_scrolling_text(AboutPage._english_help()), "English")
+        tabs.addTab(_scrolling_text(AboutPage._hindi_help()), "Roman Hindi")
+        layout.addWidget(tabs, 1)
