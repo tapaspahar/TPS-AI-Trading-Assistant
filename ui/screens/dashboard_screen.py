@@ -18,6 +18,7 @@ from ui.pages.post_market_page import PostMarketPage
 from ui.pages.replay_page import ReplayPage
 from ui.pages.settings_page import SettingsPage
 from ui.pages.equity_page import EquityPage
+from ui.pages.auto_attempt_report_page import AutoAttemptReportPage
 
 
 class DashboardScreen(QWidget):
@@ -43,8 +44,9 @@ class DashboardScreen(QWidget):
         self.replayPage = ReplayPage()
         self.settingsPage = SettingsPage()
         self.equityPage = EquityPage()
+        self.autoAttemptReportPage = AutoAttemptReportPage()
         for page in (self.dashboardPage, self.liveMarketPage, self.optionsPage, self.chartCapturePage, self.journalPage,
-                     self.checklistPage, self.aiPage, self.riskPage, self.reportsPage, self.settingsPage, self.backtestPage, self.postMarketPage, self.replayPage, self.equityPage):
+                     self.checklistPage, self.aiPage, self.riskPage, self.reportsPage, self.settingsPage, self.backtestPage, self.postMarketPage, self.replayPage, self.equityPage, self.autoAttemptReportPage):
             self.stack.addWidget(page)
         self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
         self.journalPage.trade_saved.connect(self.reportsPage.refresh)
@@ -60,6 +62,7 @@ class DashboardScreen(QWidget):
         self.optionsPage.paper_trade_closed.connect(lambda _closed: self.journalPage.load_trades())
         self.optionsPage.paper_trade_closed.connect(lambda _closed: self.dashboardPage.refresh())
         self.optionsPage.paper_trade_closed.connect(lambda _closed: self.reportsPage.refresh())
+        self.optionsPage.auto_attempt_saved.connect(self.autoAttemptReportPage.refresh)
         self.optionsPage.open_chart_capture.connect(lambda: self.show_page(3))
         self.settingsPage.live_connected.connect(self.start_default_nifty)
         for button, index in ((self.sidebar.dashboardButton, 0), (self.sidebar.liveMarketButton, 1),
@@ -68,7 +71,7 @@ class DashboardScreen(QWidget):
                               (self.sidebar.aiButton, 6), (self.sidebar.riskButton, 7),
                               (self.sidebar.reportButton, 8), (self.sidebar.settingsButton, 9),
                               (self.sidebar.backtestButton, 10), (self.sidebar.postMarketButton, 11), (self.sidebar.replayButton, 12),
-                              (self.sidebar.equityButton, 13)):
+                              (self.sidebar.equityButton, 13), (self.sidebar.autoAttemptReportButton, 14)):
             button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
         body_layout.addWidget(self.stack)
         main_layout.addLayout(body_layout, 1)
@@ -88,6 +91,8 @@ class DashboardScreen(QWidget):
             self.optionsPage.prepare_live_workspace()
         elif index == 11:
             self.postMarketPage.refresh()
+        elif index == 14:
+            self.autoAttemptReportPage.refresh()
         self.stack.setCurrentIndex(index)
 
     def handle_ai_decision(self, context):

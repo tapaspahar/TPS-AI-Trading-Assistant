@@ -1,17 +1,39 @@
 import unittest
+from datetime import datetime
 from unittest.mock import patch
 
-from services.auto_paper_trader import run_auto_paper_cycle
+from services.auto_paper_trader import _completed_candles, run_auto_paper_cycle
 
 
 class AutoPaperTraderTests(unittest.TestCase):
+    def test_current_forming_candle_is_excluded(self):
+        candles = [{"time": "2026-08-04T13:10:00+05:30"}, {"time": "2026-08-04T13:15:00+05:30"}]
+        completed = _completed_candles(candles, datetime(2026, 8, 4, 13, 15, 8))
+        self.assertEqual([item["time"] for item in completed], ["2026-08-04T13:10:00+05:30"])
+
+    @patch("services.auto_paper_trader.evaluate_tps_entry_v2")
+    @patch("services.auto_paper_trader.analyze_option_chain")
+    @patch("services.auto_paper_trader.DecisionEngine")
+    @patch("services.auto_paper_trader.build_live_capture")
+    @patch("services.auto_paper_trader.OptionContractService")
     @patch("services.auto_paper_trader.Database")
-    def test_does_not_create_new_trade_while_open_paper_trade_exists(self, database_type):
+    def test_does_not_create_new_trade_while_open_paper_trade_exists(self, database_type, service_type, build_capture, decision_type, analyze_chain, evaluate_strategy):
         database = database_type.return_value
         database.paper_trade_progress.return_value = {"trades": 1, "days": 1, "open_trades": 1, "target_hits": 0, "stoploss_hits": 0}
-        result = run_auto_paper_cycle(object(), "NIFTY", {"max_trades_per_day": 5})
-        self.assertIn("open paper trade", result["status"])
-        self.assertIn("open paper trade", result["attempt"]["blockers"][0])
+        service_type.return_value.get_front_month_future.return_value = {"exchange": "NFO", "token": "future", "symbol": "NIFTY-FUT"}
+        service_type.return_value.get_contracts.return_value = [{"exchange": "NFO", "token": "ce", "symbol": "NIFTYCE", "strike": 25000, "option_type": "CE", "expiry": "2026-08-27", "lot_size": 75}]
+        build_capture.return_value = {"close": "25010", "ema_5": "25005", "ema_20": "25000", "ema_50": "24950", "vwap": "25000", "supertrend": "24990", "volume": "1000", "volume_ema": "500", "rsi_14": "55", "atr_14": "20", "volume_ratio": "2", "candle_direction": "BULLISH", "fake_breakout_risk": False, "candle_time": "2026-08-04T11:10:00+05:30"}
+        decision_type.return_value.evaluate.return_value = {"score": 100}
+        analyze_chain.return_value = {"pcr_oi": 1.0, "pcr_volume": 1.0, "quote_rows": [], "call_resistance": 25100, "put_support": 24900}
+        evaluate_strategy.return_value = {"score": 100, "direction": "BULLISH", "candidate": "CE", "decision": "TPS V2 CE ENTRY CONFIRMED", "trade_ready": True, "passed": 6, "total": 6, "confirmations": [{"name": "Directional volume", "passed": True, "detail": "confirmed"}], "blockers": []}
+        client = unittest.mock.Mock()
+        client.get_recent_candles.return_value = [{"time": "2026-08-04T11:10:00+05:30"}] * 51
+        client.get_option_quote.return_value = {"ltp": 25010}
+        client.get_option_chain_quotes.return_value = []
+        result = run_auto_paper_cycle(client, "NIFTY", {"max_trades_per_day": 5})
+        self.assertIn("operational safety limit", result["status"])
+        self.assertTrue(any("open paper trade" in reason for reason in result["attempt"]["blockers"]))
+        database.save_auto_trade_attempt.assert_called_once()
         database.close.assert_called_once()
 
     @patch("services.auto_paper_trader.evaluate_tps_entry_v2")
@@ -50,7 +72,7 @@ class AutoPaperTraderTests(unittest.TestCase):
             ],
             "blockers": ["Strong directional volume confirmation is missing"],
         }
-        candles = [{"time": "2026-08-04T11:10:00+05:30"}]
+        candles = [{"time": "2026-08-04T11:10:00+05:30"}] * 51
         client = unittest.mock.Mock()
         client.get_recent_candles.return_value = candles
         client.get_option_quote.return_value = {"ltp": 25010}
