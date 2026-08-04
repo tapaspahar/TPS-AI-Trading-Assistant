@@ -2,7 +2,7 @@ from datetime import datetime
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QFormLayout, QGridLayout, QGroupBox, QLabel, QLineEdit, QPushButton,
+    QComboBox, QFormLayout, QGridLayout, QGroupBox, QLabel, QLineEdit, QPushButton,
     QScrollArea, QSpinBox, QVBoxLayout, QWidget,
 )
 
@@ -14,6 +14,8 @@ from ui.widgets.cards.dashboard_card import DashboardCard
 
 class RiskPage(QWidget):
     """Whole-lot option risk control centre. It never places an order."""
+
+    LOT_SIZES = {"NIFTY": 65, "BANKNIFTY": 30, "SENSEX": 20}
 
     def __init__(self):
         super().__init__()
@@ -54,19 +56,50 @@ class RiskPage(QWidget):
         form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         self.contract = QLineEdit("Manual option plan")
         self.contract.setReadOnly(True)
+        self.underlying = QComboBox()
+        self.underlying.addItems(self.LOT_SIZES)
         self.entry, self.stoploss, self.target = QLineEdit(), QLineEdit(), QLineEdit()
         self.lot_size = QSpinBox()
         self.lot_size.setRange(1, 10000)
         self.lot_size.setValue(65)
+        self.lot_size.setReadOnly(True)
+        self.lot_size.setButtonSymbols(QSpinBox.NoButtons)
         self.requested_lots = QSpinBox()
         self.requested_lots.setRange(1, 100)
+        self.quantity = QLineEdit("65")
+        self.quantity.setReadOnly(True)
         for label, field in (
-            ("Contract", self.contract), ("Entry premium", self.entry),
+            ("Contract", self.contract), ("Underlying index", self.underlying),
+            ("Entry premium", self.entry),
             ("Stop loss", self.stoploss), ("Target", self.target),
-            ("Exchange lot size", self.lot_size), ("Planned lots", self.requested_lots),
+            ("Predefined lot size", self.lot_size), ("Planned lots", self.requested_lots),
+            ("Calculated quantity", self.quantity),
         ):
             form.addRow(label, field)
         self.layout.addWidget(plan_box)
+
+        guide = QGroupBox("What these fields mean")
+        guide_layout = QVBoxLayout(guide)
+        guide_text = QLabel(
+            "• Account Capital: saved trading capital from Settings.\n"
+            "• Per-Trade Risk Cap: maximum permitted loss for one trade under your saved risk percentage.\n"
+            "• Daily Loss Capacity: remaining loss allowance before new plans are blocked.\n"
+            "• Trades Today: paper trades recorded today versus your daily maximum.\n"
+            "• Contract: selected CE/PE contract name; Options Workspace fills it automatically.\n"
+            "• Underlying index: choose NIFTY, BANKNIFTY or SENSEX for a manual check.\n"
+            "• Entry premium: planned option buying price per quantity.\n"
+            "• Stop loss: exit premium if the setup fails; it must be below entry.\n"
+            "• Target: planned profit-booking premium; it must be above entry.\n"
+            "• Predefined lot size: NIFTY 65, BANKNIFTY 30, SENSEX 20; this is locked.\n"
+            "• Planned lots: number of lots you want to review. Calculated quantity = lots × lot size."
+        )
+        guide_text.setWordWrap(True)
+        guide_layout.addWidget(guide_text)
+        self.layout.addWidget(guide)
+
+        self.underlying.currentTextChanged.connect(self._update_quantity)
+        self.requested_lots.valueChanged.connect(self._update_quantity)
+        self._update_quantity()
 
         buttons = QGridLayout()
         analyze = QPushButton("Analyze Risk Controls")
@@ -114,13 +147,23 @@ class RiskPage(QWidget):
 
     def load_trade_plan(self, plan: dict):
         contract = plan.get("contract", {})
-        self.contract.setText(str(contract.get("symbol") or plan.get("underlying") or "Option plan"))
+        contract_symbol = str(contract.get("symbol") or plan.get("underlying") or "Option plan")
+        underlying = str(plan.get("underlying") or "").upper()
+        if underlying not in self.LOT_SIZES:
+            underlying = next((name for name in self.LOT_SIZES if contract_symbol.upper().startswith(name)), "NIFTY")
+        self.underlying.setCurrentText(underlying)
+        self.contract.setText(contract_symbol)
         self.entry.setText(str(plan.get("entry", "")))
         self.stoploss.setText(str(plan.get("stoploss", "")))
         self.target.setText(str(plan.get("target", "")))
-        self.lot_size.setValue(max(1, int(plan.get("lot_size", contract.get("lot_size", 1)) or 1)))
         self.requested_lots.setValue(max(1, int(plan.get("lots", 1) or 1)))
+        self._update_quantity()
         self.calculate()
+
+    def _update_quantity(self):
+        lot_size = self.LOT_SIZES[self.underlying.currentText()]
+        self.lot_size.setValue(lot_size)
+        self.quantity.setText(str(lot_size * self.requested_lots.value()))
 
     def calculate(self):
         try:
@@ -132,7 +175,7 @@ class RiskPage(QWidget):
                 trades_today=self.progress["trades"], open_trades=self.progress["open_trades"],
                 realized_pnl=self.realized_pnl, entry=float(self.entry.text()),
                 stoploss=float(self.stoploss.text()), target=float(self.target.text()),
-                lot_size=self.lot_size.value(), requested_lots=self.requested_lots.value(),
+                lot_size=self.LOT_SIZES[self.underlying.currentText()], requested_lots=self.requested_lots.value(),
             )
             colour = {"SAFE": "#48e0a4", "REVIEW": "#ffd166", "REDUCE LOTS": "#ff9f43", "BLOCKED": "#ff6b6b"}[result["verdict"]]
             self.verdict.setText(f"{result['verdict']} — {self.contract.text()}")
