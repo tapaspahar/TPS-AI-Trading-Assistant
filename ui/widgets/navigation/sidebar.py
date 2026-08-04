@@ -23,11 +23,12 @@ class Sidebar(QFrame):
         self.replayButton = QPushButton("Candle Replay")
         self.postMarketButton = QPushButton("Post-Market Report")
         self.equityButton = QPushButton("Equity Research")
+        self.autoAttemptReportButton = QPushButton("Auto Attempt Report")
         # Keep the visual journey in the same order a trader uses the app:
         # market context -> chart confirmation -> AI evaluation -> option plan -> journal.
         self.buttons = (
             self.dashboardButton, self.liveMarketButton, self.equityButton, self.chartCaptureButton,
-            self.aiButton, self.optionsButton, self.journalButton,
+            self.aiButton, self.optionsButton, self.autoAttemptReportButton, self.journalButton,
             self.checklistButton, self.riskButton, self.reportButton, self.backtestButton, self.replayButton, self.postMarketButton, self.settingsButton,
         )
         # Stack page numbers intentionally remain stable even when the visual
@@ -48,6 +49,7 @@ class Sidebar(QFrame):
             11: self.postMarketButton,
             12: self.replayButton,
             13: self.equityButton,
+            14: self.autoAttemptReportButton,
         }
         self.menu_group = QButtonGroup(self)
         self.menu_group.setExclusive(True)

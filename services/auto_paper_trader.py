@@ -29,6 +29,23 @@ def _attempt(status, checked_at, *, capture=None, chart=None, candidate=None, fu
     }
 
 
+def _record(database, symbol, result):
+    database.save_auto_trade_attempt(symbol, result)
+    return result
+
+
+def _completed_candles(candles, checked_at):
+    """Exclude the currently forming 5-minute candle when the feed includes it."""
+    if not candles:
+        return candles
+    bucket = checked_at.replace(minute=(checked_at.minute // 5) * 5, second=0, microsecond=0)
+    try:
+        latest_start = datetime.fromisoformat(str(candles[-1]["time"])).replace(tzinfo=None)
+    except (KeyError, TypeError, ValueError):
+        return candles
+    return candles[:-1] if latest_start >= bucket.replace(tzinfo=None) else candles
+
+
 def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
     """Capture one ATM one-lot paper trade only if every strict TPS condition passes."""
     symbol = str(symbol).upper()
@@ -37,15 +54,12 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
         checked_at = datetime.now()
         today = checked_at.strftime("%d-%m-%Y")
         progress = database.paper_trade_progress(today)
-        if progress["open_trades"]:
-            reason = "An open paper trade is already being monitored"
-            return _attempt("Waiting: an open paper trade is already being monitored.", checked_at, blockers=[reason])
-        if progress["trades"] >= int(settings["max_trades_per_day"]):
-            reason = f"Daily paper-trade limit reached ({progress['trades']}/{settings['max_trades_per_day']})"
-            return _attempt(f"{reason}.", checked_at, blockers=[reason])
         service = OptionContractService()
         future = service.get_front_month_future(symbol)
         candles = client.get_recent_candles(future["exchange"], future["token"], "FIVE_MINUTE", 5)
+        candles = _completed_candles(candles, checked_at)
+        if len(candles) < 51:
+            raise ValueError("At least 51 completed 5-minute candles are required for the automatic TPS v2 check.")
         capture = build_live_capture(symbol, "5m", candles, f"Angel One current-month future {future['symbol']}")
         capture["candle_time"] = candles[-1].get("time")
         snapshot = ChartSnapshot(
@@ -62,7 +76,8 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
         spot = float(client.get_option_quote(spot_config["exchange"], spot_config["token"]).get("ltp", 0) or 0)
         if spot <= 0:
             reason = "Usable underlying spot quote is unavailable"
-            return _attempt(f"No paper trade: {reason.lower()}.", checked_at, capture=capture, chart=chart, candidate=candidate, future=future, blockers=[reason])
+            result = _attempt(f"No paper trade: {reason.lower()}.", checked_at, capture=capture, chart=legacy_chart, candidate=candidate, future=future, blockers=[reason])
+            return _record(database, symbol, result)
         contracts = contracts_near_spot(service.get_contracts(symbol), spot, wings=5)
         expiry = min(contract["expiry"] for contract in contracts)
         contracts = [contract for contract in contracts if contract["expiry"] == expiry]
@@ -76,17 +91,31 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             "warnings": strategy["blockers"] + [f"{item['name']}: {item['detail']}" for item in strategy["confirmations"] if not item["passed"]],
             "strategy": strategy, "legacy_score": legacy_chart["score"],
         }
+        operational_blockers = []
+        if progress["open_trades"]:
+            operational_blockers.append("An open paper trade is already being monitored")
+        if progress["trades"] >= int(settings["max_trades_per_day"]):
+            operational_blockers.append(f"Daily paper-trade limit reached ({progress['trades']}/{settings['max_trades_per_day']})")
+        if operational_blockers:
+            chart["warnings"].extend(operational_blockers)
+            result = _attempt(
+                "No new paper trade: TPS v2 candle evaluation completed but an operational safety limit blocked capture.",
+                checked_at, capture=capture, chart=chart, candidate=candidate, future=future,
+                blockers=chart["warnings"], chain=chain,
+            )
+            return _record(database, symbol, result)
         if not strategy["trade_ready"]:
-            return _attempt(
+            result = _attempt(
                 f"No paper trade: TPS v2 confirmations {strategy['passed']}/6 (minimum 5/6).",
                 checked_at, capture=capture, chart=chart, candidate=candidate, future=future,
                 blockers=chart["warnings"], chain=chain,
             )
+            return _record(database, symbol, result)
         plan = create_review_plan(symbol, spot, contracts, chain["quote_rows"], chart, chain, settings, requested_lots=1, minimum_score=80)
         plan["rule_version"] = "TPS Entry Confirmation System v2 - 5m + OI/PCR"
         trade_id = database.save_paper_trade(plan)
         result = _attempt("Paper trade captured", checked_at, capture=capture, chart=chart, candidate=candidate, future=future, chain=chain)
         result.update({"trade_id": trade_id, "plan": plan, "capture": capture})
-        return result
+        return _record(database, symbol, result)
     finally:
         database.close()

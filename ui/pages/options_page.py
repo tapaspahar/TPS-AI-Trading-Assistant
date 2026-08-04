@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from threading import Thread
 
 from PySide6.QtCore import QTimer, Signal
@@ -29,6 +29,7 @@ class OptionsPage(QWidget):
     paper_trade_error = Signal(str)
     auto_paper_status = Signal(object)
     auto_paper_captured = Signal(object)
+    auto_attempt_saved = Signal()
 
     def __init__(self):
         super().__init__()
@@ -537,12 +538,23 @@ class OptionsPage(QWidget):
     def _run_auto_paper_cycle(self, symbol):
         try:
             result = run_auto_paper_cycle(LiveSession.client, symbol, SettingsStore().load())
+            self.auto_attempt_saved.emit()
             if result.get("plan"):
                 self.auto_paper_captured.emit(result)
             else:
                 self.auto_paper_status.emit(result)
         except (RuntimeError, ValueError) as error:
-            self.auto_paper_status.emit(f"Auto paper cycle skipped: {error}")
+            result = {
+                "status": f"Auto paper cycle error: {error}",
+                "attempt": {"checked_at": datetime.now().isoformat(timespec="seconds"), "candle_time": None, "future_symbol": None, "candidate": None, "capture": {}, "chart": {}, "chain": {}, "blockers": [str(error)]},
+            }
+            database = Database()
+            try:
+                database.save_auto_trade_attempt(symbol, result)
+            finally:
+                database.close()
+            self.auto_attempt_saved.emit()
+            self.auto_paper_status.emit(result)
         finally:
             self.auto_paper_running = False
 

@@ -67,6 +67,23 @@ class DatabaseTests(unittest.TestCase):
         saved = self.db.get_market_snapshots("03-08-2026")
         self.assertEqual((len(saved), saved[0]["symbol"], saved[0]["oi_pcr"]), (1, "NIFTY", 1.1))
 
+    def test_auto_trade_attempt_history_deduplicates_candles_and_exports(self):
+        result = {
+            "status": "No paper trade: TPS v2 confirmations 4/6.",
+            "attempt": {
+                "checked_at": "2026-08-04T11:16:00", "candle_time": "2026-08-04T11:10:00+05:30",
+                "future_symbol": "NIFTY-FUT", "candidate": "CE", "capture": {}, "chain": {}, "blockers": ["Low volume"],
+                "chart": {"decision": "NO TRADE", "score": 67, "strategy": {"passed": 4, "total": 6}},
+            },
+        }
+        self.assertTrue(self.db.save_auto_trade_attempt("NIFTY", result))
+        self.assertFalse(self.db.save_auto_trade_attempt("NIFTY", result))
+        rows = self.db.get_auto_trade_attempts("04-08-2026")
+        self.assertEqual((len(rows), rows[0]["confirmations_passed"], rows[0]["outcome"]), (1, 4, "NO TRADE"))
+        path = Path(self.temp_dir.name) / "attempts.csv"
+        self.assertEqual(self.db.export_auto_trade_attempts(path, "04-08-2026"), 1)
+        self.assertIn("candle_time", path.read_text(encoding="utf-8-sig"))
+
     def test_open_ce_trade_gets_one_reversal_alert(self):
         trade_id = self.db.save_open_trade(sample_trade(exit=0.0))
         for timeframe in ("5m", "15m"):

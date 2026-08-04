@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 import csv
+import json
 import os
 import shutil
 from datetime import datetime
@@ -143,6 +144,28 @@ class Database:
             self.cursor.execute("ALTER TABLE market_snapshots ADD COLUMN oi_pcr_change REAL")
         if "volume_pcr_change" not in snapshot_columns:
             self.cursor.execute("ALTER TABLE market_snapshots ADD COLUMN volume_pcr_change REAL")
+        self.cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS auto_trade_attempts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                checked_at TEXT NOT NULL,
+                candle_time TEXT,
+                trade_date TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                future_symbol TEXT,
+                outcome TEXT NOT NULL,
+                decision TEXT,
+                candidate TEXT,
+                confirmations_passed INTEGER,
+                confirmations_total INTEGER,
+                score INTEGER,
+                trade_id INTEGER,
+                status_text TEXT NOT NULL,
+                details_json TEXT NOT NULL,
+                UNIQUE(symbol, candle_time)
+            )
+            """
+        )
         self.connection.commit()
 
     @staticmethod
@@ -464,6 +487,49 @@ class Database:
             "SELECT * FROM market_snapshots WHERE symbol = ? AND timeframe = ? ORDER BY captured_at DESC LIMIT 1",
             (str(symbol).upper(), str(timeframe)),
         ).fetchone()
+
+    def save_auto_trade_attempt(self, symbol: str, result: dict) -> bool:
+        """Persist one completed-candle auto-paper evaluation for audit and review."""
+        attempt = result.get("attempt") or {}
+        chart = attempt.get("chart") or {}
+        strategy = chart.get("strategy") or {}
+        checked_at = str(attempt.get("checked_at") or datetime.now().isoformat(timespec="seconds"))
+        candle_time = attempt.get("candle_time")
+        outcome = "TRADE CAPTURED" if result.get("plan") else "NO TRADE" if chart else "SKIPPED"
+        values = (
+            checked_at, candle_time, datetime.fromisoformat(checked_at).strftime("%d-%m-%Y"), str(symbol).upper(),
+            attempt.get("future_symbol"), outcome, chart.get("decision"), attempt.get("candidate"),
+            strategy.get("passed"), strategy.get("total", 6) if strategy else None, chart.get("score"),
+            result.get("trade_id"), result.get("status", "Auto paper cycle completed"),
+            json.dumps(result, ensure_ascii=False, default=str),
+        )
+        result_row = self.cursor.execute(
+            """INSERT OR IGNORE INTO auto_trade_attempts (
+                   checked_at, candle_time, trade_date, symbol, future_symbol, outcome, decision, candidate,
+                   confirmations_passed, confirmations_total, score, trade_id, status_text, details_json
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            values,
+        )
+        self.connection.commit()
+        return result_row.rowcount == 1
+
+    def get_auto_trade_attempts(self, trade_date: str | None = None, limit: int = 500) -> list[sqlite3.Row]:
+        query, values = "SELECT * FROM auto_trade_attempts", []
+        if trade_date:
+            query += " WHERE trade_date = ?"
+            values.append(trade_date)
+        query += " ORDER BY COALESCE(candle_time, checked_at) DESC, id DESC LIMIT ?"
+        values.append(max(1, min(int(limit), 5000)))
+        return self.cursor.execute(query, values).fetchall()
+
+    def export_auto_trade_attempts(self, destination: str | Path, trade_date: str | None = None) -> int:
+        rows = self.get_auto_trade_attempts(trade_date, limit=5000)
+        headers = ("checked_at", "candle_time", "trade_date", "symbol", "future_symbol", "outcome", "decision", "candidate", "confirmations_passed", "confirmations_total", "score", "trade_id", "status_text", "details_json")
+        with Path(destination).open("w", newline="", encoding="utf-8-sig") as file:
+            writer = csv.writer(file)
+            writer.writerow(headers)
+            writer.writerows(tuple(row[header] for header in headers) for row in rows)
+        return len(rows)
 
     def get_open_trades(self, symbol: str | None = None) -> list[sqlite3.Row]:
         query, values = "SELECT * FROM trades WHERE status = 'OPEN'", ()
