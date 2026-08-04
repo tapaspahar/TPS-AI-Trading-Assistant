@@ -11,6 +11,7 @@ class SettingsStoreTests(unittest.TestCase):
             store = SettingsStore(Path(directory) / "settings.json")
             self.assertEqual(store.load()["capital"], 100000.0)
             self.assertEqual(store.load()["trade_plan_min_score"], 95)
+            self.assertEqual(store.load()["ui_style"], "glassmorphism")
             saved = store.save({"capital": "250000", "risk_percent": "0.5", "daily_loss_percent": "2", "max_trades_per_day": "3", "theme": "light"})
             self.assertEqual(saved["max_trades_per_day"], 3)
             self.assertEqual(store.load()["theme"], "light")
@@ -43,3 +44,13 @@ class SettingsStoreTests(unittest.TestCase):
             store = SettingsStore(Path(directory) / "settings.json")
             saved = store.save({"capital": 100000, "risk_percent": 1, "daily_loss_percent": 3, "max_trades_per_day": 5, "theme": "emerald"})
             self.assertEqual(saved["theme"], "emerald")
+
+    def test_ui_design_style_is_persisted_and_validated(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = SettingsStore(Path(directory) / "settings.json")
+            settings = store.load()
+            settings["ui_style"] = "brutalism"
+            self.assertEqual(store.save(settings)["ui_style"], "brutalism")
+            settings["ui_style"] = "unknown"
+            with self.assertRaisesRegex(ValueError, "UI design style"):
+                store.save(settings)

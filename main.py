@@ -14,7 +14,8 @@ def main():
     app.setApplicationName(APP_NAME)
     app.setApplicationVersion(DISPLAY_VERSION)
     Database()
-    apply_theme(app, SettingsStore().load()["theme"])
+    visual = SettingsStore().load()
+    apply_theme(app, visual["theme"], visual["ui_style"])
 
     window = DashboardScreen()
     window.resize(1300, 750)

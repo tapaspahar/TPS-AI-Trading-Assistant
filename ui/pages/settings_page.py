@@ -8,6 +8,7 @@ from services.angel_one_client import AngelOneClient
 from services.credential_store import AngelOneCredentialStore
 from services.live_session import LiveSession
 from ui.themes.theme_manager import apply_theme
+from ui.themes.ui_styles import UI_STYLE_NAMES
 
 
 class SettingsPage(QWidget):
@@ -34,12 +35,29 @@ class SettingsPage(QWidget):
         self.theme.addItem("Sunset Copper  •  warm premium light", "sunset")
         self.theme.setCurrentIndex(max(0, self.theme.findData(values["theme"])))
         self.theme.currentIndexChanged.connect(self.preview_theme)
+        self.ui_style = QComboBox()
+        style_descriptions = {
+            "skeuomorphism": "realistic depth and tactile controls",
+            "neomorphism": "soft raised surfaces",
+            "glassmorphism": "translucent layered glass",
+            "claymorphism": "rounded playful clay surfaces",
+            "minimalism": "clean and distraction-free",
+            "maximalism": "bold colour and rich detail",
+            "brutalism": "raw high-contrast geometry",
+            "liquid_glass": "fluid translucent capsules",
+            "bento_grid": "structured modular cards",
+            "spatial_ui": "floating depth-first workspace",
+        }
+        for key, name in UI_STYLE_NAMES.items():
+            self.ui_style.addItem(f"{name}  -  {style_descriptions[key]}", key)
+        self.ui_style.setCurrentIndex(max(0, self.ui_style.findData(values["ui_style"])))
+        self.ui_style.currentIndexChanged.connect(self.preview_theme)
         for label, field in (("Account capital", self.capital), ("Risk per trade (%)", self.risk_percent),
                              ("Daily loss limit (%)", self.daily_loss_percent), ("Maximum trades per day", self.max_trades),
-                             ("Theme Studio", self.theme)):
+                             ("Colour Theme", self.theme), ("UI Design Style", self.ui_style)):
             form.addRow(label, field)
         layout.addLayout(form)
-        self.theme_hint = QLabel("Choose a look, preview it instantly, then press Save Settings to keep it for next launch.")
+        self.theme_hint = QLabel("Choose any colour theme plus one of 10 UI design systems. The combination previews instantly; press Save Settings to keep it for the next launch.")
         self.theme_hint.setWordWrap(True)
         layout.addWidget(self.theme_hint)
         save = QPushButton("Save Settings")
@@ -85,16 +103,17 @@ class SettingsPage(QWidget):
                 "capital": self.capital.text(), "risk_percent": self.risk_percent.text(),
                 "daily_loss_percent": self.daily_loss_percent.text(), "max_trades_per_day": self.max_trades.text(),
                 "theme": self.theme.currentData(),
+                "ui_style": self.ui_style.currentData(),
             })
         except ValueError as error:
             QMessageBox.warning(self, "Invalid settings", str(error))
             return
-        apply_theme(QApplication.instance(), self.theme.currentData())
-        QMessageBox.information(self, "Settings saved", "Settings and theme have been saved locally.")
+        apply_theme(QApplication.instance(), self.theme.currentData(), self.ui_style.currentData())
+        QMessageBox.information(self, "Settings saved", "Settings, colour theme, and UI design style have been saved locally.")
 
     def preview_theme(self):
         """Preview the selected visual style; persistence remains an explicit Save action."""
-        apply_theme(QApplication.instance(), self.theme.currentData())
+        apply_theme(QApplication.instance(), self.theme.currentData(), self.ui_style.currentData())
 
     def save_angel_credentials(self):
         try:
