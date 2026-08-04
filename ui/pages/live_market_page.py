@@ -70,25 +70,20 @@ class LiveMarketPage(QWidget):
         self.capture_snapshot_button = QPushButton("Save Market Snapshot Now (5m + 15m)")
         self.capture_snapshot_button.clicked.connect(lambda _checked=False: self.capture_market_snapshot())
         layout.addWidget(self.capture_snapshot_button)
-        overview_box = QGroupBox("Live Index & Current-Month Futures (updates every 30 seconds)")
-        overview_box.setMinimumHeight(235)
-        overview_grid = QGridLayout(overview_box)
-        overview_grid.setContentsMargins(16, 22, 16, 16)
-        overview_grid.setHorizontalSpacing(14)
-        overview_grid.setVerticalSpacing(16)
-        overview_grid.setRowMinimumHeight(0, 82)
-        overview_grid.setRowMinimumHeight(1, 82)
-        for column in range(3):
-            overview_grid.setColumnStretch(column, 1)
+        self.overview_box = QGroupBox("Live Index & Current-Month Futures (updates every 30 seconds)")
+        self.overview_grid = QGridLayout(self.overview_box)
+        self.overview_grid.setContentsMargins(16, 22, 16, 16)
+        self.overview_grid.setHorizontalSpacing(14)
+        self.overview_grid.setVerticalSpacing(16)
         self.overview_cards = {
             **{symbol: DashboardCard(f"{symbol} Spot", "Waiting") for symbol in ("NIFTY", "BANKNIFTY", "SENSEX")},
             **{f"{symbol} FUT": DashboardCard(f"{symbol} Future", "Loading") for symbol in ("NIFTY", "BANKNIFTY", "SENSEX")},
         }
-        for index, card in enumerate(self.overview_cards.values()):
+        for card in self.overview_cards.values():
             card.set_compact(True)
             card.setFixedHeight(82)
-            overview_grid.addWidget(card, index // 3, index % 3)
-        layout.addWidget(overview_box)
+        self._layout_overview_cards(3)
+        layout.addWidget(self.overview_box)
         layout.addStretch()
         self.tick_received.connect(self.show_tick)
         self.feed_status.connect(self.show_status)
@@ -111,6 +106,27 @@ class LiveMarketPage(QWidget):
         self.last_snapshot_bucket = None
         self.refresh_status()
         self.start_market_overview()
+
+    def _layout_overview_cards(self, columns):
+        """Keep overview cards separate while using vertical space responsively."""
+        while self.overview_grid.count():
+            item = self.overview_grid.takeAt(0)
+            if item.widget():
+                item.widget().setParent(self.overview_box)
+        for column in range(6):
+            self.overview_grid.setColumnStretch(column, 1 if column < columns else 0)
+        for index, card in enumerate(self.overview_cards.values()):
+            self.overview_grid.addWidget(card, index // columns, index % columns)
+        rows = (len(self.overview_cards) + columns - 1) // columns
+        height = 58 + rows * 82 + max(0, rows - 1) * 16
+        self.overview_box.setFixedHeight(height)
+        self._overview_columns = columns
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        columns = 6 if event.size().width() >= 1400 else 3
+        if getattr(self, "_overview_columns", None) != columns:
+            self._layout_overview_cards(columns)
 
     def refresh_status(self):
         self.status.setText("Angel One: Connected (read-only)" if LiveSession.connected() else "Angel One: Not connected — connect from Settings first")
