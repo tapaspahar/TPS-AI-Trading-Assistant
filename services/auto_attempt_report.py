@@ -23,6 +23,14 @@ def format_auto_paper_attempt(result):
         if confirmations:
             lines.append("TPS v2 checklist:")
             lines.extend(f"{'PASS' if item['passed'] else 'FAIL'} - {item['name']}: {item['detail']}" for item in confirmations)
+        zones = strategy.get("zones") or {}
+        if zones:
+            lines.append(
+                f"Zone confluence: Chart support {zones.get('chart_support', '-')} vs Put-OI support {zones.get('oi_support', '-')} "
+                f"({'MATCH' if zones.get('support_confluence') else 'NOT ALIGNED'}) | Chart resistance {zones.get('chart_resistance', '-')} "
+                f"vs Call-OI resistance {zones.get('oi_resistance', '-')} ({'MATCH' if zones.get('resistance_confluence') else 'NOT ALIGNED'}) | "
+                f"Tolerance {zones.get('tolerance', '-')}"
+            )
         reasons = chart.get("reasons") or []
         if reasons:
             lines.append("Conditions passed: " + "; ".join(reasons))

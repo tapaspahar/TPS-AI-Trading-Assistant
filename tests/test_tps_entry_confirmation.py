@@ -16,7 +16,7 @@ class TpsEntryConfirmationTests(unittest.TestCase):
             "vwap": "106.00", "supertrend": "102.00", "atr_14": "2.00", "volume_ratio": "2.00",
             "candle_direction": "BULLISH", "fake_breakout_risk": False,
         }
-        self.chain = {"pcr_oi": 1.0, "pcr_volume": 1.0, "call_resistance": 115, "put_support": 95}
+        self.chain = {"pcr_oi": 1.0, "pcr_volume": 1.0, "call_resistance": 109, "put_support": 103}
 
     @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
     @patch("engine.tps_entry_confirmation.ema", return_value=95)
@@ -30,11 +30,20 @@ class TpsEntryConfirmationTests(unittest.TestCase):
     @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
     @patch("engine.tps_entry_confirmation.ema", return_value=95)
     def test_five_of_six_confirmations_can_pass(self, _ema, _supertrend):
-        self.chain["call_resistance"] = 110.5
+        self.chain["call_resistance"] = 116
         result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain)
         self.assertTrue(result["trade_ready"])
         self.assertEqual(result["passed"], 5)
         self.assertEqual(result["score"], 83)
+
+    @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
+    @patch("engine.tps_entry_confirmation.ema", return_value=95)
+    def test_chart_and_oi_zones_are_marked_as_confluence(self, _ema, _supertrend):
+        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain)
+        self.assertTrue(result["zones"]["support_confluence"])
+        self.assertTrue(result["zones"]["resistance_confluence"])
+        level_check = next(item for item in result["confirmations"] if item["name"] == "Breakout/support-resistance safety")
+        self.assertIn("CONFLUENCE", level_check["detail"])
 
     @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
     @patch("engine.tps_entry_confirmation.ema", return_value=100)
