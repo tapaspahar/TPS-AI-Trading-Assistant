@@ -10,10 +10,21 @@ class SettingsStoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = SettingsStore(Path(directory) / "settings.json")
             self.assertEqual(store.load()["capital"], 100000.0)
+            self.assertEqual(store.load()["trade_plan_min_score"], 95)
             saved = store.save({"capital": "250000", "risk_percent": "0.5", "daily_loss_percent": "2", "max_trades_per_day": "3", "theme": "light"})
             self.assertEqual(saved["max_trades_per_day"], 3)
             self.assertEqual(store.load()["theme"], "light")
             self.assertEqual(store.load()["capital"], 250000.0)
+
+    def test_trade_plan_minimum_score_is_persisted_and_validated(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = SettingsStore(Path(directory) / "settings.json")
+            settings = store.load()
+            settings["trade_plan_min_score"] = 80
+            self.assertEqual(store.save(settings)["trade_plan_min_score"], 80)
+            settings["trade_plan_min_score"] = 49
+            with self.assertRaisesRegex(ValueError, "between 50 and 100"):
+                store.save(settings)
 
     def test_invalid_settings_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

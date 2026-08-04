@@ -70,6 +70,11 @@ class OptionsPage(QWidget):
         self.strike.currentIndexChanged.connect(self.update_lot_quantity)
         self.lots = QSpinBox(); self.lots.setRange(1, 100); self.lots.setValue(1); self.lots.valueChanged.connect(self.update_lot_quantity)
         self.event_check = QComboBox(); self.event_check.addItems(("Review news / event risk", "No known high-impact event", "High-impact event or expiry-day risk")); self.event_check.currentIndexChanged.connect(self.update_plan_readiness)
+        self.minimum_score = QSpinBox(); self.minimum_score.setRange(50, 100)
+        self.minimum_score.setValue(int(SettingsStore().load()["trade_plan_min_score"]))
+        self.minimum_score.setSuffix(" / 100")
+        self.minimum_score.setToolTip("Manual review and paper-plan threshold. Strict auto paper trading remains fixed at 95.")
+        self.minimum_score.valueChanged.connect(self.save_trade_plan_minimum)
         for control in (self.underlying, self.expiry, self.option_type, self.strike, self.lots, self.event_check):
             control.setMinimumHeight(32)
         self.quantity_preview = QLabel("Quantity: load a contract")
@@ -90,6 +95,7 @@ class OptionsPage(QWidget):
         form.addRow("Lots (1–100)", self.lots)
         form.addRow("Auto quantity", self.quantity_preview)
         form.addRow("News / event check", self.event_check)
+        form.addRow("Minimum trade-plan score", self.minimum_score)
         form.addRow(refresh)
         form.addRow(analyze_chain)
         layout.addWidget(selection)
@@ -352,13 +358,13 @@ class OptionsPage(QWidget):
 
     def update_plan_readiness(self):
         underlying = self.underlying.currentText()
+        minimum_score = self.minimum_score.value()
         chart_ready = bool(
             self.chart_context
             and self.chart_context.get("symbol") == underlying
-            and self.chart_context.get("score", 0) >= 95
+            and self.chart_context.get("score", 0) >= minimum_score
             and bool(self.chart_context.get("volume_confirmed"))
-            and bool(self.chart_context.get("trade_ready"))
-            and str(self.chart_context.get("decision", "")) != "NO TRADE"
+            and self.chart_context.get("direction") in {"BULLISH", "BEARISH"}
         )
         chain_ready = bool(self.chain_context and self.chain_context.get("underlying") == underlying)
         chart_text = "✓ Fresh STRONG chart confirmation" if chart_ready else "• Fresh STRONG chart confirmation required"
@@ -376,13 +382,21 @@ class OptionsPage(QWidget):
         )
         open_text = "[!] Close/review the active open trade before a new plan" if open_trade else "[OK] No active open trade for this underlying"
         self.plan_status.setText(
-            f"{score_text} (minimum: 95)  |  "
-            f"{'✓ Score 95+ with high-volume confirmation' if chart_ready else '• Score 95+ and Volume > Volume EMA 20 required'}  |  "
+            f"{score_text} (minimum: {minimum_score})  |  "
+            f"{'✓ Configured score and high-volume confirmation met' if chart_ready else f'• Score {minimum_score}+ and Volume > Volume EMA 20 required'}  |  "
             f"{chain_text}  |  {event_text}  |  {open_text}"
         )
         ready = chart_ready and chain_ready and event_ready and not open_trade
         self.create_plan_button.setEnabled(ready)
         self.paper_button.setEnabled(ready)
+
+    def save_trade_plan_minimum(self, value):
+        settings = SettingsStore().load()
+        settings["trade_plan_min_score"] = int(value)
+        SettingsStore().save(settings)
+        self.current_plan = None
+        self.send_plan_button.setEnabled(False)
+        self.update_plan_readiness()
 
     def prepare_live_workspace(self):
         """Open with current expiry/ATM data already loading when a live session exists."""

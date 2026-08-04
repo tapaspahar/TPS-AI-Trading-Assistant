@@ -46,7 +46,7 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
         expiry = min(contract["expiry"] for contract in contracts)
         contracts = [contract for contract in contracts if contract["expiry"] == expiry]
         chain = analyze_option_chain(contracts, client.get_option_chain_quotes(contracts[0]["exchange"], [contract["token"] for contract in contracts]))
-        plan = create_review_plan(symbol, spot, contracts, chain["quote_rows"], {"symbol": symbol, **chart}, chain, settings, requested_lots=1)
+        plan = create_review_plan(symbol, spot, contracts, chain["quote_rows"], {"symbol": symbol, **chart}, chain, settings, requested_lots=1, minimum_score=95)
         plan["rule_version"] = "TPS Auto Paper V1 - 5m strict confirmation"
         trade_id = database.save_paper_trade(plan)
         return {"status": "Paper trade captured", "trade_id": trade_id, "plan": plan, "capture": capture}
