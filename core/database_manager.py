@@ -495,7 +495,7 @@ class Database:
         strategy = chart.get("strategy") or {}
         checked_at = str(attempt.get("checked_at") or datetime.now().isoformat(timespec="seconds"))
         candle_time = attempt.get("candle_time")
-        outcome = "TRADE CAPTURED" if result.get("plan") else "NO TRADE" if chart else "SKIPPED"
+        outcome = "TRADE CAPTURED" if result.get("plan") else "NO TRADE" if chart else "RETRY PENDING" if result.get("retry_pending") else "SKIPPED"
         values = (
             checked_at, candle_time, datetime.fromisoformat(checked_at).strftime("%d-%m-%Y"), str(symbol).upper(),
             attempt.get("future_symbol"), outcome, chart.get("decision"), attempt.get("candidate"),
@@ -503,8 +503,26 @@ class Database:
             result.get("trade_id"), result.get("status", "Auto paper cycle completed"),
             json.dumps(result, ensure_ascii=False, default=str),
         )
+        serialized = values[-1]
+        existing = None
+        if candle_time:
+            existing = self.cursor.execute(
+                "SELECT id, details_json FROM auto_trade_attempts WHERE symbol = ? AND candle_time = ?",
+                (str(symbol).upper(), candle_time),
+            ).fetchone()
+        if existing and existing["details_json"] == serialized:
+            return False
+        if existing:
+            self.cursor.execute(
+                """UPDATE auto_trade_attempts SET checked_at = ?, trade_date = ?, future_symbol = ?, outcome = ?,
+                          decision = ?, candidate = ?, confirmations_passed = ?, confirmations_total = ?, score = ?,
+                          trade_id = ?, status_text = ?, details_json = ? WHERE id = ?""",
+                (values[0], values[2], values[4], values[5], values[6], values[7], values[8], values[9], values[10], values[11], values[12], values[13], existing["id"]),
+            )
+            self.connection.commit()
+            return True
         result_row = self.cursor.execute(
-            """INSERT OR IGNORE INTO auto_trade_attempts (
+            """INSERT INTO auto_trade_attempts (
                    checked_at, candle_time, trade_date, symbol, future_symbol, outcome, decision, candidate,
                    confirmations_passed, confirmations_total, score, trade_id, status_text, details_json
                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",

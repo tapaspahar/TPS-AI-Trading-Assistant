@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from threading import Thread
 
 from PySide6.QtCore import QTimer, Signal
@@ -522,31 +522,34 @@ class OptionsPage(QWidget):
     def check_auto_paper_cycle(self):
         if not self.auto_paper_enabled.isChecked() or self.auto_paper_running or not LiveSession.connected():
             return
-        now = __import__("datetime").datetime.now()
+        now = datetime.now().astimezone()
         market_open = now.weekday() < 5 and ((now.hour == 9 and now.minute >= 15) or 10 <= now.hour < 15 or (now.hour == 15 and now.minute <= 30))
         if not market_open:
             self.auto_paper_status.emit("Auto paper mode is waiting for NSE market hours (09:15-15:30).")
             return
-        bucket = now.strftime("%Y-%m-%d %H:") + str(now.minute // 5)
+        bucket_start = now.replace(minute=(now.minute // 5) * 5, second=0, microsecond=0)
+        bucket = bucket_start.isoformat()
         if bucket == self.last_auto_paper_bucket:
             return
-        self.last_auto_paper_bucket = bucket
         self.auto_paper_running = True
         self.auto_paper_status.emit("Checking completed 5-minute candle against TPS v2: 5/6 confirmations, chop filters, volume and OI/PCR…")
-        Thread(target=self._run_auto_paper_cycle, args=(self.underlying.currentText(),), daemon=True).start()
+        Thread(target=self._run_auto_paper_cycle, args=(self.underlying.currentText(), bucket, bucket_start), daemon=True).start()
 
-    def _run_auto_paper_cycle(self, symbol):
+    def _run_auto_paper_cycle(self, symbol, bucket, bucket_start):
         try:
             result = run_auto_paper_cycle(LiveSession.client, symbol, SettingsStore().load())
+            self.last_auto_paper_bucket = bucket
             self.auto_attempt_saved.emit()
             if result.get("plan"):
                 self.auto_paper_captured.emit(result)
             else:
                 self.auto_paper_status.emit(result)
         except (RuntimeError, ValueError) as error:
+            candle_time = (bucket_start - timedelta(minutes=5)).isoformat()
             result = {
-                "status": f"Auto paper cycle error: {error}",
-                "attempt": {"checked_at": datetime.now().isoformat(timespec="seconds"), "candle_time": None, "future_symbol": None, "candidate": None, "capture": {}, "chart": {}, "chain": {}, "blockers": [str(error)]},
+                "status": f"Retry pending for candle {candle_time}: {error} TPS will retry this same candle automatically.",
+                "retry_pending": True,
+                "attempt": {"checked_at": datetime.now().astimezone().isoformat(timespec="seconds"), "candle_time": candle_time, "future_symbol": None, "candidate": None, "capture": {}, "chart": {}, "chain": {}, "blockers": [str(error), "Automatic retry remains pending for this candle"]},
             }
             database = Database()
             try:

@@ -17,7 +17,7 @@ class AngelOneClient:
     # Serialising them also avoids several UI pages exhausting the limit together.
     CANDLE_REQUEST_INTERVAL_SECONDS = 3.5
     CANDLE_CACHE_SECONDS = 30
-    CANDLE_RATE_LIMIT_COOLDOWN_SECONDS = 20
+    CANDLE_RETRY_DELAYS_SECONDS = (15, 30)
 
     @staticmethod
     def _suppress_sensitive_smartapi_logs() -> None:
@@ -89,7 +89,7 @@ class AngelOneClient:
                 return cached[1]
 
             response = None
-            for attempt in range(2):
+            for attempt in range(3):
                 wait_seconds = self.CANDLE_REQUEST_INTERVAL_SECONDS - (monotonic() - self._last_candle_request_at)
                 if wait_seconds > 0:
                     sleep(wait_seconds)
@@ -104,19 +104,29 @@ class AngelOneClient:
                         "fromdate": start.strftime("%Y-%m-%d %H:%M"),
                         "todate": end.strftime("%Y-%m-%d %H:%M"),
                     })
-                    break
                 except Exception as error:
                     message = str(error)
-                    limited = "access rate" in message.lower() or "rate limit" in message.lower()
-                    retryable = limited or "timeout" in message.lower() or "connection" in message.lower()
-                    if retryable and attempt == 0:
-                        sleep(self.CANDLE_RATE_LIMIT_COOLDOWN_SECONDS if limited else 5)
+                    lowered = message.lower()
+                    retryable = any(marker in lowered for marker in ("access rate", "rate limit", "timeout", "connection", "ab1004", "try after sometime"))
+                    if retryable and attempt < 2:
+                        sleep(self.CANDLE_RETRY_DELAYS_SECONDS[attempt])
                         continue
-                    if limited:
-                        raise RuntimeError("Angel One candle service is busy. TPS retried automatically; try again after 30 seconds.") from error
                     if retryable:
-                        raise RuntimeError("Angel One historical candle service timed out after an automatic retry. Try again after 30 seconds.") from error
+                        raise RuntimeError("Angel One candle service is temporarily busy after 3 retries.") from error
                     raise RuntimeError(f"Angel One candle request failed: {message}") from error
+
+                if response.get("status"):
+                    break
+                message = str(response.get("message", "Angel One candle data is unavailable."))
+                error_code = str(response.get("errorcode", ""))
+                lowered = message.lower()
+                retryable = error_code.upper() == "AB1004" or any(marker in lowered for marker in ("rate limit", "access rate", "try after sometime", "temporarily"))
+                if retryable and attempt < 2:
+                    sleep(self.CANDLE_RETRY_DELAYS_SECONDS[attempt])
+                    continue
+                if retryable:
+                    raise RuntimeError(f"Angel One candle service is temporarily busy after 3 retries ({error_code or 'transient error'}).")
+                raise RuntimeError(message)
 
             if not response.get("status"):
                 raise RuntimeError(response.get("message", "Angel One candle data is unavailable."))
