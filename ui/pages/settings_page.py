@@ -1,7 +1,10 @@
 from threading import Thread
 
-from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QApplication, QComboBox, QFormLayout, QGroupBox, QLabel, QLineEdit, QMessageBox, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import (
+    QApplication, QComboBox, QFormLayout, QFrame, QGroupBox, QHBoxLayout, QLabel, QLayout,
+    QLineEdit, QMessageBox, QPushButton, QScrollArea, QVBoxLayout, QWidget,
+)
 
 from core.settings_store import SettingsStore
 from services.angel_one_client import AngelOneClient
@@ -21,9 +24,24 @@ class SettingsPage(QWidget):
         self.store = SettingsStore()
         self.credential_store = AngelOneCredentialStore()
         values = self.store.load()
-        layout = QVBoxLayout(self)
+        shell = QVBoxLayout(self)
+        shell.setContentsMargins(0, 0, 0, 0)
+        self.scroll = QScrollArea()
+        self.scroll.setFrameShape(QFrame.NoFrame)
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.content = QWidget()
+        layout = QVBoxLayout(self.content)
+        layout.setContentsMargins(12, 10, 12, 14)
+        layout.setSpacing(10)
+        layout.setSizeConstraint(QLayout.SetMinimumSize)
+        self.scroll.setWidget(self.content)
+        shell.addWidget(self.scroll)
         layout.addWidget(QLabel("Risk Settings"))
         form = QFormLayout()
+        form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        form.setHorizontalSpacing(18)
+        form.setVerticalSpacing(10)
         self.capital = QLineEdit(str(values["capital"]))
         self.risk_percent = QLineEdit(str(values["risk_percent"]))
         self.daily_loss_percent = QLineEdit(str(values["daily_loss_percent"]))
@@ -55,6 +73,7 @@ class SettingsPage(QWidget):
         for label, field in (("Account capital", self.capital), ("Risk per trade (%)", self.risk_percent),
                              ("Daily loss limit (%)", self.daily_loss_percent), ("Maximum trades per day", self.max_trades),
                              ("Colour Theme", self.theme), ("UI Design Style", self.ui_style)):
+            field.setMinimumHeight(36)
             form.addRow(label, field)
         layout.addLayout(form)
         self.theme_hint = QLabel("Choose any colour theme plus one of 10 UI design systems. The combination previews instantly; press Save Settings to keep it for the next launch.")
@@ -66,12 +85,17 @@ class SettingsPage(QWidget):
         layout.addWidget(QLabel("Settings are stored only on this computer. They do not connect to a broker or place trades."))
         broker_box = QGroupBox("Angel One live data")
         broker_form = QFormLayout(broker_box)
+        broker_form.setContentsMargins(18, 28, 18, 16)
+        broker_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        broker_form.setHorizontalSpacing(18)
+        broker_form.setVerticalSpacing(12)
         self.api_key = QLineEdit()
         self.api_key.setEchoMode(QLineEdit.Password)
         self.client_code = QLineEdit()
         self.mpin = QLineEdit(); self.mpin.setEchoMode(QLineEdit.Password)
         self.totp_secret = QLineEdit(); self.totp_secret.setEchoMode(QLineEdit.Password)
         for label, field in (("API Key", self.api_key), ("Client Code", self.client_code), ("MPIN", self.mpin), ("TOTP secret", self.totp_secret)):
+            field.setMinimumHeight(36)
             broker_form.addRow(label, field)
         try:
             saved_credentials = self.credential_store.load()
@@ -82,14 +106,23 @@ class SettingsPage(QWidget):
         self.mpin.setText(saved_credentials.get("mpin", ""))
         self.totp_secret.setText(saved_credentials.get("totp_secret", ""))
         self.broker_status = QLabel("Connection status: not connected")
+        self.broker_status.setWordWrap(True)
+        self.broker_status.setMinimumHeight(24)
         broker_form.addRow(self.broker_status)
         save_credentials = QPushButton("Save Credentials Securely")
         save_credentials.clicked.connect(self.save_angel_credentials)
         forget_credentials = QPushButton("Remove Saved Credentials")
         forget_credentials.clicked.connect(self.clear_angel_credentials)
-        broker_form.addRow(save_credentials, forget_credentials)
+        credential_actions = QWidget()
+        credential_actions_layout = QHBoxLayout(credential_actions)
+        credential_actions_layout.setContentsMargins(0, 0, 0, 0)
+        credential_actions_layout.setSpacing(10)
+        credential_actions_layout.addWidget(save_credentials)
+        credential_actions_layout.addWidget(forget_credentials, 1)
+        broker_form.addRow(credential_actions)
         connect = QPushButton("Connect Live Data")
         connect.clicked.connect(self.connect_angel_one)
+        connect.setMinimumHeight(38)
         broker_form.addRow(connect)
         layout.addWidget(broker_box)
         layout.addStretch()
