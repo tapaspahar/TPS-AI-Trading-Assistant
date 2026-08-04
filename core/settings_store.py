@@ -44,8 +44,8 @@ class SettingsStore:
             raise ValueError("Capital must be positive and risk percentage must be between 0 and 100.")
         if not 0 < values["daily_loss_percent"] <= 100 or values["max_trades_per_day"] < 1:
             raise ValueError("Daily-loss percentage must be between 0 and 100, and trade limit must be at least 1.")
-        if not 50 <= values["trade_plan_min_score"] <= 100:
-            raise ValueError("Trade-plan minimum score must be between 50 and 100.")
+        if not 0 <= values["trade_plan_min_score"] <= 100:
+            raise ValueError("Trade-plan minimum score must be between 0 and 100.")
         if values["theme"] not in {"dark", "light", "emerald", "sunset"}:
             raise ValueError("Choose a valid TPS visual theme.")
         if values["ui_style"] not in {"skeuomorphism", "neomorphism", "glassmorphism", "claymorphism", "minimalism", "maximalism", "brutalism", "liquid_glass", "bento_grid", "spatial_ui"}:

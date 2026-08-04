@@ -23,8 +23,10 @@ class SettingsStoreTests(unittest.TestCase):
             settings = store.load()
             settings["trade_plan_min_score"] = 80
             self.assertEqual(store.save(settings)["trade_plan_min_score"], 80)
-            settings["trade_plan_min_score"] = 49
-            with self.assertRaisesRegex(ValueError, "between 50 and 100"):
+            settings["trade_plan_min_score"] = 10
+            self.assertEqual(store.save(settings)["trade_plan_min_score"], 10)
+            settings["trade_plan_min_score"] = -1
+            with self.assertRaisesRegex(ValueError, "between 0 and 100"):
                 store.save(settings)
 
     def test_invalid_settings_are_rejected(self):
