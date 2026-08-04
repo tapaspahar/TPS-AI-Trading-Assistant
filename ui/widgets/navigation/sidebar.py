@@ -3,6 +3,8 @@ from PySide6.QtWidgets import QButtonGroup, QFrame, QScrollArea, QVBoxLayout, QP
 
 
 class Sidebar(QFrame):
+    NAV_BULLET = "◆"
+
     def __init__(self):
         super().__init__()
         self.setObjectName("sidebar")
@@ -24,21 +26,22 @@ class Sidebar(QFrame):
         layout = QVBoxLayout(self.menu_widget)
         layout.setContentsMargins(4, 2, 4, 2)
         layout.setSpacing(5)
-        self.dashboardButton = QPushButton("▦  Dashboard")
-        self.liveMarketButton = QPushButton("◈  Market Snapshot")
-        self.chartCaptureButton = QPushButton("▣  Chart Capture")
-        self.aiButton = QPushButton("✦  AI Analysis")
-        self.optionsButton = QPushButton("◉  Options Workspace")
-        self.journalButton = QPushButton("▤  Trade Journal")
-        self.checklistButton = QPushButton("✓  Checklist")
-        self.riskButton = QPushButton("◈  Risk Manager")
-        self.reportButton = QPushButton("▥  Reports")
-        self.settingsButton = QPushButton("⚙  Settings")
-        self.backtestButton = QPushButton("Backtesting")
-        self.replayButton = QPushButton("Candle Replay")
-        self.postMarketButton = QPushButton("Post-Market Report")
-        self.equityButton = QPushButton("Equity Research")
-        self.autoAttemptReportButton = QPushButton("Auto Attempt Report")
+        nav = lambda label: QPushButton(f"{self.NAV_BULLET}  {label}")
+        self.dashboardButton = nav("Dashboard")
+        self.liveMarketButton = nav("Market Snapshot")
+        self.chartCaptureButton = nav("Chart Capture")
+        self.aiButton = nav("AI Analysis")
+        self.optionsButton = nav("Options Workspace")
+        self.journalButton = nav("Trade Journal")
+        self.checklistButton = nav("Checklist")
+        self.riskButton = nav("Risk Manager")
+        self.reportButton = nav("Reports")
+        self.settingsButton = nav("Settings")
+        self.backtestButton = nav("Backtesting")
+        self.replayButton = nav("Candle Replay")
+        self.postMarketButton = nav("Post-Market Report")
+        self.equityButton = nav("Equity Research")
+        self.autoAttemptReportButton = nav("Auto Attempt Report")
         # Keep the visual journey in the same order a trader uses the app:
         # market context -> chart confirmation -> AI evaluation -> option plan -> journal.
         self.buttons = (
