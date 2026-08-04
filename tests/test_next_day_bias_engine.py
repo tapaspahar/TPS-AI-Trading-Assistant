@@ -26,3 +26,12 @@ class NextDayBiasEngineTests(unittest.TestCase):
     def test_invalid_oi_zone_is_rejected(self):
         with self.assertRaises(ValueError):
             NextDayBiasEngine().analyze(self.values(put_support=110, call_resistance=100))
+
+    def test_missing_spot_vwap_abstains_without_blocking_direct_data(self):
+        result = NextDayBiasEngine().analyze(self.values(spot_vwap=""))
+        self.assertEqual(result["bias"], "BULLISH")
+        self.assertIn("VWAP unavailable", " ".join(result["evidence"]))
+
+    def test_equal_oi_walls_are_valid_pin_zone(self):
+        result = NextDayBiasEngine().analyze(self.values(put_support=105, call_resistance=105))
+        self.assertEqual(result["support"], result["resistance"])

@@ -1,3 +1,6 @@
+from threading import Thread
+
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QComboBox, QFileDialog, QFormLayout, QGridLayout, QGroupBox, QLabel, QLineEdit,
     QPushButton, QScrollArea, QVBoxLayout, QWidget,
@@ -5,10 +8,14 @@ from PySide6.QtWidgets import (
 
 from engine.next_day_bias_engine import NextDayBiasEngine
 from services.chart_capture_service import ChartCaptureService, OCRUnavailableError
+from services.live_session import LiveSession
+from services.next_day_bias_data_service import NextDayBiasDataService
 
 
 class NextDayBiasPage(QWidget):
     """Verified closing-evidence workspace for three supported indices."""
+    direct_loaded = Signal(dict)
+    direct_failed = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -21,6 +28,10 @@ class NextDayBiasPage(QWidget):
         note.setWordWrap(True); layout.addWidget(note)
 
         self.index = QComboBox(); self.index.addItems(("NIFTY", "BANKNIFTY", "SENSEX")); layout.addWidget(self.index)
+        self.direct_button = QPushButton("Load Closing Data from Angel One")
+        self.direct_button.clicked.connect(self.load_direct); layout.addWidget(self.direct_button)
+        self.direct_status = QLabel("Connect Angel One in Settings, then load the selected index. Snapshots are optional fallback inputs.")
+        self.direct_status.setWordWrap(True); layout.addWidget(self.direct_status)
         uploads = QGridLayout(); self.upload_labels = {}
         for column, (key, label) in enumerate((("spot", "1. Spot Chart"), ("future", "2. Future Chart"), ("chain", "3. Option Chain"))):
             button = QPushButton(f"Upload {label}"); button.clicked.connect(lambda _=False, kind=key: self._upload(kind))
@@ -50,6 +61,45 @@ class NextDayBiasPage(QWidget):
         self.result = QLabel("No forecast calculated. Closing evidence is observational and cannot include overnight news or gap risk.")
         self.result.setWordWrap(True); self.result.setTextInteractionFlags(self.result.textInteractionFlags()); layout.addWidget(self.result)
         layout.addStretch()
+        self.direct_loaded.connect(self._apply_direct_data)
+        self.direct_failed.connect(self._show_direct_error)
+
+    def load_direct(self):
+        if not LiveSession.connected():
+            self.direct_status.setText("Angel One is not connected. Connect it from Settings first.")
+            return
+        self.direct_button.setEnabled(False)
+        self.verify.setCurrentIndex(0)
+        symbol = self.index.currentText()
+        self.direct_status.setText(f"Loading {symbol} Spot, Future and nearest-expiry Option Chain...")
+        Thread(target=self._load_direct_worker, args=(symbol,), daemon=True).start()
+
+    def _load_direct_worker(self, symbol):
+        try:
+            self.direct_loaded.emit(NextDayBiasDataService(LiveSession.client).load(symbol))
+        except (RuntimeError, ValueError, IndexError, TypeError) as error:
+            self.direct_failed.emit(str(error))
+
+    def _apply_direct_data(self, data):
+        for prefix in ("spot", "future"):
+            capture = data[prefix]
+            for source, target in (("close", "close"), ("ema_5", "ema5"), ("ema_20", "ema20"),
+                                   ("ema_50", "ema50"), ("vwap", "vwap"), ("supertrend", "supertrend")):
+                self.fields[f"{prefix}_{target}"].setText(str(capture.get(source) or ""))
+        for key in ("put_support", "call_resistance", "oi_pcr", "atm_call", "atm_put"):
+            self.fields[key].setText("" if data.get(key) is None else str(data[key]))
+        self.fields["atr"].setText(str(data["spot"].get("atr_14") or ""))
+        missing = [key for key, field in self.fields.items() if not field.text().strip()]
+        suffix = f"Verify/fill missing fields: {', '.join(missing)}." if missing else "All fields loaded; verify them before analysis."
+        self.direct_status.setText(
+            f"Loaded {data['symbol']} Spot + {data['future_symbol']} | Expiry {data['expiry']} | "
+            f"ATM {data['atm_strike']:,.0f} | {data['quoted_contracts']} contracts quoted. {suffix}"
+        )
+        self.direct_button.setEnabled(True)
+
+    def _show_direct_error(self, message):
+        self.direct_status.setText(f"Direct load failed: {message} Use snapshot fallback or try again.")
+        self.direct_button.setEnabled(True)
 
     def _upload(self, kind):
         path, _ = QFileDialog.getOpenFileName(self, "Select closing snapshot", "", "Images (*.png *.jpg *.jpeg *.bmp)")
