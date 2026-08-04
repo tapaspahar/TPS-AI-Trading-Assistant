@@ -108,30 +108,38 @@ class LiveMarketPage(QWidget):
         self.start_market_overview()
 
     def _layout_overview_cards(self, columns):
-        """Keep overview cards separate while using vertical space responsively."""
+        """Keep each spot card directly above its matching future card."""
         while self.overview_grid.count():
             item = self.overview_grid.takeAt(0)
             if item.widget():
                 item.widget().setParent(self.overview_box)
-        for column in range(6):
+        for column in range(3):
             self.overview_grid.setColumnStretch(column, 1 if column < columns else 0)
-        for index, card in enumerate(self.overview_cards.values()):
-            self.overview_grid.addWidget(card, index // columns, index % columns)
-        rows = (len(self.overview_cards) + columns - 1) // columns
+        symbols = ("NIFTY", "BANKNIFTY", "SENSEX")
+        if columns == 3:
+            for column, symbol in enumerate(symbols):
+                self.overview_grid.addWidget(self.overview_cards[symbol], 0, column)
+                self.overview_grid.addWidget(self.overview_cards[f"{symbol} FUT"], 1, column)
+            rows = 2
+        else:
+            for pair, symbol in enumerate(symbols):
+                self.overview_grid.addWidget(self.overview_cards[symbol], pair * 2, 0)
+                self.overview_grid.addWidget(self.overview_cards[f"{symbol} FUT"], pair * 2 + 1, 0)
+            rows = 6
         height = 58 + rows * 82 + max(0, rows - 1) * 16
         self.overview_box.setFixedHeight(height)
         self._overview_columns = columns
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        columns = 6 if event.size().width() >= 1100 else 3
+        columns = 3 if event.size().width() >= 760 else 1
         if getattr(self, "_overview_columns", None) != columns:
             self._layout_overview_cards(columns)
 
     def showEvent(self, event):
         """Reflow after this stacked page becomes visible at its real width."""
         super().showEvent(event)
-        columns = 6 if self.width() >= 1100 else 3
+        columns = 3 if self.width() >= 760 else 1
         if getattr(self, "_overview_columns", None) != columns:
             self._layout_overview_cards(columns)
 
