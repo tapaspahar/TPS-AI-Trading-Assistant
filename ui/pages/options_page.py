@@ -27,7 +27,7 @@ class OptionsPage(QWidget):
     paper_trade_captured = Signal(dict)
     paper_trade_closed = Signal(object)
     paper_trade_error = Signal(str)
-    auto_paper_status = Signal(str)
+    auto_paper_status = Signal(object)
     auto_paper_captured = Signal(object)
 
     def __init__(self):
@@ -540,15 +540,41 @@ class OptionsPage(QWidget):
             if result.get("plan"):
                 self.auto_paper_captured.emit(result)
             else:
-                self.auto_paper_status.emit(result["status"])
+                self.auto_paper_status.emit(result)
         except (RuntimeError, ValueError) as error:
             self.auto_paper_status.emit(f"Auto paper cycle skipped: {error}")
         finally:
             self.auto_paper_running = False
 
-    def show_auto_paper_status(self, message):
+    @staticmethod
+    def format_auto_paper_attempt(result):
+        if isinstance(result, str):
+            return result
+        attempt = result.get("attempt") or {}
+        capture = attempt.get("capture") or {}
+        chart = attempt.get("chart") or {}
+        lines = [result.get("status", "Auto paper cycle completed.")]
+        lines.append(f"Checked at: {attempt.get('checked_at') or 'Unavailable'} | Candle time: {attempt.get('candle_time') or 'Not evaluated'} | Future: {attempt.get('future_symbol') or 'Not loaded'}")
+        if capture:
+            lines.extend((
+                f"OHLC: O {capture.get('open', '-')} | H {capture.get('high', '-')} | L {capture.get('low', '-')} | C {capture.get('close', '-')}",
+                f"Trend values: EMA 5 {capture.get('ema_5', '-')} | EMA 20 {capture.get('ema_20', '-')} | EMA 50 {capture.get('ema_50', '-')} | VWAP {capture.get('vwap', '-')} | SuperTrend {capture.get('supertrend', '-')} ({capture.get('supertrend_state', '-')})",
+                f"Momentum: RSI 14 {capture.get('rsi_14', '-')} | ATR 14 {capture.get('atr_14', '-')} | Candle {capture.get('candle_direction', '-')}",
+                f"Volume: {capture.get('volume', '-')} | Volume EMA 20: {capture.get('volume_ema', '-')} | Ratio: {capture.get('volume_ratio', '-')}x | {capture.get('volume_signal', '-')}",
+            ))
+        if chart:
+            lines.append(f"Decision: {chart.get('decision', '-')} | Direction: {chart.get('direction', '-')} | Candidate: {attempt.get('candidate') or '-'} | Score: {chart.get('score', '-')}/100 | Strict minimum: 95")
+            reasons = chart.get("reasons") or []
+            if reasons:
+                lines.append("Conditions passed: " + "; ".join(reasons))
+        blockers = attempt.get("blockers") or []
+        lines.append("Why trade was not captured: " + ("; ".join(dict.fromkeys(blockers)) if blockers else "All strict conditions passed; paper trade was captured."))
+        return "\n".join(lines)
+
+    def show_auto_paper_status(self, result):
         progress = self.db.paper_trade_progress()
-        self.auto_paper_progress.setText(f"{message}\nForward-test progress: {progress['days']}/20 trading days | {progress['trades']} paper trades | {progress['target_hits']} targets | {progress['stoploss_hits']} stop losses.")
+        details = self.format_auto_paper_attempt(result)
+        self.auto_paper_progress.setText(f"{details}\nForward-test progress: {progress['days']}/20 trading days | {progress['trades']} paper trades | {progress['target_hits']} targets | {progress['stoploss_hits']} stop losses.")
 
     def show_auto_paper_captured(self, result):
         plan = result["plan"]
@@ -556,6 +582,7 @@ class OptionsPage(QWidget):
         self.auto_paper_progress.setText(
             f"PAPER TRADE #{result['trade_id']} captured: {plan['contract']['symbol']} | 1 lot / {plan['quantity']} qty | "
             f"Entry {plan['entry']:.2f}, Stop {plan['stoploss']:.2f}, Target {plan['target']:.2f}. Live quote monitoring is active.\n"
+            f"{self.format_auto_paper_attempt(result)}\n"
             f"Forward-test progress: {progress['days']}/20 trading days | {progress['trades']} paper trades."
         )
         self.paper_trade_captured.emit(plan)
