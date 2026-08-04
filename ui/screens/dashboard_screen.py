@@ -21,6 +21,7 @@ from ui.pages.equity_page import EquityPage
 from ui.pages.auto_attempt_report_page import AutoAttemptReportPage
 from ui.pages.about_help_page import AboutPage, HelpPage
 from ui.pages.next_day_bias_page import NextDayBiasPage
+from ui.pages.smart_money_page import SmartMoneyPage
 from ui.widgets.glass_effects import add_glass_shadow
 
 
@@ -60,10 +61,11 @@ class DashboardScreen(QWidget):
         self.aboutPage = AboutPage()
         self.helpPage = HelpPage()
         self.nextDayBiasPage = NextDayBiasPage()
+        self.smartMoneyPage = SmartMoneyPage()
         for page in (self.dashboardPage, self.liveMarketPage, self.optionsPage, self.chartCapturePage, self.journalPage,
                      self.checklistPage, self.aiPage, self.riskPage, self.reportsPage, self.settingsPage,
                      self.backtestPage, self.postMarketPage, self.replayPage, self.equityPage,
-                     self.autoAttemptReportPage, self.aboutPage, self.helpPage, self.nextDayBiasPage):
+                     self.autoAttemptReportPage, self.aboutPage, self.helpPage, self.nextDayBiasPage, self.smartMoneyPage):
             self.stack.addWidget(page)
         self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
         self.journalPage.trade_saved.connect(self.reportsPage.refresh)
@@ -91,7 +93,7 @@ class DashboardScreen(QWidget):
                               (self.sidebar.backtestButton, 10), (self.sidebar.postMarketButton, 11), (self.sidebar.replayButton, 12),
                               (self.sidebar.equityButton, 13), (self.sidebar.autoAttemptReportButton, 14),
                               (self.sidebar.aboutButton, 15), (self.sidebar.helpButton, 16),
-                              (self.sidebar.nextDayBiasButton, 17)):
+                              (self.sidebar.nextDayBiasButton, 17), (self.sidebar.smartMoneyButton, 18)):
             button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
         body_layout.addWidget(self.stack)
         main_layout.addLayout(body_layout, 1)
