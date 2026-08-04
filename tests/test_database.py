@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 import csv
+import copy
 from pathlib import Path
 
 from core.database_manager import Database
@@ -78,8 +79,13 @@ class DatabaseTests(unittest.TestCase):
         }
         self.assertTrue(self.db.save_auto_trade_attempt("NIFTY", result))
         self.assertFalse(self.db.save_auto_trade_attempt("NIFTY", result))
+        resolved = copy.deepcopy(result)
+        resolved["status"] = "No paper trade after successful retry"
+        resolved["attempt"]["chart"] = {"decision": "NO TRADE", "score": 83, "strategy": {"passed": 5, "total": 6}}
+        resolved.pop("retry_pending", None)
+        self.assertTrue(self.db.save_auto_trade_attempt("NIFTY", resolved))
         rows = self.db.get_auto_trade_attempts("04-08-2026")
-        self.assertEqual((len(rows), rows[0]["confirmations_passed"], rows[0]["outcome"]), (1, 4, "NO TRADE"))
+        self.assertEqual((len(rows), rows[0]["confirmations_passed"], rows[0]["outcome"]), (1, 5, "NO TRADE"))
         path = Path(self.temp_dir.name) / "attempts.csv"
         self.assertEqual(self.db.export_auto_trade_attempts(path, "04-08-2026"), 1)
         self.assertIn("candle_time", path.read_text(encoding="utf-8-sig"))
