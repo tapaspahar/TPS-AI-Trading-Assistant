@@ -11,4 +11,42 @@ class AutoPaperTraderTests(unittest.TestCase):
         database.paper_trade_progress.return_value = {"trades": 1, "days": 1, "open_trades": 1, "target_hits": 0, "stoploss_hits": 0}
         result = run_auto_paper_cycle(object(), "NIFTY", {"max_trades_per_day": 5})
         self.assertIn("open paper trade", result["status"])
+        self.assertIn("open paper trade", result["attempt"]["blockers"][0])
         database.close.assert_called_once()
+
+    @patch("services.auto_paper_trader.DecisionEngine")
+    @patch("services.auto_paper_trader.build_live_capture")
+    @patch("services.auto_paper_trader.OptionContractService")
+    @patch("services.auto_paper_trader.Database")
+    def test_rejected_candle_returns_complete_attempt_audit(self, database_type, service_type, build_capture, decision_type):
+        database_type.return_value.paper_trade_progress.return_value = {
+            "trades": 0, "days": 0, "open_trades": 0, "target_hits": 0, "stoploss_hits": 0,
+        }
+        service_type.return_value.get_front_month_future.return_value = {
+            "exchange": "NFO", "token": "future", "symbol": "NIFTY-AUG-FUT",
+        }
+        capture = {
+            "open": "25000.00", "high": "25020.00", "low": "24980.00", "close": "25010.00",
+            "ema_5": "25005.00", "ema_20": "24995.00", "ema_50": "24950.00", "vwap": "25000.00",
+            "supertrend": "24990.00", "rsi_14": "55.00", "atr_14": "30.00", "volume": "1000.00",
+            "volume_ema": "900.00", "volume_ratio": "1.11", "candle_direction": "BULLISH",
+            "fake_breakout_risk": True,
+        }
+        build_capture.return_value = capture
+        decision_type.return_value.evaluate.return_value = {
+            "trade_ready": False, "decision": "NO TRADE", "score": 90, "direction": "BULLISH",
+            "volume_confirmed": False, "reasons": ["EMA aligned"], "warnings": ["Volume below threshold"],
+        }
+        candles = [{"time": "2026-08-04T11:10:00+05:30"}]
+        client = unittest.mock.Mock()
+        client.get_recent_candles.return_value = candles
+
+        result = run_auto_paper_cycle(client, "NIFTY", {"max_trades_per_day": 5})
+
+        attempt = result["attempt"]
+        self.assertEqual(attempt["candle_time"], "2026-08-04T11:10:00+05:30")
+        self.assertEqual(attempt["future_symbol"], "NIFTY-AUG-FUT")
+        self.assertEqual(attempt["chart"]["score"], 90)
+        self.assertEqual(attempt["capture"]["volume_ratio"], "1.11")
+        self.assertTrue(any("below strict" in reason for reason in attempt["blockers"]))
+        self.assertTrue(any("Heavy-volume" in reason for reason in attempt["blockers"]))
