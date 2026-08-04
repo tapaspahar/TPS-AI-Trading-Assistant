@@ -22,9 +22,10 @@ def evaluate_tps_entry_v2(candles, capture, chain=None):
     }
     bullish_votes = sum(value == "BULLISH" for value in votes.values())
     bearish_votes = sum(value == "BEARISH" for value in votes.values())
-    if bullish_votes >= 3:
+    core_votes = (votes["Market structure"], votes["Price vs VWAP"], votes["EMA stack"])
+    if all(value == "BULLISH" for value in core_votes):
         direction, candidate = "BULLISH", "CE"
-    elif bearish_votes >= 3:
+    elif all(value == "BEARISH" for value in core_votes):
         direction, candidate = "BEARISH", "PE"
     else:
         direction, candidate = "MIXED", None
@@ -80,7 +81,10 @@ def evaluate_tps_entry_v2(candles, capture, chain=None):
 
     blockers = []
     if direction == "MIXED":
-        blockers.append(f"Market direction is mixed ({bullish_votes} bullish vs {bearish_votes} bearish votes); neither CE nor PE is permitted")
+        blockers.append(
+            "Core trend is not fully aligned: Market structure, Price vs VWAP, and EMA stack must all confirm the same direction; "
+            f"current votes are {votes}. Neither CE nor PE is permitted"
+        )
     compression_limit = max(atr * 0.10, close * 0.0003)
     if abs(ema_5 - ema_20) <= compression_limit:
         blockers.append(f"EMA5 and EMA20 are compressed ({abs(ema_5 - ema_20):.2f} <= {compression_limit:.2f})")
