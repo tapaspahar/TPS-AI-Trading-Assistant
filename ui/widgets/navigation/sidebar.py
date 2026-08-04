@@ -42,12 +42,14 @@ class Sidebar(QFrame):
         self.postMarketButton = nav("Post-Market Report")
         self.equityButton = nav("Equity Research")
         self.autoAttemptReportButton = nav("Auto Attempt Report")
+        self.aboutHelpButton = nav("About & Help")
         # Keep the visual journey in the same order a trader uses the app:
         # market context -> chart confirmation -> AI evaluation -> option plan -> journal.
         self.buttons = (
             self.dashboardButton, self.liveMarketButton, self.equityButton, self.chartCaptureButton,
             self.aiButton, self.optionsButton, self.autoAttemptReportButton, self.journalButton,
-            self.checklistButton, self.riskButton, self.reportButton, self.backtestButton, self.replayButton, self.postMarketButton, self.settingsButton,
+            self.checklistButton, self.riskButton, self.reportButton, self.backtestButton, self.replayButton,
+            self.postMarketButton, self.settingsButton, self.aboutHelpButton,
         )
         # Stack page numbers intentionally remain stable even when the visual
         # menu order changes.  This prevents the wrong sidebar item being
@@ -68,6 +70,7 @@ class Sidebar(QFrame):
             12: self.replayButton,
             13: self.equityButton,
             14: self.autoAttemptReportButton,
+            15: self.aboutHelpButton,
         }
         self.menu_group = QButtonGroup(self)
         self.menu_group.setExclusive(True)
