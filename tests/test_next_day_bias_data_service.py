@@ -30,3 +30,18 @@ class NextDayBiasDataServiceTests(unittest.TestCase):
         self.assertEqual(result["atm_put"], 7)
         self.assertAlmostEqual(result["oi_pcr"], 1.2)
         self.assertEqual(client.get_recent_candles.call_count, 2)
+
+    def test_missing_atm_quote_is_not_faked_as_zero(self):
+        client, contracts = Mock(), Mock()
+        client.get_recent_candles.side_effect = [candles(100), candles(102)]
+        contracts.get_front_month_future.return_value = {"exchange": "NFO", "token": "f", "symbol": "NIFTYFUT"}
+        contracts.get_contracts.return_value = [
+            {"exchange": "NFO", "token": "ce", "symbol": "CE", "expiry": date(2026, 8, 6), "strike": 150, "option_type": "CE", "lot_size": 65},
+            {"exchange": "NFO", "token": "pe", "symbol": "PE", "expiry": date(2026, 8, 6), "strike": 150, "option_type": "PE", "lot_size": 65},
+        ]
+        client.get_option_chain_quotes.return_value = [
+            {"symbolToken": "ce", "opnInterest": 100, "tradeVolume": 20, "ltp": 0},
+            {"symbolToken": "pe", "opnInterest": 120, "tradeVolume": 30, "ltp": 7},
+        ]
+        result = NextDayBiasDataService(client, contracts).load("NIFTY")
+        self.assertIsNone(result["atm_call"])
