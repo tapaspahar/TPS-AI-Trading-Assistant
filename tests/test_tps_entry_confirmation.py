@@ -30,7 +30,7 @@ class TpsEntryConfirmationTests(unittest.TestCase):
     @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
     @patch("engine.tps_entry_confirmation.ema", return_value=95)
     def test_five_of_six_confirmations_can_pass(self, _ema, _supertrend):
-        self.capture["vwap"] = "111.00"
+        self.chain["call_resistance"] = 110.5
         result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain)
         self.assertTrue(result["trade_ready"])
         self.assertEqual(result["passed"], 5)
@@ -44,3 +44,27 @@ class TpsEntryConfirmationTests(unittest.TestCase):
         self.assertFalse(result["trade_ready"])
         self.assertTrue(any("volume" in reason.lower() for reason in result["blockers"]))
         self.assertTrue(any("EMA50 is flat" in reason for reason in result["blockers"]))
+
+    @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
+    @patch("engine.tps_entry_confirmation.ema", return_value=95)
+    def test_bearish_consensus_selects_pe_even_when_supertrend_is_bullish(self, _ema, _supertrend):
+        for index, candle in enumerate(self.candles):
+            candle.update({"open": 120 - index * 0.2, "high": 121 - index * 0.2, "low": 118 - index * 0.2, "close": 119 - index * 0.2})
+        self.capture.update({
+            "open": "110.00", "close": "109.00", "ema_5": "110.00", "ema_20": "112.00", "ema_50": "115.00",
+            "vwap": "114.00", "supertrend": "100.00", "candle_direction": "BEARISH",
+        })
+        self.chain.update({"pcr_oi": 0.63, "pcr_volume": 1.52})
+        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain)
+        self.assertEqual(result["direction"], "BEARISH")
+        self.assertEqual(result["candidate"], "PE")
+        self.assertFalse(next(item for item in result["confirmations"] if item["name"] == "SuperTrend confirmation")["passed"])
+
+    @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
+    @patch("engine.tps_entry_confirmation.ema", return_value=95)
+    def test_mixed_direction_never_selects_an_option_side(self, _ema, _supertrend):
+        self.capture.update({"vwap": "111.00", "ema_5": "104.00", "ema_20": "106.00", "ema_50": "100.00"})
+        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain)
+        self.assertEqual(result["direction"], "MIXED")
+        self.assertIsNone(result["candidate"])
+        self.assertFalse(result["trade_ready"])
