@@ -42,3 +42,24 @@ class TradePlanEngineTests(unittest.TestCase):
         )
         self.assertEqual(plan["lots"], 2)
         self.assertEqual(plan["quantity"], 150)
+
+    def test_configured_score_allows_manual_review_plan_below_95(self):
+        contracts = [{"token": "ce", "symbol": "NIFTY25000CE", "strike": 25000, "option_type": "CE", "lot_size": 75}]
+        plan = create_review_plan(
+            "NIFTY", 25010, contracts, [{"symbolToken": "ce", "ltp": 100, "tradeVolume": 1000}],
+            {"symbol": "NIFTY", "direction": "BULLISH", "decision": "NO TRADE", "score": 80, "volume_confirmed": True, "trade_ready": False},
+            {"context": "Put OI is higher"},
+            {"capital": 1_000_000, "risk_percent": 3, "trade_plan_min_score": 80},
+        )
+        self.assertEqual(plan["confidence"], 80)
+        self.assertEqual(plan["minimum_score"], 80)
+
+    def test_explicit_strict_threshold_overrides_manual_setting(self):
+        with self.assertRaisesRegex(ValueError, "95"):
+            create_review_plan(
+                "NIFTY", 25010, [], [],
+                {"symbol": "NIFTY", "direction": "BULLISH", "score": 90, "volume_confirmed": True},
+                {"context": "available"},
+                {"capital": 1_000_000, "risk_percent": 3, "trade_plan_min_score": 80},
+                minimum_score=95,
+            )

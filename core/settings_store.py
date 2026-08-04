@@ -12,6 +12,7 @@ DEFAULT_SETTINGS = {
     "risk_percent": 1.0,
     "daily_loss_percent": 3.0,
     "max_trades_per_day": 5,
+    "trade_plan_min_score": 95,
     "theme": "dark",
 }
 
@@ -34,12 +35,15 @@ class SettingsStore:
             "risk_percent": float(settings["risk_percent"]),
             "daily_loss_percent": float(settings["daily_loss_percent"]),
             "max_trades_per_day": int(settings["max_trades_per_day"]),
+            "trade_plan_min_score": int(settings.get("trade_plan_min_score", self.load()["trade_plan_min_score"])),
             "theme": str(settings.get("theme", self.load()["theme"])).lower(),
         }
         if values["capital"] <= 0 or not 0 < values["risk_percent"] <= 100:
             raise ValueError("Capital must be positive and risk percentage must be between 0 and 100.")
         if not 0 < values["daily_loss_percent"] <= 100 or values["max_trades_per_day"] < 1:
             raise ValueError("Daily-loss percentage must be between 0 and 100, and trade limit must be at least 1.")
+        if not 50 <= values["trade_plan_min_score"] <= 100:
+            raise ValueError("Trade-plan minimum score must be between 50 and 100.")
         if values["theme"] not in {"dark", "light", "emerald", "sunset"}:
             raise ValueError("Choose a valid TPS visual theme.")
         self.path.parent.mkdir(parents=True, exist_ok=True)
