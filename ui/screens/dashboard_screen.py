@@ -19,7 +19,7 @@ from ui.pages.replay_page import ReplayPage
 from ui.pages.settings_page import SettingsPage
 from ui.pages.equity_page import EquityPage
 from ui.pages.auto_attempt_report_page import AutoAttemptReportPage
-from ui.pages.about_help_page import AboutHelpPage
+from ui.pages.about_help_page import AboutPage, HelpPage
 from ui.widgets.glass_effects import add_glass_shadow
 
 
@@ -56,11 +56,12 @@ class DashboardScreen(QWidget):
         self.settingsPage = SettingsPage()
         self.equityPage = EquityPage()
         self.autoAttemptReportPage = AutoAttemptReportPage()
-        self.aboutHelpPage = AboutHelpPage()
+        self.aboutPage = AboutPage()
+        self.helpPage = HelpPage()
         for page in (self.dashboardPage, self.liveMarketPage, self.optionsPage, self.chartCapturePage, self.journalPage,
                      self.checklistPage, self.aiPage, self.riskPage, self.reportsPage, self.settingsPage,
                      self.backtestPage, self.postMarketPage, self.replayPage, self.equityPage,
-                     self.autoAttemptReportPage, self.aboutHelpPage):
+                     self.autoAttemptReportPage, self.aboutPage, self.helpPage):
             self.stack.addWidget(page)
         self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
         self.journalPage.trade_saved.connect(self.reportsPage.refresh)
@@ -87,7 +88,7 @@ class DashboardScreen(QWidget):
                               (self.sidebar.reportButton, 8), (self.sidebar.settingsButton, 9),
                               (self.sidebar.backtestButton, 10), (self.sidebar.postMarketButton, 11), (self.sidebar.replayButton, 12),
                               (self.sidebar.equityButton, 13), (self.sidebar.autoAttemptReportButton, 14),
-                              (self.sidebar.aboutHelpButton, 15)):
+                              (self.sidebar.aboutButton, 15), (self.sidebar.helpButton, 16)):
             button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
         body_layout.addWidget(self.stack)
         main_layout.addLayout(body_layout, 1)
