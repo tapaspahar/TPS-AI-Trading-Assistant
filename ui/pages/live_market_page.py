@@ -124,7 +124,14 @@ class LiveMarketPage(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        columns = 6 if event.size().width() >= 1400 else 3
+        columns = 6 if event.size().width() >= 1100 else 3
+        if getattr(self, "_overview_columns", None) != columns:
+            self._layout_overview_cards(columns)
+
+    def showEvent(self, event):
+        """Reflow after this stacked page becomes visible at its real width."""
+        super().showEvent(event)
+        columns = 6 if self.width() >= 1100 else 3
         if getattr(self, "_overview_columns", None) != columns:
             self._layout_overview_cards(columns)
 
