@@ -73,7 +73,7 @@ class OptionsPage(QWidget):
         self.minimum_score = QSpinBox(); self.minimum_score.setRange(50, 100)
         self.minimum_score.setValue(int(SettingsStore().load()["trade_plan_min_score"]))
         self.minimum_score.setSuffix(" / 100")
-        self.minimum_score.setToolTip("Manual review and paper-plan threshold. Strict auto paper trading remains fixed at 95.")
+        self.minimum_score.setToolTip("Manual review and paper-plan threshold. Auto paper trading uses TPS v2 with at least 5 of 6 confirmations plus hard safety filters.")
         self.minimum_score.valueChanged.connect(self.save_trade_plan_minimum)
         for control in (self.underlying, self.expiry, self.option_type, self.strike, self.lots, self.event_check):
             control.setMinimumHeight(32)
@@ -531,7 +531,7 @@ class OptionsPage(QWidget):
             return
         self.last_auto_paper_bucket = bucket
         self.auto_paper_running = True
-        self.auto_paper_status.emit("Checking completed 5-minute future candle, volume, OI/PCR and 95-score conditions…")
+        self.auto_paper_status.emit("Checking completed 5-minute candle against TPS v2: 5/6 confirmations, chop filters, volume and OI/PCR…")
         Thread(target=self._run_auto_paper_cycle, args=(self.underlying.currentText(),), daemon=True).start()
 
     def _run_auto_paper_cycle(self, symbol):
@@ -563,10 +563,20 @@ class OptionsPage(QWidget):
                 f"Volume: {capture.get('volume', '-')} | Volume EMA 20: {capture.get('volume_ema', '-')} | Ratio: {capture.get('volume_ratio', '-')}x | {capture.get('volume_signal', '-')}",
             ))
         if chart:
-            lines.append(f"Decision: {chart.get('decision', '-')} | Direction: {chart.get('direction', '-')} | Candidate: {attempt.get('candidate') or '-'} | Score: {chart.get('score', '-')}/100 | Strict minimum: 95")
+            strategy = chart.get("strategy") or {}
+            lines.append(f"Decision: {chart.get('decision', '-')} | Direction: {chart.get('direction', '-')} | Candidate: {attempt.get('candidate') or '-'} | TPS v2 confirmations: {strategy.get('passed', '-')}/6 (minimum 5/6) | Score: {chart.get('score', '-')}/100")
+            confirmations = strategy.get("confirmations") or []
+            if confirmations:
+                lines.append("TPS v2 checklist:")
+                lines.extend(f"{'PASS' if item['passed'] else 'FAIL'} — {item['name']}: {item['detail']}" for item in confirmations)
             reasons = chart.get("reasons") or []
             if reasons:
                 lines.append("Conditions passed: " + "; ".join(reasons))
+        chain = attempt.get("chain") or {}
+        if chain:
+            oi_pcr = f"{chain['pcr_oi']:.2f}" if chain.get("pcr_oi") is not None else "Unavailable"
+            volume_pcr = f"{chain['pcr_volume']:.2f}" if chain.get("pcr_volume") is not None else "Unavailable"
+            lines.append(f"Option chain: OI PCR {oi_pcr} | Volume PCR {volume_pcr} | Put support {chain.get('put_support', '-')} | Call resistance {chain.get('call_resistance', '-')} | {chain.get('context', '')}")
         blockers = attempt.get("blockers") or []
         lines.append("Why trade was not captured: " + ("; ".join(dict.fromkeys(blockers)) if blockers else "All strict conditions passed; paper trade was captured."))
         return "\n".join(lines)

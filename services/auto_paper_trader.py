@@ -8,6 +8,7 @@ from engine.decision_engine import ChartSnapshot, DecisionEngine
 from engine.live_setup_capture import build_live_capture
 from engine.option_chain_engine import analyze_option_chain
 from engine.trade_plan_engine import create_review_plan
+from engine.tps_entry_confirmation import evaluate_tps_entry_v2
 from services.option_contract_service import UNDERLYING_QUOTES, OptionContractService, contracts_near_spot
 
 
@@ -56,17 +57,7 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             fake_breakout_risk=bool(capture.get("fake_breakout_risk", True)),
         )
         candidate = "CE" if snapshot.price > snapshot.supertrend else "PE"
-        chart = DecisionEngine().evaluate(snapshot, candidate, "Calm")
-        if not chart["trade_ready"]:
-            blockers = list(chart.get("warnings") or [])
-            if chart["score"] < 95:
-                blockers.insert(0, f"Score {chart['score']}/100 is below strict auto-paper minimum 95")
-            if not chart.get("volume_confirmed"):
-                blockers.append("Heavy-volume confirmation is not satisfied")
-            return _attempt(
-                f"No paper trade: {chart['decision']} ({chart['score']}/100).",
-                checked_at, capture=capture, chart=chart, candidate=candidate, future=future, blockers=blockers,
-            )
+        legacy_chart = DecisionEngine().evaluate(snapshot, candidate, "Calm")
         spot_config = UNDERLYING_QUOTES[symbol]
         spot = float(client.get_option_quote(spot_config["exchange"], spot_config["token"]).get("ltp", 0) or 0)
         if spot <= 0:
@@ -76,8 +67,23 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
         expiry = min(contract["expiry"] for contract in contracts)
         contracts = [contract for contract in contracts if contract["expiry"] == expiry]
         chain = analyze_option_chain(contracts, client.get_option_chain_quotes(contracts[0]["exchange"], [contract["token"] for contract in contracts]))
-        plan = create_review_plan(symbol, spot, contracts, chain["quote_rows"], {"symbol": symbol, **chart}, chain, settings, requested_lots=1, minimum_score=95)
-        plan["rule_version"] = "TPS Auto Paper V1 - 5m strict confirmation"
+        strategy = evaluate_tps_entry_v2(candles, capture, chain)
+        chart = {
+            "symbol": symbol, "score": strategy["score"], "direction": strategy["direction"],
+            "decision": strategy["decision"], "trade_ready": strategy["trade_ready"],
+            "volume_confirmed": any(item["name"] == "Directional volume" and item["passed"] for item in strategy["confirmations"]),
+            "reasons": [f"{item['name']}: {item['detail']}" for item in strategy["confirmations"] if item["passed"]],
+            "warnings": strategy["blockers"] + [f"{item['name']}: {item['detail']}" for item in strategy["confirmations"] if not item["passed"]],
+            "strategy": strategy, "legacy_score": legacy_chart["score"],
+        }
+        if not strategy["trade_ready"]:
+            return _attempt(
+                f"No paper trade: TPS v2 confirmations {strategy['passed']}/6 (minimum 5/6).",
+                checked_at, capture=capture, chart=chart, candidate=candidate, future=future,
+                blockers=chart["warnings"], chain=chain,
+            )
+        plan = create_review_plan(symbol, spot, contracts, chain["quote_rows"], chart, chain, settings, requested_lots=1, minimum_score=80)
+        plan["rule_version"] = "TPS Entry Confirmation System v2 - 5m + OI/PCR"
         trade_id = database.save_paper_trade(plan)
         result = _attempt("Paper trade captured", checked_at, capture=capture, chart=chart, candidate=candidate, future=future, chain=chain)
         result.update({"trade_id": trade_id, "plan": plan, "capture": capture})
