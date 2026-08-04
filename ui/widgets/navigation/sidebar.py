@@ -1,4 +1,5 @@
-from PySide6.QtWidgets import QButtonGroup, QFrame, QVBoxLayout, QPushButton
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QButtonGroup, QFrame, QScrollArea, QVBoxLayout, QPushButton, QWidget
 
 
 class Sidebar(QFrame):
@@ -6,8 +7,22 @@ class Sidebar(QFrame):
         super().__init__()
         self.setObjectName("sidebar")
         self.setFixedWidth(236)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 14, 10, 14)
+        shell_layout = QVBoxLayout(self)
+        shell_layout.setContentsMargins(6, 12, 6, 12)
+        self.scroll = QScrollArea()
+        self.scroll.setObjectName("sidebarScroll")
+        self.scroll.setFrameShape(QFrame.NoFrame)
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.scroll.setStyleSheet(
+            "QScrollArea#sidebarScroll { background: transparent; border: none; }"
+            "QScrollArea#sidebarScroll > QWidget > QWidget { background: transparent; }"
+        )
+        self.menu_widget = QWidget()
+        self.menu_widget.setObjectName("sidebarMenu")
+        layout = QVBoxLayout(self.menu_widget)
+        layout.setContentsMargins(4, 2, 4, 2)
         layout.setSpacing(5)
         self.dashboardButton = QPushButton("▦  Dashboard")
         self.liveMarketButton = QPushButton("◈  Market Snapshot")
@@ -56,12 +71,17 @@ class Sidebar(QFrame):
         for index, button in enumerate(self.buttons):
             button.setObjectName("menuButton")
             button.setCheckable(True)
+            button.setFixedHeight(44)
             self.menu_group.addButton(button, index)
             layout.addWidget(button)
         layout.addStretch()
+        self.menu_widget.setMinimumHeight(len(self.buttons) * 49 + 4)
+        self.scroll.setWidget(self.menu_widget)
+        shell_layout.addWidget(self.scroll)
         self.dashboardButton.setChecked(True)
 
     def set_active(self, index: int):
         button = self.page_buttons.get(index)
         if button:
             button.setChecked(True)
+            self.scroll.ensureWidgetVisible(button, 0, 16)
