@@ -1,10 +1,13 @@
 from threading import Thread
+from datetime import datetime
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QComboBox, QFormLayout, QLabel, QPushButton, QSlider, QVBoxLayout, QWidget
 
 from engine.live_setup_capture import TIMEFRAMES, build_live_capture
+from engine.full_day_audit import audit_tps_day, format_tps_day_audit
 from engine.market_structure import analyze_candles
+from core.database_manager import Database
 from services.live_session import LiveSession
 from services.option_contract_service import OptionContractService
 
@@ -31,6 +34,8 @@ class ReplayPage(QWidget):
         layout.addLayout(form)
         self.load_button = QPushButton("Load Candle Replay")
         self.load_button.clicked.connect(self.load_replay); layout.addWidget(self.load_button)
+        self.audit_button = QPushButton("Audit Selected Day with TPS v2 + Saved OI")
+        self.audit_button.clicked.connect(self.audit_selected_day); self.audit_button.setEnabled(False); layout.addWidget(self.audit_button)
         self.slider = QSlider(); self.slider.setOrientation(__import__('PySide6.QtCore', fromlist=['Qt']).Qt.Horizontal)
         self.slider.valueChanged.connect(self.show_candle); self.slider.setEnabled(False); layout.addWidget(self.slider)
         self.summary = QLabel("Connect Angel One and load a replay dataset."); self.summary.setWordWrap(True); layout.addWidget(self.summary)
@@ -61,6 +66,7 @@ class ReplayPage(QWidget):
         )
         self.slider.blockSignals(True); self.slider.setRange(50, len(self.candles) - 1); self.slider.setValue(50); self.slider.blockSignals(False)
         self.slider.setEnabled(True); self.show_candle(50)
+        self.audit_button.setEnabled(self.replay_timeframe == "5m")
 
     def show_candle(self, index):
         if not self.candles: return
@@ -75,6 +81,22 @@ class ReplayPage(QWidget):
                 f"RSI 14: {capture['rsi_14']} | ATR 14: {capture['atr_14']} | {capture['volume_signal']}. This is a study tool, not a trade instruction."
             )
         except ValueError as error: self.summary.setText(str(error))
+
+    def audit_selected_day(self):
+        if not self.candles:
+            return
+        index = self.slider.value()
+        try:
+            candle_date = datetime.fromisoformat(str(self.candles[index]["time"])).strftime("%d-%m-%Y")
+            database = Database()
+            try:
+                snapshots = database.get_market_snapshots(candle_date)
+            finally:
+                database.close()
+            audit = audit_tps_day(self.candles, snapshots, self.replay_symbol, candle_date)
+            self.summary.setText(format_tps_day_audit(audit))
+        except (ValueError, KeyError) as error:
+            self.summary.setText(f"Full-day audit unavailable: {error}")
 
     def show_error(self, message):
         self.load_button.setEnabled(True); self.summary.setText(f"Replay unavailable: {message}")
