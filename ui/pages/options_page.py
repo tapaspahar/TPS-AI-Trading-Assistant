@@ -71,10 +71,10 @@ class OptionsPage(QWidget):
         self.strike.currentIndexChanged.connect(self.update_lot_quantity)
         self.lots = QSpinBox(); self.lots.setRange(1, 100); self.lots.setValue(1); self.lots.valueChanged.connect(self.update_lot_quantity)
         self.event_check = QComboBox(); self.event_check.addItems(("Review news / event risk", "No known high-impact event", "High-impact event or expiry-day risk")); self.event_check.currentIndexChanged.connect(self.update_plan_readiness)
-        self.minimum_score = QSpinBox(); self.minimum_score.setRange(50, 100)
+        self.minimum_score = QSpinBox(); self.minimum_score.setRange(0, 100)
         self.minimum_score.setValue(int(SettingsStore().load()["trade_plan_min_score"]))
         self.minimum_score.setSuffix(" / 100")
-        self.minimum_score.setToolTip("Manual review and paper-plan threshold. Auto paper trading uses TPS v2 with at least 5 of 6 confirmations plus hard safety filters.")
+        self.minimum_score.setToolTip("0-100 testing threshold for manual review and paper plans. Strict auto paper trading keeps TPS v2 confirmations and hard safety filters.")
         self.minimum_score.valueChanged.connect(self.save_trade_plan_minimum)
         for control in (self.underlying, self.expiry, self.option_type, self.strike, self.lots, self.event_check):
             control.setMinimumHeight(32)
@@ -96,7 +96,7 @@ class OptionsPage(QWidget):
         form.addRow("Lots (1–100)", self.lots)
         form.addRow("Auto quantity", self.quantity_preview)
         form.addRow("News / event check", self.event_check)
-        form.addRow("Minimum trade-plan score", self.minimum_score)
+        form.addRow("Testing trade-plan score (0-100)", self.minimum_score)
         form.addRow(refresh)
         form.addRow(analyze_chain)
         layout.addWidget(selection)
@@ -387,6 +387,11 @@ class OptionsPage(QWidget):
             f"{'✓ Configured score and high-volume confirmation met' if chart_ready else f'• Score {minimum_score}+ and Volume > Volume EMA 20 required'}  |  "
             f"{chain_text}  |  {event_text}  |  {open_text}"
         )
+        if minimum_score < 50:
+            self.plan_status.setText(
+                self.plan_status.text() +
+                "  |  [TEST MODE] Low score does not bypass volume, direction, OI, event, or open-trade safety checks."
+            )
         ready = chart_ready and chain_ready and event_ready and not open_trade
         self.create_plan_button.setEnabled(ready)
         self.paper_button.setEnabled(ready)

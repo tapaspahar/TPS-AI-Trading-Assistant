@@ -63,3 +63,24 @@ class TradePlanEngineTests(unittest.TestCase):
                 {"capital": 1_000_000, "risk_percent": 3, "trade_plan_min_score": 80},
                 minimum_score=95,
             )
+
+    def test_testing_threshold_allows_score_ten_review_plan(self):
+        contracts = [{"token": "pe", "symbol": "NIFTY25000PE", "strike": 25000, "option_type": "PE", "lot_size": 75}]
+        plan = create_review_plan(
+            "NIFTY", 25010, contracts, [{"symbolToken": "pe", "ltp": 90, "tradeVolume": 800}],
+            {"symbol": "NIFTY", "direction": "BEARISH", "decision": "NO TRADE", "score": 10, "volume_confirmed": True},
+            {"context": "Call OI resistance confirmed"},
+            {"capital": 1_000_000, "risk_percent": 3, "trade_plan_min_score": 10},
+        )
+        self.assertEqual(plan["option_type"], "PE")
+        self.assertEqual(plan["confidence"], 10)
+        self.assertEqual(plan["minimum_score"], 10)
+
+    def test_testing_threshold_does_not_bypass_volume_confirmation(self):
+        with self.assertRaisesRegex(ValueError, "Volume"):
+            create_review_plan(
+                "NIFTY", 25010, [], [],
+                {"symbol": "NIFTY", "direction": "BEARISH", "score": 10, "volume_confirmed": False},
+                {"context": "available"},
+                {"capital": 1_000_000, "risk_percent": 3, "trade_plan_min_score": 10},
+            )

@@ -11,8 +11,8 @@ from services.option_contract_service import buying_risk
 def create_review_plan(underlying, spot_price, contracts, quote_rows, chart_context, chain_context, settings, requested_lots=None, minimum_score=None):
     """Select a liquid near-ATM contract only when every required context agrees."""
     minimum_score = int(settings.get("trade_plan_min_score", 95) if minimum_score is None else minimum_score)
-    if not 50 <= minimum_score <= 100:
-        raise ValueError("Trade Plan minimum score must be between 50 and 100.")
+    if not 0 <= minimum_score <= 100:
+        raise ValueError("Trade Plan minimum score must be between 0 and 100.")
     if (
         not chart_context or chart_context.get("score", 0) < minimum_score
         or not chart_context.get("volume_confirmed")
