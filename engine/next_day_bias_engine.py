@@ -2,14 +2,16 @@ class NextDayBiasEngine:
     """Evidence score for the next session; never a price guarantee."""
 
     def analyze(self, values):
-        required = ("spot_close", "spot_ema5", "spot_ema20", "spot_ema50", "spot_vwap", "spot_supertrend",
-                    "future_close", "future_ema5", "future_ema20", "future_ema50", "future_vwap", "future_supertrend",
+        required = ("spot_close", "spot_ema5", "spot_ema20", "spot_ema50", "spot_supertrend",
+                    "future_close", "future_ema5", "future_ema20", "future_ema50", "future_supertrend",
                     "put_support", "call_resistance")
         data = {key: float(values[key]) for key in required}
         if any(value <= 0 for value in data.values()):
             raise ValueError("Verify every required closing value before analysis.")
-        if data["put_support"] >= data["call_resistance"]:
-            raise ValueError("Put support must be below call resistance.")
+        data["spot_vwap"] = float(values.get("spot_vwap", 0) or 0)
+        data["future_vwap"] = float(values.get("future_vwap", 0) or 0)
+        if data["put_support"] > data["call_resistance"]:
+            raise ValueError("Put support must not be above call resistance.")
 
         votes, evidence = [], []
         self._trend_votes("Spot", data, "spot", votes, evidence)
@@ -53,12 +55,16 @@ class NextDayBiasEngine:
         close, ema5 = data[f"{prefix}_close"], data[f"{prefix}_ema5"]
         ema20, ema50 = data[f"{prefix}_ema20"], data[f"{prefix}_ema50"]
         vwap, supertrend = data[f"{prefix}_vwap"], data[f"{prefix}_supertrend"]
-        price_vote = 1 if close > vwap else -1
+        price_vote = 1 if vwap > 0 and close > vwap else -1 if vwap > 0 else 0
         ema_vote = 1 if ema5 > ema20 > ema50 else -1 if ema5 < ema20 < ema50 else 0
         st_vote = 1 if close > supertrend else -1
-        votes.extend((price_vote, ema_vote, st_vote))
+        if vwap > 0:
+            votes.append(price_vote)
+            evidence.append(f"{label} close {'above' if price_vote > 0 else 'below'} VWAP")
+        else:
+            evidence.append(f"{label} VWAP unavailable; no VWAP vote was guessed")
+        votes.extend((ema_vote, st_vote))
         evidence.extend((
-            f"{label} close {'above' if price_vote > 0 else 'below'} VWAP",
             f"{label} EMA stack {'bullish' if ema_vote > 0 else 'bearish' if ema_vote < 0 else 'mixed'}",
             f"{label} is on the {'bullish' if st_vote > 0 else 'bearish'} side of SuperTrend",
         ))
