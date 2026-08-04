@@ -1,7 +1,8 @@
 from threading import Thread
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QFileDialog, QFormLayout, QLabel, QLineEdit, QMessageBox, QPlainTextEdit, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (QFileDialog, QFormLayout, QLabel, QLineEdit, QMessageBox,
+                               QPlainTextEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget)
 
 from services.chart_capture_service import ChartCaptureService, OCRUnavailableError
 from services.live_session import LiveSession
@@ -18,7 +19,13 @@ class ChartCapturePage(QWidget):
     def __init__(self):
         super().__init__()
         self.service = ChartCaptureService()
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        outer.addWidget(scroll)
+        content = QWidget()
+        scroll.setWidget(content)
+        layout = QVBoxLayout(content)
         layout.addWidget(QLabel("Quick Chart Capture"))
         layout.addWidget(QLabel("Fixed profile: EMA 5 Pink | EMA 20 Violet | EMA 50 White | VWAP Yellow | SuperTrend Green/Red | Volume EMA 20"))
         layout.addWidget(QLabel("Select a broker/chart screenshot. OCR runs locally; verify every extracted value before trading."))
@@ -41,8 +48,10 @@ class ChartCapturePage(QWidget):
         layout.addWidget(copy_symbol)
         self.raw_text = QPlainTextEdit()
         self.raw_text.setReadOnly(True)
+        self.raw_text.setMinimumHeight(140)
         self.raw_text.setPlaceholderText("OCR text will appear here for review.")
         layout.addWidget(self.raw_text)
+        layout.addStretch()
         self.live_capture_received.connect(self.apply_capture)
         self.live_capture_error.connect(self.show_live_capture_error)
 
