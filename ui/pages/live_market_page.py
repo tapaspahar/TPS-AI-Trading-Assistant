@@ -71,13 +71,22 @@ class LiveMarketPage(QWidget):
         self.capture_snapshot_button.clicked.connect(lambda _checked=False: self.capture_market_snapshot())
         layout.addWidget(self.capture_snapshot_button)
         overview_box = QGroupBox("Live Index & Current-Month Futures (updates every 30 seconds)")
+        overview_box.setMinimumHeight(235)
         overview_grid = QGridLayout(overview_box)
+        overview_grid.setContentsMargins(16, 22, 16, 16)
+        overview_grid.setHorizontalSpacing(14)
+        overview_grid.setVerticalSpacing(16)
+        overview_grid.setRowMinimumHeight(0, 82)
+        overview_grid.setRowMinimumHeight(1, 82)
+        for column in range(3):
+            overview_grid.setColumnStretch(column, 1)
         self.overview_cards = {
             **{symbol: DashboardCard(f"{symbol} Spot", "Waiting") for symbol in ("NIFTY", "BANKNIFTY", "SENSEX")},
             **{f"{symbol} FUT": DashboardCard(f"{symbol} Future", "Loading") for symbol in ("NIFTY", "BANKNIFTY", "SENSEX")},
         }
         for index, card in enumerate(self.overview_cards.values()):
             card.set_compact(True)
+            card.setFixedHeight(82)
             overview_grid.addWidget(card, index // 3, index % 3)
         layout.addWidget(overview_box)
         layout.addStretch()
