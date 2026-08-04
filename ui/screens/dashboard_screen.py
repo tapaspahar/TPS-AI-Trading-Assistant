@@ -19,17 +19,27 @@ from ui.pages.replay_page import ReplayPage
 from ui.pages.settings_page import SettingsPage
 from ui.pages.equity_page import EquityPage
 from ui.pages.auto_attempt_report_page import AutoAttemptReportPage
+from ui.widgets.glass_effects import add_glass_shadow
 
 
 class DashboardScreen(QWidget):
     def __init__(self):
         super().__init__()
+        self.setObjectName("dashboardScreen")
         main_layout = QVBoxLayout(self)
-        main_layout.addWidget(Header())
+        main_layout.setContentsMargins(14, 12, 14, 10)
+        main_layout.setSpacing(10)
+        self.header = Header()
+        add_glass_shadow(self.header)
+        main_layout.addWidget(self.header)
         body_layout = QHBoxLayout()
+        body_layout.setSpacing(10)
         self.sidebar = Sidebar()
+        add_glass_shadow(self.sidebar, blur=20, y_offset=3, opacity=75)
         body_layout.addWidget(self.sidebar)
         self.stack = QStackedWidget()
+        self.stack.setObjectName("contentStack")
+        add_glass_shadow(self.stack, blur=25, y_offset=5, opacity=75)
         self.dashboardPage = DashboardPage()
         self.liveMarketPage = LiveMarketPage()
         self.optionsPage = OptionsPage()
@@ -75,7 +85,9 @@ class DashboardScreen(QWidget):
             button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
         body_layout.addWidget(self.stack)
         main_layout.addLayout(body_layout, 1)
-        main_layout.addWidget(InformationPanel())
+        self.informationPanel = InformationPanel()
+        add_glass_shadow(self.informationPanel, blur=16, y_offset=2, opacity=60)
+        main_layout.addWidget(self.informationPanel)
         QTimer.singleShot(0, self.settingsPage.auto_connect_saved_credentials)
 
     def show_page(self, index: int):
