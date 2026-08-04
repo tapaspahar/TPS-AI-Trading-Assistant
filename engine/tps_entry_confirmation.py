@@ -13,7 +13,8 @@ def evaluate_tps_entry_v2(candles, capture, chain=None):
     trend_line = float(capture["supertrend"])
     atr = float(capture["atr_14"]) if capture.get("atr_14") else max(close * 0.001, 1)
     volume_ratio = float(capture["volume_ratio"]) if capture.get("volume_ratio") else 0
-    structure_state = analyze_candles(candles)["state"]
+    structure = analyze_candles(candles)
+    structure_state = structure["state"]
     votes = {
         "Market structure": "BULLISH" if structure_state.startswith("Bullish") else "BEARISH" if structure_state.startswith("Bearish") else "MIXED",
         "Price vs VWAP": "BULLISH" if vwap is not None and close > vwap else "BEARISH" if vwap is not None and close < vwap else "MIXED",
@@ -60,21 +61,38 @@ def evaluate_tps_entry_v2(candles, capture, chain=None):
     add("Directional volume", strong_volume, f"{volume_ratio:.2f}x Volume EMA 20; candle {capture.get('candle_direction', 'NEUTRAL')}")
 
     chain = chain or {}
-    level = chain.get("call_resistance") if bullish else chain.get("put_support") if bearish else None
-    if level is None:
-        level = capture.get("opening_range_high") if bullish else capture.get("opening_range_low")
+    chart_support = float(structure["support"])
+    chart_resistance = float(structure["resistance"])
+    oi_support = chain.get("put_support")
+    oi_resistance = chain.get("call_resistance")
+    oi_support = float(oi_support) if oi_support not in (None, "") else None
+    oi_resistance = float(oi_resistance) if oi_resistance not in (None, "") else None
+    zone_tolerance = max(atr * 2.5, close * 0.0025)
+    support_gap = abs(chart_support - oi_support) if oi_support is not None else None
+    resistance_gap = abs(chart_resistance - oi_resistance) if oi_resistance is not None else None
+    support_confluence = support_gap is not None and support_gap <= zone_tolerance
+    resistance_confluence = resistance_gap is not None and resistance_gap <= zone_tolerance
+    level = oi_resistance if bullish else oi_support if bearish else None
     level = float(level) if level not in (None, "") else None
     required_room = max(atr * 0.75, close * 0.001)
     if level is None:
         level_ok, level_detail = False, "Support/resistance level unavailable"
     elif bullish:
         room = level - close
-        level_ok = close > level or room >= required_room
-        level_detail = f"Call resistance {level:.2f}; {'breakout confirmed' if close > level else f'room {room:.2f} points'}"
+        level_ok = resistance_confluence and (close > max(level, chart_resistance) or room >= required_room)
+        level_detail = (
+            f"Chart resistance {chart_resistance:.2f} vs Call-OI resistance {level:.2f} "
+            f"(gap {resistance_gap:.2f}, tolerance {zone_tolerance:.2f}, {'CONFLUENCE' if resistance_confluence else 'NOT ALIGNED'}); "
+            f"{'breakout above both zones' if close > max(level, chart_resistance) else f'room {room:.2f} points'}"
+        )
     elif bearish:
         room = close - level
-        level_ok = close < level or room >= required_room
-        level_detail = f"Put support {level:.2f}; {'breakdown confirmed' if close < level else f'room {room:.2f} points'}"
+        level_ok = support_confluence and (close < min(level, chart_support) or room >= required_room)
+        level_detail = (
+            f"Chart support {chart_support:.2f} vs Put-OI support {level:.2f} "
+            f"(gap {support_gap:.2f}, tolerance {zone_tolerance:.2f}, {'CONFLUENCE' if support_confluence else 'NOT ALIGNED'}); "
+            f"{'breakdown below both zones' if close < min(level, chart_support) else f'room {room:.2f} points'}"
+        )
     else:
         level_ok, level_detail = False, "Direction is mixed; CE/PE support-resistance test was not selected"
     add("Breakout/support-resistance safety", level_ok, level_detail)
@@ -132,4 +150,11 @@ def evaluate_tps_entry_v2(candles, capture, chain=None):
         "decision": f"TPS V2 {candidate} ENTRY CONFIRMED" if ready else "NO TRADE",
         "blockers": blockers, "pcr_oi": pcr_oi, "pcr_volume": pcr_volume,
         "structure_state": structure_state, "direction_votes": votes,
+        "zones": {
+            "chart_support": chart_support, "chart_resistance": chart_resistance,
+            "oi_support": oi_support, "oi_resistance": oi_resistance,
+            "support_gap": support_gap, "resistance_gap": resistance_gap,
+            "tolerance": zone_tolerance, "support_confluence": support_confluence,
+            "resistance_confluence": resistance_confluence,
+        },
     }
