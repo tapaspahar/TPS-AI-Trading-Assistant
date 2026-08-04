@@ -65,6 +65,7 @@ class DashboardScreen(QWidget):
         self.chartCapturePage.analysis_ready.connect(self.aiPage.load_chart_capture)
         self.aiPage.decision_ready.connect(self.handle_ai_decision)
         self.optionsPage.trade_plan_ready.connect(self.journalPage.load_trade_plan)
+        self.optionsPage.trade_plan_ready.connect(self.riskPage.load_trade_plan)
         self.optionsPage.trade_plan_ready.connect(lambda _plan: self.show_page(4))
         self.journalPage.open_backtesting.connect(lambda: self.show_page(10))
         self.optionsPage.paper_trade_captured.connect(lambda _plan: self.journalPage.load_trades())
@@ -105,6 +106,8 @@ class DashboardScreen(QWidget):
             self.postMarketPage.refresh()
         elif index == 14:
             self.autoAttemptReportPage.refresh()
+        elif index == 7:
+            self.riskPage.refresh()
         self.stack.setCurrentIndex(index)
 
     def handle_ai_decision(self, context):
