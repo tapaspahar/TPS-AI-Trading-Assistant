@@ -38,10 +38,50 @@ class ChartCaptureService:
         try:
             # Sparse mode is a better fit for broker charts with labels scattered
             # around the chart, watchlist and indicator rail.
-            text = pytesseract.image_to_string(ImageOps.grayscale(Image.open(image_path)), config="--psm 11")
+            source_image = Image.open(image_path)
+            image = ImageOps.grayscale(source_image)
+            text = pytesseract.image_to_string(image, config="--psm 11")
         except pytesseract.TesseractNotFoundError as error:
             raise OCRUnavailableError("Tesseract OCR is not installed or not on PATH. Install Tesseract, then restart the app.") from error
-        return self.parse_text(text)
+        result = self.parse_text(text)
+        result.update(self._extract_colored_label_values(source_image, pytesseract))
+        self._set_supertrend_state(result)
+        return result
+
+    @staticmethod
+    def _extract_colored_label_values(image, pytesseract) -> dict:
+        """OCR the compact yellow VWAP badge separately from the full chart."""
+        data = pytesseract.image_to_data(image, config="--psm 11", output_type=pytesseract.Output.DICT)
+        for index, word in enumerate(data["text"]):
+            if word.strip().upper().replace(",", "") != "VWAP":
+                continue
+            left, top = data["left"][index], data["top"][index]
+            width, height = data["width"][index], data["height"][index]
+            badge = image.crop((max(0, left - 10), max(0, top - 12), min(image.width, left + max(width, 130)), min(image.height, top + height + 14))).resize((810, 180))
+            badge_text = pytesseract.image_to_string(badge, config="--psm 7").upper().replace(" ", "")
+            value = re.search(r"VWAP([\d.]+)", badge_text)
+            if value:
+                return {"vwap": value.group(1)}
+        # Yellow VWAP badges may be readable by colour even when the word is
+        # too small for image-to-data. This fallback searches only the chart's
+        # right indicator rail, avoiding yellow candles elsewhere on screen.
+        rail_left, rail_right = int(image.width * 0.87), int(image.width * 0.96)
+        rail_top, rail_bottom = int(image.height * 0.15), int(image.height * 0.80)
+        yellow_pixels = []
+        for y in range(rail_top, rail_bottom):
+            for x in range(rail_left, rail_right):
+                red, green, blue = image.getpixel((x, y))[:3]
+                if red > 160 and green > 120 and blue < 100:
+                    yellow_pixels.append((x, y))
+        if yellow_pixels:
+            left, right = min(x for x, _ in yellow_pixels), max(x for x, _ in yellow_pixels)
+            top, bottom = min(y for _, y in yellow_pixels), max(y for _, y in yellow_pixels)
+            badge = image.crop((max(0, left - 2), max(0, top - 5), min(image.width, right + 8), min(image.height, bottom + 6))).resize((810, 180))
+            badge_text = pytesseract.image_to_string(badge, config="--psm 7").upper().replace(" ", "")
+            value = re.search(r"VWAP([\d.]+)", badge_text)
+            if value:
+                return {"vwap": value.group(1)}
+        return {}
 
     def parse_text(self, text: str) -> dict:
         normalized = text.upper().replace(",", "")
@@ -60,14 +100,23 @@ class ChartCaptureService:
             match = re.search(rf"\b{label}\b\s*[: ]\s*([\d.]+)", normalized)
             if match:
                 result[field] = match.group(1)
+        # Sparse OCR can read a coloured badge's number just before its label.
+        if not result["supertrend"]:
+            preceding = re.search(r"([\d]{3,}\.[\d]+)(?:\s|[^\d]){0,24}SUPERTREND", normalized)
+            if preceding:
+                result["supertrend"] = preceding.group(1)
         # On the fixed TPS chart, the right-side labels appear vertically as
         # EMA20 (violet), EMA50 (white), then EMA5 (pink).
         ema_values = re.findall(r"EMA\s*:?\s*PLOT\s*([\d.]+)", normalized)
         if len(ema_values) >= 3:
             result["ema_20"], result["ema_50"], result["ema_5"] = ema_values[:3]
+        self._set_supertrend_state(result)
+        return result
+
+    @staticmethod
+    def _set_supertrend_state(result: dict) -> None:
         try:
             if result["close"] and result["supertrend"]:
-                result["supertrend_state"] = "BULLISH" if float(result["close"]) > float(result["supertrend"]) else "BEARISH"
+                result["supertrend_state"] = "Green / Bullish" if float(result["close"]) > float(result["supertrend"]) else "Red / Bearish"
         except ValueError:
             pass
-        return result

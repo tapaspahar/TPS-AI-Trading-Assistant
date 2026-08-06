@@ -15,7 +15,7 @@ class ChartCaptureTests(unittest.TestCase):
         self.assertEqual(result["ema_20"], "78107.13")
         self.assertEqual(result["ema_50"], "78091.97")
         self.assertEqual(result["ema_5"], "78079.05")
-        self.assertEqual(result["supertrend_state"], "BEARISH")
+        self.assertEqual(result["supertrend_state"], "Red / Bearish")
 
     def test_parser_allows_missing_labels(self):
         result = ChartCaptureService().parse_text("NIFTY 15M")
