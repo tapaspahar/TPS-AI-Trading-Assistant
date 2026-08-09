@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QCheckBox, QComboBox, QFormLayout, QGroupBox, QLab
 from core.settings_store import SettingsStore
 from core.database_manager import Database
 from engine.option_chain_engine import analyze_option_chain
+from engine.tps_entry_confirmation import CONDITION_WEIGHTS
 from engine.trade_plan_engine import create_review_plan
 from engine.greeks_engine import calculate_greeks
 from services.auto_paper_trader import run_auto_paper_cycle
@@ -26,6 +27,7 @@ class OptionsPage(QWidget):
     open_chart_capture = Signal()
     paper_trade_captured = Signal(dict)
     paper_trade_closed = Signal(object)
+    paper_trade_monitored = Signal(object)
     paper_trade_error = Signal(str)
     auto_paper_status = Signal(object)
     auto_paper_captured = Signal(object)
@@ -72,7 +74,14 @@ class OptionsPage(QWidget):
         self.lots = QSpinBox(); self.lots.setRange(1, 100); self.lots.setValue(1); self.lots.valueChanged.connect(self.update_lot_quantity)
         self.event_check = QComboBox(); self.event_check.addItems(("Review news / event risk", "No known high-impact event", "High-impact event or expiry-day risk")); self.event_check.currentIndexChanged.connect(self.update_plan_readiness)
         self.minimum_score = QSpinBox(); self.minimum_score.setRange(0, 100)
-        self.minimum_score.setValue(int(SettingsStore().load()["trade_plan_min_score"]))
+        saved_settings = SettingsStore().load()
+        self.news_pause = QCheckBox("Emergency News Risk Pause - block all new paper entries")
+        self.news_pause.setChecked(bool(saved_settings.get("news_risk_pause", False)))
+        self.news_pause.toggled.connect(self.save_news_risk_controls)
+        self.event_window = QComboBox(); self.event_window.addItems(("15 minutes", "30 minutes", "60 minutes"))
+        self.event_window.setCurrentText(f"{saved_settings.get('event_no_trade_minutes', 30)} minutes")
+        self.event_window.currentIndexChanged.connect(self.save_news_risk_controls)
+        self.minimum_score.setValue(int(saved_settings["trade_plan_min_score"]))
         self.minimum_score.setSuffix(" / 100")
         self.minimum_score.setToolTip("0-100 testing threshold for manual review and paper plans. Strict auto paper trading keeps TPS v2 confirmations and hard safety filters.")
         self.minimum_score.valueChanged.connect(self.save_trade_plan_minimum)
@@ -96,10 +105,32 @@ class OptionsPage(QWidget):
         form.addRow("Lots (1–100)", self.lots)
         form.addRow("Auto quantity", self.quantity_preview)
         form.addRow("News / event check", self.event_check)
+        form.addRow(self.news_pause)
+        form.addRow("Event no-trade window", self.event_window)
         form.addRow("Testing trade-plan score (0-100)", self.minimum_score)
         form.addRow(refresh)
         form.addRow(analyze_chain)
         layout.addWidget(selection)
+
+        checklist_box = QGroupBox("2. Session checklist - only ticked evidence is scored")
+        checklist_form = QFormLayout(checklist_box)
+        self.condition_checks = {}
+        enabled_conditions = set(saved_settings["tps_enabled_conditions"])
+        for name in CONDITION_WEIGHTS:
+            check = QCheckBox(name); check.setChecked(name in enabled_conditions)
+            check.toggled.connect(self.save_tps_checklist)
+            self.condition_checks[name] = check; checklist_form.addRow(check)
+        self.match_mode = QComboBox(); self.match_mode.addItem("Selected count", "count"); self.match_mode.addItem("All selected", "all")
+        self.match_mode.setCurrentIndex(max(0, self.match_mode.findData(saved_settings["tps_match_mode"])))
+        self.match_mode.currentIndexChanged.connect(self.save_tps_checklist)
+        self.required_matches = QSpinBox(); self.required_matches.setRange(1, len(CONDITION_WEIGHTS)); self.required_matches.setValue(saved_settings["tps_required_matches"])
+        self.required_matches.valueChanged.connect(self.save_tps_checklist)
+        checklist_form.addRow("Match rule", self.match_mode); checklist_form.addRow("Required matches", self.required_matches)
+        self.side_score_status = QLabel("CE score: waiting | PE score: waiting | Hard blockers: waiting")
+        self.side_score_status.setWordWrap(True); checklist_form.addRow(self.side_score_status)
+        self.environment_status = QLabel("Market environment: waiting for live 5-minute data and India VIX")
+        self.environment_status.setWordWrap(True); checklist_form.addRow(self.environment_status)
+        layout.addWidget(checklist_box)
 
         self.details = QLabel("Load current expiries to choose an option contract.")
         layout.addWidget(self.details)
@@ -120,9 +151,9 @@ class OptionsPage(QWidget):
         self.paper_button.clicked.connect(self.capture_paper_trade)
         self.paper_button.setEnabled(False)
         layout.addWidget(self.paper_button)
-        auto_box = QGroupBox("Auto Paper Trading - 20 trading-day forward validation only")
+        auto_box = QGroupBox("Auto Paper Trading - selected checklist + score + hard-risk validation")
         auto_form = QFormLayout(auto_box)
-        self.auto_paper_enabled = QCheckBox("Enable strict auto paper trades (ATM, 1 lot, no real order)")
+        self.auto_paper_enabled = QCheckBox("Enable configurable auto paper trades (ATM, 1 lot, no real order)")
         self.auto_paper_enabled.toggled.connect(self.set_auto_paper_enabled)
         self.auto_paper_progress = QLabel("Disabled. This mode only evaluates each completed 5-minute candle during market hours.")
         self.auto_paper_progress.setWordWrap(True)
@@ -143,6 +174,7 @@ class OptionsPage(QWidget):
         self.chain_error.connect(self.show_error)
         self.paper_trade_captured.connect(self.show_paper_trade_captured)
         self.paper_trade_closed.connect(self.show_paper_trade_closed)
+        self.paper_trade_monitored.connect(self.show_paper_trade_monitoring)
         self.paper_trade_error.connect(self.show_paper_trade_error)
         self.auto_paper_status.connect(self.show_auto_paper_status)
         self.auto_paper_captured.connect(self.show_auto_paper_captured)
@@ -377,10 +409,12 @@ class OptionsPage(QWidget):
         chain_text = "✓ OI/PCR analysis ready" if chain_ready else "• Selected-expiry OI/PCR analysis required"
         open_trade = self.db.has_open_trade(underlying)
         expiry_day = self.expiry.currentData() == date.today()
-        event_ready = self.event_check.currentText() == "No known high-impact event" and not expiry_day
+        event_ready = self.event_check.currentText() == "No known high-impact event" and not expiry_day and not self.news_pause.isChecked()
         event_text = "⚠ Expiry-day caution: TPS blocks new plans; review manually" if expiry_day else (
             "✓ News/event check recorded" if event_ready else "• Confirm no high-impact news/event before planning"
         )
+        if self.news_pause.isChecked():
+            event_text = "[BLOCK] Emergency News Risk Pause is ON"
         open_text = "[!] Close/review the active open trade before a new plan" if open_trade else "[OK] No active open trade for this underlying"
         self.plan_status.setText(
             f"{score_text} (minimum: {minimum_score})  |  "
@@ -402,6 +436,34 @@ class OptionsPage(QWidget):
         SettingsStore().save(settings)
         self.current_plan = None
         self.send_plan_button.setEnabled(False)
+        self.update_plan_readiness()
+
+    def save_tps_checklist(self, *_args):
+        enabled = [name for name, check in self.condition_checks.items() if check.isChecked()]
+        if not enabled:
+            sender = self.sender()
+            if isinstance(sender, QCheckBox):
+                sender.blockSignals(True); sender.setChecked(True); sender.blockSignals(False)
+                enabled = [sender.text()]
+        self.required_matches.setMaximum(max(1, len(enabled)))
+        if self.required_matches.value() > len(enabled):
+            self.required_matches.setValue(len(enabled))
+        settings = SettingsStore().load()
+        settings.update({
+            "tps_enabled_conditions": enabled,
+            "tps_match_mode": self.match_mode.currentData(),
+            "tps_required_matches": self.required_matches.value(),
+        })
+        SettingsStore().save(settings)
+        self.update_plan_readiness()
+
+    def save_news_risk_controls(self, *_args):
+        settings = SettingsStore().load()
+        settings["news_risk_pause"] = self.news_pause.isChecked()
+        settings["event_no_trade_minutes"] = int(self.event_window.currentText().split()[0])
+        SettingsStore().save(settings)
+        if self.news_pause.isChecked() and self.auto_paper_enabled.isChecked():
+            self.auto_paper_enabled.setChecked(False)
         self.update_plan_readiness()
 
     def prepare_live_workspace(self):
@@ -491,8 +553,11 @@ class OptionsPage(QWidget):
         database = Database()
         try:
             closed = database.monitor_paper_trades(LiveSession.client)
+            monitoring = database.get_paper_trade_monitoring()
             if closed:
                 self.paper_trade_closed.emit(closed)
+            elif monitoring:
+                self.paper_trade_monitored.emit(monitoring)
         except (RuntimeError, ValueError) as error:
             self.paper_trade_error.emit(str(error))
         finally:
@@ -504,11 +569,25 @@ class OptionsPage(QWidget):
         self.details.setText(f"PAPER TRADE AUTO-BOOKED: {summary}. It has been saved in Trade Journal; review the result before using any real-money plan.")
         self.update_plan_readiness()
 
+    def show_paper_trade_monitoring(self, rows):
+        lines = []
+        for row in rows:
+            alert = f" | {row['alert']} STOP WARNING" if row.get("alert") else ""
+            lines.append(
+                f"{row['symbol']} LTP {row.get('ltp') or 0:.2f} | SL {row['stoploss']:.2f} | "
+                f"Target {row['target']:.2f} | MAE {row['mae']:.2f} | MFE {row['mfe']:.2f}{alert}"
+            )
+        self.details.setText("PAPER TRADE PREMIUM MONITOR (30-second quote check)\n" + "\n".join(lines))
+
     def show_paper_trade_error(self, message):
         self.details.setText(f"Paper-trade monitor paused: {message}. No broker order was sent; retry after Angel One data is available.")
 
     def set_auto_paper_enabled(self, enabled: bool):
         if enabled:
+            if self.news_pause.isChecked():
+                self.auto_paper_enabled.blockSignals(True); self.auto_paper_enabled.setChecked(False); self.auto_paper_enabled.blockSignals(False)
+                QMessageBox.warning(self, "Auto paper trading", "Emergency News Risk Pause is ON. Turn it off only after reviewing event risk.")
+                return
             if self.event_check.currentText() != "No known high-impact event":
                 self.auto_paper_enabled.blockSignals(True); self.auto_paper_enabled.setChecked(False); self.auto_paper_enabled.blockSignals(False)
                 QMessageBox.warning(self, "Auto paper trading", "First select 'No known high-impact event' after checking news/events. TPS will not automate around an unreviewed event.")
@@ -537,7 +616,12 @@ class OptionsPage(QWidget):
         if bucket == self.last_auto_paper_bucket:
             return
         self.auto_paper_running = True
-        self.auto_paper_status.emit("Checking completed 5-minute candle against TPS v2: 5/6 confirmations, chop filters, volume and OI/PCR…")
+        settings = SettingsStore().load()
+        mode = "all selected" if settings["tps_match_mode"] == "all" else f"{settings['tps_required_matches']} matches"
+        self.auto_paper_status.emit(
+            f"Checking completed 5-minute candle independently for CE and PE: {mode}, "
+            f"score {settings['trade_plan_min_score']}+, then hard-risk blockers..."
+        )
         Thread(target=self._run_auto_paper_cycle, args=(self.underlying.currentText(), bucket, bucket_start), daemon=True).start()
 
     def _run_auto_paper_cycle(self, symbol, bucket, bucket_start):
@@ -584,10 +668,17 @@ class OptionsPage(QWidget):
             ))
         if chart:
             strategy = chart.get("strategy") or {}
-            lines.append(f"Decision: {chart.get('decision', '-')} | Direction: {chart.get('direction', '-')} | Candidate: {attempt.get('candidate') or '-'} | TPS v2 confirmations: {strategy.get('passed', '-')}/6 (minimum 5/6) | Score: {chart.get('score', '-')}/100")
+            sides = strategy.get("side_evaluations") or {}
+            ce, pe = sides.get("CE") or {}, sides.get("PE") or {}
+            lines.append(
+                f"Decision: {chart.get('decision', '-')} | Candidate: {attempt.get('candidate') or '-'} | "
+                f"CE {ce.get('passed', '-')}/{ce.get('total', '-')} score {ce.get('score', '-')} | "
+                f"PE {pe.get('passed', '-')}/{pe.get('total', '-')} score {pe.get('score', '-')} | "
+                f"Required {strategy.get('required', '-')} matches + {strategy.get('minimum_score', '-')} score"
+            )
             confirmations = strategy.get("confirmations") or []
             if confirmations:
-                lines.append("TPS v2 checklist:")
+                lines.append("Selected-side checklist evidence:")
                 lines.extend(f"{'PASS' if item['passed'] else 'FAIL'} — {item['name']}: {item['detail']}" for item in confirmations)
             zones = strategy.get("zones") or {}
             if zones:
@@ -600,6 +691,13 @@ class OptionsPage(QWidget):
             reasons = chart.get("reasons") or []
             if reasons:
                 lines.append("Conditions passed: " + "; ".join(reasons))
+            environment = strategy.get("market_environment") or chart.get("market_environment") or {}
+            if environment:
+                lines.append(
+                    f"Environment: {environment.get('regime')} | India VIX {environment.get('vix') or 'Unavailable'} "
+                    f"({environment.get('vix_zone')}) | ATR {environment.get('atr_percent')}% | "
+                    f"Risk multiplier {environment.get('risk_multiplier')}"
+                )
         chain = attempt.get("chain") or {}
         if chain:
             oi_pcr = f"{chain['pcr_oi']:.2f}" if chain.get("pcr_oi") is not None else "Unavailable"
@@ -612,6 +710,26 @@ class OptionsPage(QWidget):
     def show_auto_paper_status(self, result):
         progress = self.db.paper_trade_progress()
         details = self.format_auto_paper_attempt(result)
+        if isinstance(result, dict):
+            strategy = (((result.get("attempt") or {}).get("chart") or {}).get("strategy") or {})
+            sides = strategy.get("side_evaluations") or {}
+            ce, pe = sides.get("CE") or {}, sides.get("PE") or {}
+            blockers = strategy.get("hard_blockers") or []
+            if sides:
+                self.side_score_status.setText(
+                    f"CE: {ce.get('score', 0)}/100 ({ce.get('passed', 0)}/{ce.get('total', 0)}) {ce.get('state', '')} | "
+                    f"PE: {pe.get('score', 0)}/100 ({pe.get('passed', 0)}/{pe.get('total', 0)}) {pe.get('state', '')}\n"
+                    f"Hard blockers for selected side: {'; '.join(blockers) if blockers else 'None'}"
+                )
+            environment = strategy.get("market_environment") or {}
+            if environment:
+                expected = environment.get("expected_daily_range")
+                self.environment_status.setText(
+                    f"Market environment: {environment.get('regime')} | India VIX {environment.get('vix') or 'Unavailable'} "
+                    f"({environment.get('vix_zone')}) | Expected daily range "
+                    f"{'±' + format(expected, ',.2f') if expected is not None else 'Unavailable'} | "
+                    f"Risk quantity {environment.get('risk_multiplier', 1) * 100:.0f}% | {environment.get('strike_preference')}"
+                )
         self.auto_paper_progress.setText(f"{details}\nForward-test progress: {progress['days']}/20 trading days | {progress['trades']} paper trades | {progress['target_hits']} targets | {progress['stoploss_hits']} stop losses.")
 
     def show_auto_paper_captured(self, result):

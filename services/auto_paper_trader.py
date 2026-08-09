@@ -6,6 +6,7 @@ from datetime import datetime
 from core.database_manager import Database
 from engine.decision_engine import ChartSnapshot, DecisionEngine
 from engine.live_setup_capture import build_live_capture
+from engine.market_environment import analyze_market_environment
 from engine.option_chain_engine import analyze_option_chain
 from engine.trade_plan_engine import create_review_plan
 from engine.tps_entry_confirmation import evaluate_tps_entry_v2
@@ -47,7 +48,7 @@ def _completed_candles(candles, checked_at):
 
 
 def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
-    """Capture one ATM one-lot paper trade only if every strict TPS condition passes."""
+    """Evaluate both sides and capture only after checklist, score and risk pass."""
     symbol = str(symbol).upper()
     database = Database()
     try:
@@ -82,17 +83,30 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
         expiry = min(contract["expiry"] for contract in contracts)
         contracts = [contract for contract in contracts if contract["expiry"] == expiry]
         chain = analyze_option_chain(contracts, client.get_option_chain_quotes(contracts[0]["exchange"], [contract["token"] for contract in contracts]))
-        strategy = evaluate_tps_entry_v2(candles, capture, chain)
+        try:
+            vix_config = service.get_india_vix_instrument()
+            india_vix = float(client.get_option_quote(vix_config["exchange"], vix_config["token"]).get("ltp", 0) or 0)
+        except (RuntimeError, ValueError, TypeError, KeyError):
+            india_vix = None
+        environment = analyze_market_environment(candles, capture, spot, india_vix, checked_at)
+        strategy = evaluate_tps_entry_v2(candles, capture, chain, settings, environment)
         candidate = strategy["candidate"]
+        selected_confirmations = strategy.get("selected_confirmations") or strategy.get("confirmations") or []
+        side_evaluations = strategy.get("side_evaluations") or {}
         chart = {
             "symbol": symbol, "score": strategy["score"], "direction": strategy["direction"],
             "decision": strategy["decision"], "trade_ready": strategy["trade_ready"],
-            "volume_confirmed": any(item["name"] == "Directional volume" and item["passed"] for item in strategy["confirmations"]),
-            "reasons": [f"{item['name']}: {item['detail']}" for item in strategy["confirmations"] if item["passed"]],
-            "warnings": strategy["blockers"] + [f"{item['name']}: {item['detail']}" for item in strategy["confirmations"] if not item["passed"]],
+            "volume_confirmed": any(item["name"] == "Directional volume" and item["passed"] for item in selected_confirmations),
+            "reasons": [f"{item['name']}: {item['detail']}" for item in selected_confirmations if item["passed"]],
+            "warnings": strategy["blockers"] + [f"{item['name']}: {item['detail']}" for item in selected_confirmations if not item["passed"]],
             "strategy": strategy, "legacy_score": legacy_chart["score"],
+            "ce_score": (side_evaluations.get("CE") or {}).get("score"),
+            "pe_score": (side_evaluations.get("PE") or {}).get("score"),
+            "market_environment": environment,
         }
         operational_blockers = []
+        if settings.get("news_risk_pause"):
+            operational_blockers.append("Emergency News Risk Pause is ON")
         if progress["open_trades"]:
             operational_blockers.append("An open paper trade is already being monitored")
         if progress["trades"] >= int(settings["max_trades_per_day"]):
@@ -107,13 +121,24 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             return _record(database, symbol, result)
         if not strategy["trade_ready"]:
             result = _attempt(
-                f"No paper trade: TPS v2 confirmations {strategy['passed']}/6 (minimum 5/6).",
+                f"No paper trade: {candidate} checklist {strategy['passed']}/{strategy.get('total', 7)} "
+                f"(required {strategy.get('required', settings.get('tps_required_matches', 5))}) and score {strategy['score']}/100 "
+                f"(required {strategy.get('minimum_score', settings.get('trade_plan_min_score', 95))}).",
                 checked_at, capture=capture, chart=chart, candidate=candidate, future=future,
                 blockers=chart["warnings"], chain=chain,
             )
             return _record(database, symbol, result)
-        plan = create_review_plan(symbol, spot, contracts, chain["quote_rows"], chart, chain, settings, requested_lots=1, minimum_score=80)
-        plan["rule_version"] = "TPS Entry Confirmation System v2 - 5m + OI/PCR"
+        plan = create_review_plan(
+            symbol, spot, contracts, chain["quote_rows"], chart, chain, settings,
+            requested_lots=1, minimum_score=int(settings.get("trade_plan_min_score", 95)),
+        )
+        plan["rule_version"] = "TPS Entry Confirmation System v3 - independent CE/PE + selected checklist"
+        plan["decision_audit"] = {
+            "ce": side_evaluations.get("CE"), "pe": side_evaluations.get("PE"),
+            "enabled_conditions": strategy.get("enabled_conditions"),
+            "required_matches": strategy.get("required"), "required_score": strategy.get("minimum_score"),
+            "hard_blockers": strategy.get("hard_blockers", []),
+        }
         trade_id = database.save_paper_trade(plan)
         result = _attempt("Paper trade captured", checked_at, capture=capture, chart=chart, candidate=candidate, future=future, chain=chain)
         result.update({"trade_id": trade_id, "plan": plan, "capture": capture})

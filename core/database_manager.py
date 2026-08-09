@@ -81,7 +81,11 @@ class Database:
                 trade_id INTEGER PRIMARY KEY,
                 exchange TEXT NOT NULL,
                 token TEXT NOT NULL,
-                contract_symbol TEXT NOT NULL
+                contract_symbol TEXT NOT NULL,
+                last_ltp REAL,
+                min_ltp REAL,
+                max_ltp REAL,
+                last_alert_level TEXT
             )
             """
         )
@@ -107,6 +111,10 @@ class Database:
             self.cursor.execute("ALTER TABLE trades ADD COLUMN outcome TEXT NOT NULL DEFAULT 'MANUAL EXIT'")
         if "closed_at" not in columns:
             self.cursor.execute("ALTER TABLE trades ADD COLUMN closed_at TEXT")
+        paper_columns = {row["name"] for row in self.cursor.execute("PRAGMA table_info(paper_trade_links)")}
+        for name, definition in (("last_ltp", "REAL"), ("min_ltp", "REAL"), ("max_ltp", "REAL"), ("last_alert_level", "TEXT")):
+            if name not in paper_columns:
+                self.cursor.execute(f"ALTER TABLE paper_trade_links ADD COLUMN {name} {definition}")
         self.cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS market_snapshots (
@@ -272,7 +280,7 @@ class Database:
     def monitor_paper_trades(self, client) -> list[dict]:
         """Close simulated trades on a verified option quote only; no order API is used."""
         rows = self.cursor.execute(
-            """SELECT t.*, p.exchange, p.token, p.contract_symbol FROM trades t
+            """SELECT t.*, p.exchange, p.token, p.contract_symbol, p.last_ltp, p.min_ltp, p.max_ltp, p.last_alert_level FROM trades t
                JOIN paper_trade_links p ON p.trade_id = t.id WHERE t.status = 'OPEN'"""
         ).fetchall()
         closed = []
@@ -281,10 +289,43 @@ class Database:
             ltp = float(quote.get("ltp", 0) or 0)
             if ltp <= 0:
                 continue
+            minimum = min(ltp, float(row["min_ltp"])) if row["min_ltp"] is not None else ltp
+            maximum = max(ltp, float(row["max_ltp"])) if row["max_ltp"] is not None else ltp
+            risk = max(float(row["entry"]) - float(row["stoploss"]), 0.000001)
+            loss_progress = (float(row["entry"]) - ltp) / risk
+            alert_level = "CRITICAL" if loss_progress >= .90 else "STRONG" if loss_progress >= .75 else "EARLY" if loss_progress >= .50 else None
+            self.cursor.execute(
+                "UPDATE paper_trade_links SET last_ltp = ?, min_ltp = ?, max_ltp = ?, last_alert_level = COALESCE(?, last_alert_level) WHERE trade_id = ?",
+                (ltp, minimum, maximum, alert_level, int(row["id"])),
+            )
+            if alert_level:
+                self.cursor.execute(
+                    "INSERT OR IGNORE INTO trade_alerts (trade_id, created_at, alert_type, title, message) VALUES (?, ?, ?, ?, ?)",
+                    (int(row["id"]), datetime.now().isoformat(timespec="seconds"), f"PREMIUM_SL_{alert_level}",
+                     f"{alert_level.title()} option-premium stop warning",
+                     f"{row['contract_symbol']} LTP {ltp:.2f}; stop {float(row['stoploss']):.2f}; "
+                     f"{max(0, loss_progress) * 100:.0f}% of entry-to-stop risk used."),
+                )
             outcome = "TARGET HIT" if ltp >= float(row["target"]) else "STOP LOSS HIT" if ltp <= float(row["stoploss"]) else None
             if outcome and self.close_trade(int(row["id"]), ltp, outcome):
                 closed.append({"trade_id": int(row["id"]), "symbol": row["contract_symbol"], "ltp": ltp, "outcome": outcome})
+        self.connection.commit()
         return closed
+
+    def get_paper_trade_monitoring(self) -> list[dict]:
+        """Return live premium, MAE/MFE and active stop-proximity alerts."""
+        rows = self.cursor.execute(
+            """SELECT t.id, t.entry, t.stoploss, t.target, p.contract_symbol, p.last_ltp,
+                      p.min_ltp, p.max_ltp, p.last_alert_level
+               FROM trades t JOIN paper_trade_links p ON p.trade_id = t.id
+               WHERE t.status = 'OPEN' ORDER BY t.id DESC"""
+        ).fetchall()
+        return [{
+            "trade_id": int(row["id"]), "symbol": row["contract_symbol"], "ltp": row["last_ltp"],
+            "mae": round(float(row["entry"]) - float(row["min_ltp"]), 2) if row["min_ltp"] is not None else 0,
+            "mfe": round(float(row["max_ltp"]) - float(row["entry"]), 2) if row["max_ltp"] is not None else 0,
+            "alert": row["last_alert_level"], "stoploss": float(row["stoploss"]), "target": float(row["target"]),
+        } for row in rows]
 
     def paper_trade_progress(self, trade_date: str | None = None) -> dict:
         """Return forward-test progress without mixing it with manual real trades."""
