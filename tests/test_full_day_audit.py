@@ -26,6 +26,8 @@ class FullDayAuditTests(unittest.TestCase):
         self.assertEqual(result["oi_matched"], 1)
         self.assertIsNotNone(evaluate.call_args_list[0].args[2]["pcr_oi"])
         self.assertIsNone(evaluate.call_args_list[1].args[2]["pcr_oi"])
+        self.assertIn(result["evaluations"][0]["hypothetical_outcome"], {"TARGET", "STOP LOSS", "TIME EXIT"})
+        self.assertIn("Rejected outcome audit", format_tps_day_audit(result))
         self.assertIn("No strict setup found", format_tps_day_audit(result))
 
 

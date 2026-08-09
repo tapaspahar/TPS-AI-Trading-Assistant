@@ -7,89 +7,79 @@ from engine.tps_entry_confirmation import evaluate_tps_entry_v2
 class TpsEntryConfirmationTests(unittest.TestCase):
     def setUp(self):
         self.candles = [
-            {"open": 100 + index * 0.1, "high": 102 + index * 0.1, "low": 99 + index * 0.1, "close": 101 + index * 0.1, "volume": 100}
-            for index in range(60)
+            {"open": 100 + i * .1, "high": 102 + i * .1, "low": 99 + i * .1,
+             "close": 101 + i * .1, "volume": 100} for i in range(60)
         ]
         self.candles[-2]["low"] = 105.1
         self.capture = {
-            "open": "109.00", "close": "110.00", "ema_5": "108.00", "ema_20": "105.00", "ema_50": "100.00",
-            "vwap": "106.00", "supertrend": "102.00", "atr_14": "2.00", "volume_ratio": "2.00",
-            "candle_direction": "BULLISH", "fake_breakout_risk": False,
+            "open": "109", "close": "110", "ema_5": "108", "ema_20": "105", "ema_50": "100",
+            "vwap": "106", "supertrend": "102", "atr_14": "2", "rsi_14": "55",
+            "volume_ratio": "2", "candle_direction": "BULLISH", "fake_breakout_risk": False,
         }
         self.chain = {"pcr_oi": 1.0, "pcr_volume": 1.0, "call_resistance": 109, "put_support": 103}
+        self.settings = {"trade_plan_min_score": 80, "tps_required_matches": 5}
 
     @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
     @patch("engine.tps_entry_confirmation.ema", return_value=95)
-    def test_all_six_confirmations_allow_ce_entry(self, _ema, _supertrend):
-        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain)
+    def test_both_ce_and_pe_are_always_scored(self, _ema, _supertrend):
+        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain, self.settings)
+        self.assertEqual(set(result["side_evaluations"]), {"CE", "PE"})
+        self.assertEqual(result["side_evaluations"]["CE"]["score"], 100)
+        self.assertGreaterEqual(result["side_evaluations"]["PE"]["score"], 0)
         self.assertTrue(result["trade_ready"])
-        self.assertEqual(result["candidate"], "CE")
-        self.assertEqual(result["passed"], 6)
-        self.assertFalse(result["blockers"])
 
     @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
     @patch("engine.tps_entry_confirmation.ema", return_value=95)
-    def test_five_of_six_confirmations_can_pass(self, _ema, _supertrend):
-        self.chain["call_resistance"] = 116
-        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain)
-        self.assertTrue(result["trade_ready"])
-        self.assertEqual(result["passed"], 5)
-        self.assertEqual(result["score"], 83)
+    def test_mixed_market_keeps_independent_watch_candidate(self, _ema, _supertrend):
+        self.capture.update({"vwap": "111", "ema_5": "104", "ema_20": "106", "ema_50": "100"})
+        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain, self.settings)
+        self.assertIn(result["candidate"], {"CE", "PE"})
+        self.assertIn("CE", result["side_evaluations"])
+        self.assertIn("PE", result["side_evaluations"])
+        self.assertNotEqual(result["side_evaluations"]["CE"]["score"], result["side_evaluations"]["PE"]["score"])
 
     @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
     @patch("engine.tps_entry_confirmation.ema", return_value=95)
-    def test_chart_and_oi_zones_are_marked_as_confluence(self, _ema, _supertrend):
-        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain)
-        self.assertTrue(result["zones"]["support_confluence"])
-        self.assertTrue(result["zones"]["resistance_confluence"])
-        level_check = next(item for item in result["confirmations"] if item["name"] == "Breakout/support-resistance safety")
-        self.assertIn("CONFLUENCE", level_check["detail"])
-
-    @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
-    @patch("engine.tps_entry_confirmation.ema", return_value=100)
-    def test_low_volume_and_flat_ema50_are_hard_no_trade_filters(self, _ema, _supertrend):
-        self.capture.update({"volume_ratio": "0.50", "fake_breakout_risk": True})
-        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain)
-        self.assertFalse(result["trade_ready"])
-        self.assertTrue(any("volume" in reason.lower() for reason in result["blockers"]))
-        self.assertTrue(any("EMA50 is flat" in reason for reason in result["blockers"]))
+    def test_only_user_enabled_conditions_are_counted_and_normalized(self, _ema, _supertrend):
+        settings = {"trade_plan_min_score": 60, "tps_required_matches": 2,
+                    "tps_enabled_conditions": ["Price vs VWAP", "EMA 5/20/50 alignment", "SuperTrend confirmation"]}
+        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain, settings)
+        ce = result["side_evaluations"]["CE"]
+        self.assertEqual(ce["total"], 3)
+        self.assertEqual(ce["passed"], 3)
+        self.assertEqual(ce["score"], 100)
 
     @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
     @patch("engine.tps_entry_confirmation.ema", return_value=95)
-    def test_bearish_consensus_selects_pe_even_when_supertrend_is_bullish(self, _ema, _supertrend):
-        for index, candle in enumerate(self.candles):
-            candle.update({"open": 120 - index * 0.2, "high": 121 - index * 0.2, "low": 118 - index * 0.2, "close": 119 - index * 0.2})
-        self.capture.update({
-            "open": "110.00", "close": "109.00", "ema_5": "110.00", "ema_20": "112.00", "ema_50": "115.00",
-            "vwap": "114.00", "supertrend": "100.00", "candle_direction": "BEARISH",
-        })
-        self.chain.update({"pcr_oi": 0.63, "pcr_volume": 1.52})
-        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain)
-        self.assertEqual(result["direction"], "BEARISH")
+    def test_soft_failure_does_not_erase_analytical_score(self, _ema, _supertrend):
+        self.capture.update({"volume_ratio": ".5", "fake_breakout_risk": True})
+        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain, self.settings)
+        ce = result["side_evaluations"]["CE"]
+        self.assertGreater(ce["score"], 0)
+        self.assertFalse(next(item for item in ce["confirmations"] if item["name"] == "Directional volume")["passed"])
+        self.assertTrue(any("fake-breakout" in item for item in ce["hard_blockers"]))
+
+    @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
+    @patch("engine.tps_entry_confirmation.ema", return_value=95)
+    def test_bearish_pe_is_scored_even_when_supertrend_is_bullish(self, _ema, _supertrend):
+        for i, candle in enumerate(self.candles):
+            candle.update({"open": 120-i*.2, "high": 121-i*.2, "low": 118-i*.2, "close": 119-i*.2})
+        self.capture.update({"open": "110", "close": "109", "ema_5": "110", "ema_20": "112", "ema_50": "115",
+                             "vwap": "114", "supertrend": "100", "candle_direction": "BEARISH"})
+        self.chain.update({"pcr_oi": .63, "pcr_volume": 1.52})
+        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain, self.settings)
+        pe = result["side_evaluations"]["PE"]
+        self.assertGreater(pe["score"], result["side_evaluations"]["CE"]["score"])
+        self.assertFalse(next(item for item in pe["confirmations"] if item["name"] == "SuperTrend confirmation")["passed"])
         self.assertEqual(result["candidate"], "PE")
-        self.assertFalse(next(item for item in result["confirmations"] if item["name"] == "SuperTrend confirmation")["passed"])
 
     @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
     @patch("engine.tps_entry_confirmation.ema", return_value=95)
-    def test_one_bullish_candle_does_not_turn_a_bearish_setup_into_ce(self, _ema, _supertrend):
-        for index, candle in enumerate(self.candles):
-            candle.update({"open": 120 - index * 0.2, "high": 121 - index * 0.2, "low": 118 - index * 0.2, "close": 119 - index * 0.2})
-        self.capture.update({
-            "open": "108.00", "close": "109.00", "ema_5": "110.00", "ema_20": "112.00", "ema_50": "115.00",
-            "vwap": "114.00", "supertrend": "100.00", "candle_direction": "BULLISH",
-        })
-        self.chain.update({"pcr_oi": 0.63, "pcr_volume": 1.52})
-        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain)
-        self.assertEqual(result["direction"], "BEARISH")
-        self.assertEqual(result["candidate"], "PE")
-        self.assertFalse(result["trade_ready"])
-        self.assertFalse(next(item for item in result["confirmations"] if item["name"] == "Directional volume")["passed"])
-
-    @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
-    @patch("engine.tps_entry_confirmation.ema", return_value=95)
-    def test_mixed_direction_never_selects_an_option_side(self, _ema, _supertrend):
-        self.capture.update({"vwap": "111.00", "ema_5": "104.00", "ema_20": "106.00", "ema_50": "100.00"})
-        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain)
-        self.assertEqual(result["direction"], "MIXED")
-        self.assertIsNone(result["candidate"])
-        self.assertFalse(result["trade_ready"])
+    def test_rsi_exhaustion_is_a_separate_pe_hard_blocker(self, _ema, _supertrend):
+        for i, candle in enumerate(self.candles):
+            candle.update({"open": 120-i*.2, "high": 121-i*.2, "low": 118-i*.2, "close": 119-i*.2})
+        self.capture.update({"open": "110", "close": "109", "ema_5": "110", "ema_20": "112", "ema_50": "115",
+                             "vwap": "114", "supertrend": "112", "candle_direction": "BEARISH", "rsi_14": "24"})
+        self.chain.update({"pcr_oi": .63, "pcr_volume": 1.52, "put_support": 108})
+        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain, self.settings)
+        self.assertTrue(any("oversold" in item for item in result["side_evaluations"]["PE"]["hard_blockers"]))

@@ -29,6 +29,21 @@ class SettingsStoreTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "between 0 and 100"):
                 store.save(settings)
 
+    def test_selected_tps_checklist_is_persisted_and_validated(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = SettingsStore(Path(directory) / "settings.json")
+            settings = store.load()
+            settings.update({
+                "tps_enabled_conditions": ["Price vs VWAP", "EMA 5/20/50 alignment"],
+                "tps_required_matches": 1, "tps_match_mode": "count",
+            })
+            saved = store.save(settings)
+            self.assertEqual(saved["tps_required_matches"], 1)
+            self.assertEqual(len(saved["tps_enabled_conditions"]), 2)
+            settings["tps_required_matches"] = 3
+            with self.assertRaisesRegex(ValueError, "fit within"):
+                store.save(settings)
+
     def test_invalid_settings_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             store = SettingsStore(Path(directory) / "settings.json")

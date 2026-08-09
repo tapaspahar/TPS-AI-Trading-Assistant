@@ -18,10 +18,17 @@ def format_auto_paper_attempt(result):
         ))
     if chart:
         strategy = chart.get("strategy") or {}
-        lines.append(f"Decision: {chart.get('decision', '-')} | Direction: {chart.get('direction', '-')} | Candidate: {attempt.get('candidate') or '-'} | TPS v2 confirmations: {strategy.get('passed', '-')}/6 (minimum 5/6) | Score: {chart.get('score', '-')}/100")
+        sides = strategy.get("side_evaluations") or {}
+        ce, pe = sides.get("CE") or {}, sides.get("PE") or {}
+        lines.append(
+            f"Decision: {chart.get('decision', '-')} | Candidate: {attempt.get('candidate') or '-'} | "
+            f"CE score {ce.get('score', '-')} ({ce.get('passed', '-')}/{ce.get('total', '-')}) | "
+            f"PE score {pe.get('score', '-')} ({pe.get('passed', '-')}/{pe.get('total', '-')}) | "
+            f"Required: {strategy.get('required', '-')} matches + score {strategy.get('minimum_score', '-')}"
+        )
         confirmations = strategy.get("confirmations") or []
         if confirmations:
-            lines.append("TPS v2 checklist:")
+            lines.append("Selected-side checklist evidence:")
             lines.extend(f"{'PASS' if item['passed'] else 'FAIL'} - {item['name']}: {item['detail']}" for item in confirmations)
         zones = strategy.get("zones") or {}
         if zones:
@@ -34,6 +41,13 @@ def format_auto_paper_attempt(result):
         reasons = chart.get("reasons") or []
         if reasons:
             lines.append("Conditions passed: " + "; ".join(reasons))
+        environment = strategy.get("market_environment") or chart.get("market_environment") or {}
+        if environment:
+            lines.append(
+                f"Market environment: {environment.get('regime')} | VIX {environment.get('vix') or 'Unavailable'} "
+                f"({environment.get('vix_zone')}) | ATR {environment.get('atr_percent')}% | "
+                f"Risk multiplier {environment.get('risk_multiplier')} | Strike {environment.get('strike_preference')}"
+            )
     chain = attempt.get("chain") or {}
     if chain:
         oi_pcr = f"{chain['pcr_oi']:.2f}" if chain.get("pcr_oi") is not None else "Unavailable"

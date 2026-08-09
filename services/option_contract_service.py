@@ -151,3 +151,11 @@ class OptionContractService:
         if underlying not in UNDERLYINGS:
             raise ValueError("Choose NIFTY, BANKNIFTY, or SENSEX.")
         return parse_front_month_future(self._load_master(), underlying)
+
+    def get_india_vix_instrument(self):
+        """Discover India VIX from the daily master instead of hard-coding a token."""
+        for row in self._load_master():
+            identity = f"{row.get('name', '')} {row.get('symbol', '')}".upper()
+            if str(row.get("exch_seg", "")).upper() == "NSE" and "INDIA VIX" in identity:
+                return {"exchange": "NSE", "token": str(row["token"]), "symbol": str(row.get("symbol") or "INDIA VIX")}
+        raise RuntimeError("India VIX instrument was not found in Angel One's daily instrument master.")
