@@ -1,8 +1,11 @@
 from datetime import datetime
 from threading import Thread
 
-from PySide6.QtCore import QTimer, Signal
-from PySide6.QtWidgets import QComboBox, QGridLayout, QGroupBox, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtWidgets import (
+    QComboBox, QFrame, QGridLayout, QGroupBox, QLabel, QMessageBox,
+    QPushButton, QScrollArea, QVBoxLayout, QWidget,
+)
 
 from services.angel_one_stream import AngelOneStream
 from services.live_session import LiveSession
@@ -38,7 +41,20 @@ class LiveMarketPage(QWidget):
 
     def __init__(self):
         super().__init__()
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        self.scroll = QScrollArea()
+        self.scroll.setObjectName("liveMarketScroll")
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QFrame.NoFrame)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        content = QWidget()
+        content.setObjectName("liveMarketContent")
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(10, 8, 10, 10)
+        layout.setSpacing(8)
+        self.scroll.setWidget(content)
+        outer.addWidget(self.scroll)
         self.status = QLabel()
         layout.addWidget(self.status)
         buttons = QGridLayout()
