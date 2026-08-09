@@ -79,6 +79,11 @@ class AboutPage(QWidget):
           overnight gap, nearby economic events and the directional-versus-hedge research note.</li>
           <li>Check the generated plan in <b>Risk Control Center</b>. Quantity uses predefined index lots:
           NIFTY 65, BANKNIFTY 30 and SENSEX 20.</li>
+          <li>Use <b>CAS Analysis</b> after market close to compare an F&amp;O stock's 3:00-3:15 reference VWAP,
+          final cash close and front-month futures close. TPS labels this as an estimate when exchange auction
+          imbalance data is unavailable through the broker feed.</li>
+          <li>Use <b>Stock Options Watch</b> to maintain up to 8 active NSE F&amp;O shares. The completed-candle
+          scan shows CE/PE side, score, entry timing and a one-lot paper plan with entry, stop, target and quantity.</li>
           <li>Use <b>Trade Journal</b> for planned entry, stop loss, target, actual exit and review notes.</li>
         </ol>
         <h3>Workspace guide</h3>
@@ -122,6 +127,11 @@ class AboutPage(QWidget):
           economic event aur directional/hedge research note dekhiye.</li>
           <li><b>Risk Control Center</b> me plan ka risk dekhiye. Quantity predefined lots se niklegi:
           NIFTY 65, BANKNIFTY 30 aur SENSEX 20.</li>
+          <li>Market close ke baad <b>CAS Analysis</b> me F&amp;O stock ka 3:00-3:15 reference VWAP, final cash close
+          aur front-month future close compare kijiye. Broker feed me exchange auction imbalance na milne par
+          TPS result ko estimate ke roop me clearly dikhayega.</li>
+          <li><b>Stock Options Watch</b> me maximum 8 active NSE F&amp;O shares rakhiye. Completed 5-minute candle
+          scan CE/PE side, score, entry timing aur one-lot paper plan ka entry, stop, target aur quantity dikhayega.</li>
           <li><b>Trade Journal</b> me entry, stop loss, target, actual exit aur review notes record kijiye.</li>
         </ol>
         <h3>Har page ka kaam</h3>

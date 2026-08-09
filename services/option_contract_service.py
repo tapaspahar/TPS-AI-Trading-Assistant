@@ -82,6 +82,78 @@ def parse_front_month_future(rows, underlying):
     return min(futures, key=lambda item: item["expiry"])
 
 
+def parse_stock_option_universe(rows):
+    """Map NSE cash shares that currently have active stock-option contracts."""
+    active_names = {
+        str(row.get("name", "")).upper().strip()
+        for row in rows
+        if str(row.get("exch_seg", "")).upper() == "NFO"
+        and str(row.get("instrumenttype", "")).upper() == "OPTSTK"
+        and (_expiry_date(row.get("expiry")) or date.min) >= date.today()
+    }
+    universe, seen = [], set()
+    for row in rows:
+        name = str(row.get("name", "")).upper().strip()
+        symbol = str(row.get("symbol", "")).upper().strip()
+        token = str(row.get("token", "")).strip()
+        if (
+            str(row.get("exch_seg", "")).upper() != "NSE" or not symbol.endswith("-EQ")
+            or name not in active_names or not token or name in seen
+        ):
+            continue
+        seen.add(name)
+        universe.append({
+            "underlying": name, "company": str(row.get("name") or name),
+            "symbol": symbol, "token": token, "exchange": "NSE", "derivative_exchange": "NFO",
+        })
+    return sorted(universe, key=lambda item: item["underlying"])
+
+
+def parse_stock_option_contracts(rows, underlying):
+    underlying = str(underlying).upper().strip()
+    contracts = []
+    for row in rows:
+        if str(row.get("exch_seg", "")).upper() != "NFO":
+            continue
+        if str(row.get("name", "")).upper().strip() != underlying:
+            continue
+        if str(row.get("instrumenttype", "")).upper() != "OPTSTK":
+            continue
+        symbol = str(row.get("symbol", "")).upper()
+        option_type = "CE" if symbol.endswith("CE") else "PE" if symbol.endswith("PE") else ""
+        expiry = _expiry_date(row.get("expiry"))
+        if not option_type or not expiry or expiry < date.today():
+            continue
+        contracts.append({
+            "token": str(row["token"]), "symbol": str(row["symbol"]), "exchange": "NFO",
+            "expiry": expiry, "strike": _strike(row.get("strike")), "option_type": option_type,
+            "lot_size": int(float(row.get("lotsize", 0) or 0)),
+        })
+    return sorted(contracts, key=lambda item: (item["expiry"], item["strike"], item["option_type"]))
+
+
+def parse_stock_front_month_future(rows, underlying):
+    underlying = str(underlying).upper().strip()
+    futures = []
+    for row in rows:
+        if str(row.get("exch_seg", "")).upper() != "NFO":
+            continue
+        if str(row.get("name", "")).upper().strip() != underlying:
+            continue
+        if str(row.get("instrumenttype", "")).upper() != "FUTSTK":
+            continue
+        expiry = _expiry_date(row.get("expiry"))
+        if not expiry or expiry < date.today():
+            continue
+        futures.append({
+            "token": str(row["token"]), "symbol": str(row["symbol"]), "exchange": "NFO",
+            "expiry": expiry, "lot_size": int(float(row.get("lotsize", 0) or 0)),
+        })
+    if not futures:
+        raise RuntimeError(f"No active {underlying} stock future was found in Angel One's instrument master.")
+    return min(futures, key=lambda item: item["expiry"])
+
+
 def buying_risk(premium, lot_size, capital, risk_percent):
     """Suggest the maximum whole lots within the user's configured premium-risk cap."""
     per_lot_risk = float(premium) * int(lot_size)
@@ -159,3 +231,18 @@ class OptionContractService:
             if str(row.get("exch_seg", "")).upper() == "NSE" and "INDIA VIX" in identity:
                 return {"exchange": "NSE", "token": str(row["token"]), "symbol": str(row.get("symbol") or "INDIA VIX")}
         raise RuntimeError("India VIX instrument was not found in Angel One's daily instrument master.")
+
+    def get_stock_option_universe(self):
+        universe = parse_stock_option_universe(self._load_master())
+        if not universe:
+            raise RuntimeError("No active NSE stock-option underlyings were found in Angel One's instrument master.")
+        return universe
+
+    def get_stock_contracts(self, underlying):
+        contracts = parse_stock_option_contracts(self._load_master(), underlying)
+        if not contracts:
+            raise RuntimeError(f"No active {underlying} stock-option contracts were found.")
+        return contracts
+
+    def get_stock_front_month_future(self, underlying):
+        return parse_stock_front_month_future(self._load_master(), underlying)
