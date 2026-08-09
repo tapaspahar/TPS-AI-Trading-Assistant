@@ -39,6 +39,15 @@ def format_auto_paper_attempt(result):
                 f"vs Call-OI resistance {zones.get('oi_resistance', '-')} ({'MATCH' if zones.get('resistance_confluence') else 'NOT ALIGNED'}) | "
                 f"Tolerance {zones.get('tolerance', '-')}"
             )
+        selected_side = sides.get(attempt.get("candidate")) or {}
+        entry_quality = selected_side.get("entry_quality") or {}
+        if entry_quality:
+            lines.append(
+                f"Entry timing: {'TIMELY' if entry_quality.get('timely') else 'LATE / EXTENDED'} | "
+                f"Distance {entry_quality.get('extension_points')} points = {entry_quality.get('extension_atr')} ATR "
+                f"(maximum {entry_quality.get('maximum_extension_atr')} ATR) | RSI {entry_quality.get('rsi')} | "
+                f"Fresh pullback/reversal {'YES' if entry_quality.get('fresh_pullback_reversal') else 'NO'}"
+            )
         reasons = chart.get("reasons") or []
         if reasons:
             lines.append("Conditions passed: " + "; ".join(reasons))

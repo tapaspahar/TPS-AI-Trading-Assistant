@@ -13,8 +13,8 @@ class TpsEntryConfirmationTests(unittest.TestCase):
         self.candles[-2]["low"] = 105.1
         self.capture = {
             "open": "109", "close": "110", "ema_5": "108", "ema_20": "105", "ema_50": "100",
-            "vwap": "106", "supertrend": "102", "atr_14": "2", "rsi_14": "55",
-            "volume_ratio": "2", "candle_direction": "BULLISH", "fake_breakout_risk": False,
+            "vwap": "106", "supertrend": "102", "atr_14": "10", "rsi_14": "55",
+            "volume_ratio": "2", "volume_ema": "100", "candle_direction": "BULLISH", "fake_breakout_risk": False,
         }
         self.chain = {"pcr_oi": 1.0, "pcr_volume": 1.0, "call_resistance": 109, "put_support": 103}
         self.settings = {"trade_plan_min_score": 80, "tps_required_matches": 5}
@@ -82,4 +82,58 @@ class TpsEntryConfirmationTests(unittest.TestCase):
                              "vwap": "114", "supertrend": "112", "candle_direction": "BEARISH", "rsi_14": "24"})
         self.chain.update({"pcr_oi": .63, "pcr_volume": 1.52, "put_support": 108})
         result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain, self.settings)
-        self.assertTrue(any("oversold" in item for item in result["side_evaluations"]["PE"]["hard_blockers"]))
+        self.assertTrue(any("Late PE entry" in item for item in result["side_evaluations"]["PE"]["hard_blockers"]))
+
+    @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
+    @patch("engine.tps_entry_confirmation.ema", return_value=95)
+    def test_august_6_late_ce_is_blocked_even_after_breakout(self, _ema, _supertrend):
+        self.capture.update({
+            "open": "24729", "close": "24745.90", "ema_5": "24725.08", "ema_20": "24672.10",
+            "ema_50": "24644.49", "vwap": "24716.37", "supertrend": "24662.63",
+            "atr_14": "29.65", "rsi_14": "92.44", "volume_ratio": "1.88", "volume_ema": "892.44",
+        })
+        self.chain.update({"call_resistance": 24700, "put_support": 24600})
+        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain, self.settings)
+        ce = result["side_evaluations"]["CE"]
+        self.assertFalse(ce["trade_ready"])
+        self.assertFalse(ce["entry_quality"]["timely"])
+        self.assertTrue(any("Late CE entry" in item for item in ce["hard_blockers"]))
+
+    @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
+    @patch("engine.tps_entry_confirmation.ema", return_value=95)
+    def test_august_7_late_pe_at_support_is_blocked(self, _ema, _supertrend):
+        for i, candle in enumerate(self.candles):
+            candle.update({"open": 24800-i*2, "high": 24805-i*2, "low": 24790-i*2, "close": 24795-i*2})
+        self.capture.update({
+            "open": "24670.10", "close": "24650.60", "ema_5": "24673.56", "ema_20": "24696.90",
+            "ema_50": "24708.22", "vwap": "24677.13", "supertrend": "24592.71",
+            "atr_14": "26.48", "rsi_14": "24.72", "volume_ratio": "2.40", "volume_ema": "471.93",
+            "candle_direction": "BEARISH",
+        })
+        self.chain.update({"call_resistance": 24600, "put_support": 24600})
+        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain, self.settings)
+        pe = result["side_evaluations"]["PE"]
+        self.assertFalse(pe["trade_ready"])
+        self.assertFalse(pe["entry_quality"]["timely"])
+        self.assertTrue(any("Late PE entry" in item for item in pe["hard_blockers"]))
+
+    @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
+    @patch("engine.tps_entry_confirmation.ema", return_value=95)
+    def test_recent_impulse_volume_can_confirm_a_timely_pullback(self, _ema, _supertrend):
+        self.candles[-3].update({"open": 104, "close": 107, "volume": 220})
+        self.capture.update({"volume_ratio": ".80", "volume_ema": "100", "rsi_14": "55"})
+        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain, self.settings)
+        volume = next(item for item in result["side_evaluations"]["CE"]["confirmations"] if item["name"] == "Directional volume")
+        self.assertTrue(volume["passed"])
+        self.assertIn("recent bullish impulse", volume["detail"])
+
+    @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
+    @patch("engine.tps_entry_confirmation.ema", return_value=95)
+    def test_just_closed_reversal_candle_does_not_wait_an_extra_candle(self, _ema, _supertrend):
+        for candle in self.candles[-3:]:
+            candle["low"] = 90
+        self.candles[-1].update({"open": 106, "close": 110, "low": 105.2, "volume": 210})
+        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain, self.settings)
+        pullback = next(item for item in result["side_evaluations"]["CE"]["confirmations"] if item["name"] == "Pullback and reversal")
+        self.assertTrue(pullback["passed"])
+        self.assertTrue(result["side_evaluations"]["CE"]["entry_quality"]["fresh_pullback_reversal"])

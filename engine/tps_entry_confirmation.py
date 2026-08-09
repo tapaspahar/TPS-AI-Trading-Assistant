@@ -22,6 +22,13 @@ CONDITION_WEIGHTS = {
 }
 DEFAULT_ENABLED = tuple(CONDITION_WEIGHTS)
 
+# Execution-quality safeguards are deliberately independent from the user's
+# score threshold.  A low testing score must never turn an exhausted/chased
+# candle into an automatic paper entry.
+DEFAULT_MAX_ENTRY_EXTENSION_ATR = 0.75
+DEFAULT_CE_MAX_RSI = 75.0
+DEFAULT_PE_MIN_RSI = 25.0
+
 
 def _side_condition(name, passed, detail):
     return {"name": name, "passed": bool(passed), "detail": detail}
@@ -32,6 +39,26 @@ def _side_score(confirmations, enabled):
     possible = sum(CONDITION_WEIGHTS[item["name"]] for item in selected)
     earned = sum(CONDITION_WEIGHTS[item["name"]] for item in selected if item["passed"])
     return round(earned / possible * 100) if possible else 0, selected
+
+
+def _recent_impulse_volume(candles, volume_ema, threshold, side):
+    """Accept volume from the impulse immediately preceding a pullback entry.
+
+    Requiring heavy volume on the entry candle itself tends to authorise a
+    trade only after price has already expanded.  A directional impulse in the
+    previous three completed candles is valid confirmation when the current
+    candle is the pullback/reversal trigger.
+    """
+    if not volume_ema:
+        return False
+    for candle in candles[-4:-1]:
+        opening = float(candle.get("open", 0) or 0)
+        close = float(candle.get("close", 0) or 0)
+        volume = float(candle.get("volume", 0) or 0)
+        directional = close > opening if side == "CE" else close < opening
+        if directional and volume >= volume_ema * threshold:
+            return True
+    return False
 
 
 def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environment=None):
@@ -51,6 +78,7 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
     atr = float(capture["atr_14"]) if capture.get("atr_14") else max(close * .001, 1)
     rsi = float(capture["rsi_14"]) if capture.get("rsi_14") else None
     volume_ratio = float(capture["volume_ratio"]) if capture.get("volume_ratio") else 0
+    volume_ema = float(capture["volume_ema"]) if capture.get("volume_ema") else None
     candle_direction = capture.get("candle_direction", "NEUTRAL")
     structure = analyze_candles(candles)
     structure_state = structure["state"]
@@ -62,9 +90,11 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
     pcr_volume = float(pcr_volume) if pcr_volume is not None else None
     tolerance = max(atr * .35, close * .0005)
     zones = [ema_5, ema_20] + ([vwap] if vwap is not None else [])
-    prior = candles[-5:-1]
-    recent_bullish_touch = any(any(abs(float(c["low"]) - zone) <= tolerance for zone in zones) for c in prior)
-    recent_bearish_touch = any(any(abs(float(c["high"]) - zone) <= tolerance for zone in zones) for c in prior)
+    # Include the just-completed trigger candle.  Excluding it forced the
+    # engine to wait one extra 5-minute candle after a valid EMA/VWAP retest.
+    trigger_window = candles[-3:]
+    recent_bullish_touch = any(any(abs(float(c["low"]) - zone) <= tolerance for zone in zones) for c in trigger_window)
+    recent_bearish_touch = any(any(abs(float(c["high"]) - zone) <= tolerance for zone in zones) for c in trigger_window)
     environment = environment or {}
     environment_ok = not environment or (
         float(environment.get("risk_multiplier", 1)) >= .75 and environment.get("vix_zone") != "EXTREME RISK"
@@ -75,6 +105,24 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
     )
     volume_threshold = float(environment.get("volume_threshold", 1.5))
     strong_quality = volume_ratio >= volume_threshold and not capture.get("fake_breakout_risk", True)
+    ce_recent_impulse = _recent_impulse_volume(candles, volume_ema, volume_threshold, "CE")
+    pe_recent_impulse = _recent_impulse_volume(candles, volume_ema, volume_threshold, "PE")
+    ce_volume_ok = not capture.get("fake_breakout_risk", True) and (
+        (strong_quality and candle_direction == "BULLISH") or (recent_bullish_touch and ce_recent_impulse)
+    )
+    pe_volume_ok = not capture.get("fake_breakout_risk", True) and (
+        (strong_quality and candle_direction == "BEARISH") or (recent_bearish_touch and pe_recent_impulse)
+    )
+    ce_volume_detail = (
+        f"{volume_ratio:.2f}x current Volume EMA20" if strong_quality and candle_direction == "BULLISH"
+        else f"recent bullish impulse >= {volume_threshold:.2f}x Volume EMA20 before pullback"
+        if ce_recent_impulse else f"{volume_ratio:.2f}x Volume EMA20; no qualifying recent bullish impulse"
+    )
+    pe_volume_detail = (
+        f"{volume_ratio:.2f}x current Volume EMA20" if strong_quality and candle_direction == "BEARISH"
+        else f"recent bearish impulse >= {volume_threshold:.2f}x Volume EMA20 before pullback"
+        if pe_recent_impulse else f"{volume_ratio:.2f}x Volume EMA20; no qualifying recent bearish impulse"
+    )
 
     common = {
         "CE": [
@@ -83,7 +131,7 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
             _side_condition("EMA 5/20/50 alignment", ema_5 > ema_20 > ema_50, f"EMA5 {ema_5:.2f} > EMA20 {ema_20:.2f} > EMA50 {ema_50:.2f}"),
             _side_condition("SuperTrend confirmation", close > trend_line, f"Close {close:.2f} > SuperTrend {trend_line:.2f}"),
             _side_condition("Pullback and reversal", recent_bullish_touch and close > opening, f"EMA/VWAP touch within {tolerance:.2f}; candle {candle_direction}"),
-            _side_condition("Directional volume", strong_quality and candle_direction == "BULLISH", f"{volume_ratio:.2f}x Volume EMA20; required {volume_threshold:.2f}x; candle {candle_direction}"),
+            _side_condition("Directional volume", ce_volume_ok, ce_volume_detail),
             _side_condition("OI/PCR context", pcr_oi is not None and pcr_volume is not None and pcr_oi >= .75 and pcr_volume <= 1.25, f"OI PCR {pcr_oi if pcr_oi is not None else '-'}; Volume PCR {pcr_volume if pcr_volume is not None else '-'}"),
             _side_condition("Market environment / VIX", environment_ok, environment_detail),
         ],
@@ -93,7 +141,7 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
             _side_condition("EMA 5/20/50 alignment", ema_5 < ema_20 < ema_50, f"EMA5 {ema_5:.2f} < EMA20 {ema_20:.2f} < EMA50 {ema_50:.2f}"),
             _side_condition("SuperTrend confirmation", close < trend_line, f"Close {close:.2f} < SuperTrend {trend_line:.2f}"),
             _side_condition("Pullback and reversal", recent_bearish_touch and close < opening, f"EMA/VWAP touch within {tolerance:.2f}; candle {candle_direction}"),
-            _side_condition("Directional volume", strong_quality and candle_direction == "BEARISH", f"{volume_ratio:.2f}x Volume EMA20; required {volume_threshold:.2f}x; candle {candle_direction}"),
+            _side_condition("Directional volume", pe_volume_ok, pe_volume_detail),
             _side_condition("OI/PCR context", pcr_oi is not None and pcr_volume is not None and pcr_oi <= 1.25 and pcr_volume >= .80, f"OI PCR {pcr_oi if pcr_oi is not None else '-'}; Volume PCR {pcr_volume if pcr_volume is not None else '-'}"),
             _side_condition("Market environment / VIX", environment_ok, environment_detail),
         ],
@@ -105,6 +153,9 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
     support_confluence = support_gap is not None and support_gap <= zone_tolerance
     resistance_confluence = resistance_gap is not None and resistance_gap <= zone_tolerance
     required_room = max(atr * .75, close * .001)
+    max_extension_atr = max(.30, min(float(settings.get("tps_max_entry_extension_atr", DEFAULT_MAX_ENTRY_EXTENSION_ATR)), 2.0))
+    ce_max_rsi = max(60.0, min(float(settings.get("tps_ce_max_rsi", DEFAULT_CE_MAX_RSI)), 90.0))
+    pe_min_rsi = max(10.0, min(float(settings.get("tps_pe_min_rsi", DEFAULT_PE_MIN_RSI)), 40.0))
     side_results = {}
     for side in ("CE", "PE"):
         score, selected = _side_score(common[side], enabled)
@@ -113,6 +164,10 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
         if capture.get("fake_breakout_risk", True):
             blockers.append("Rejection-wick / fake-breakout risk is active")
         if side == "CE":
+            trigger_ok = recent_bullish_touch and close > opening and candle_direction == "BULLISH"
+            timing_reference = max(level for level in (ema_20, vwap) if level is not None)
+            extension_points = max(0.0, close - timing_reference)
+            extension_atr = extension_points / atr
             resistance_levels = [level for level in (chart_resistance, oi_resistance) if level is not None]
             nearest = min(resistance_levels) if resistance_levels else None
             room = nearest - close if nearest is not None else None
@@ -121,9 +176,17 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
                 blockers.append("Resistance level is unavailable")
             elif 0 <= room < required_room and not breakout:
                 blockers.append(f"CE entry is too close to resistance ({room:.2f} < {required_room:.2f} points room)")
-            if rsi is not None and rsi >= 70 and not breakout:
-                blockers.append(f"RSI {rsi:.1f} is overbought near resistance")
+            if extension_atr > max_extension_atr:
+                blockers.append(f"Late CE entry: price is {extension_atr:.2f} ATR above VWAP/EMA20 (maximum {max_extension_atr:.2f})")
+            if rsi is not None and rsi >= ce_max_rsi:
+                blockers.append(f"Late CE entry: RSI {rsi:.1f} is above the {ce_max_rsi:.1f} chase limit")
+            if not trigger_ok:
+                blockers.append("No fresh bullish EMA/VWAP pullback-and-reversal trigger")
         else:
+            trigger_ok = recent_bearish_touch and close < opening and candle_direction == "BEARISH"
+            timing_reference = min(level for level in (ema_20, vwap) if level is not None)
+            extension_points = max(0.0, timing_reference - close)
+            extension_atr = extension_points / atr
             support_levels = [level for level in (chart_support, oi_support) if level is not None]
             nearest = max(support_levels) if support_levels else None
             room = close - nearest if nearest is not None else None
@@ -132,8 +195,12 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
                 blockers.append("Support level is unavailable")
             elif 0 <= room < required_room and not breakdown:
                 blockers.append(f"PE entry is too close to support ({room:.2f} < {required_room:.2f} points room)")
-            if rsi is not None and rsi <= 30 and not breakdown:
-                blockers.append(f"RSI {rsi:.1f} is oversold near support")
+            if extension_atr > max_extension_atr:
+                blockers.append(f"Late PE entry: price is {extension_atr:.2f} ATR below VWAP/EMA20 (maximum {max_extension_atr:.2f})")
+            if rsi is not None and rsi <= pe_min_rsi:
+                blockers.append(f"Late PE entry: RSI {rsi:.1f} is below the {pe_min_rsi:.1f} chase limit")
+            if not trigger_ok:
+                blockers.append("No fresh bearish EMA/VWAP pullback-and-reversal trigger")
         checklist_matched = passed >= required
         score_matched = score >= minimum_score
         ready = checklist_matched and score_matched and not blockers
@@ -142,6 +209,15 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
             "passed": passed, "total": len(selected), "required": required, "score": score,
             "checklist_matched": checklist_matched, "score_matched": score_matched,
             "hard_blockers": blockers, "trade_ready": ready,
+            "entry_quality": {
+                "reference": timing_reference, "extension_points": round(extension_points, 2),
+                "extension_atr": round(extension_atr, 2), "maximum_extension_atr": max_extension_atr,
+                "rsi": rsi, "rsi_limit": ce_max_rsi if side == "CE" else pe_min_rsi,
+                "fresh_pullback_reversal": trigger_ok,
+                "timely": extension_atr <= max_extension_atr and (
+                    rsi is None or (rsi < ce_max_rsi if side == "CE" else rsi > pe_min_rsi)
+                ) and trigger_ok,
+            },
             "state": "EXECUTE" if ready else "REJECTED" if blockers else "WATCH",
         }
 
