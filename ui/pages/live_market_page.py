@@ -10,6 +10,7 @@ from services.option_contract_service import OptionContractService
 from services.market_snapshot_recorder import MarketSnapshotRecorder
 from core.database_manager import Database
 from engine.market_structure import analyze_candles
+from engine.market_environment import classify_india_vix
 from engine.multi_timeframe_engine import analyze_multi_timeframe
 from ui.widgets.cards.dashboard_card import DashboardCard
 
@@ -78,6 +79,7 @@ class LiveMarketPage(QWidget):
         self.overview_cards = {
             **{symbol: DashboardCard(f"{symbol} Spot", "Waiting") for symbol in ("NIFTY", "BANKNIFTY", "SENSEX")},
             **{f"{symbol} FUT": DashboardCard(f"{symbol} Future", "Loading") for symbol in ("NIFTY", "BANKNIFTY", "SENSEX")},
+            "INDIA VIX": DashboardCard("India VIX", "Loading live volatility"),
         }
         for card in self.overview_cards.values():
             card.set_compact(True)
@@ -99,6 +101,7 @@ class LiveMarketPage(QWidget):
         self.selected_symbol = None
         self.overview_loading = False
         self.future_contracts = {}
+        self.vix_instrument = None
         self.overview_timer = QTimer(self)
         self.overview_timer.timeout.connect(self.load_market_overview)
         self.snapshot_timer = QTimer(self)
@@ -122,6 +125,8 @@ class LiveMarketPage(QWidget):
         for index, card in enumerate(ordered_cards):
             self.overview_grid.addWidget(card, index // columns, index % columns)
         rows = (len(ordered_cards) + columns - 1) // columns
+        self.overview_grid.addWidget(self.overview_cards["INDIA VIX"], rows, 0, 1, columns)
+        rows += 1
         height = 58 + rows * 82 + max(0, rows - 1) * 16
         self.overview_box.setFixedHeight(height)
         self._overview_columns = columns
@@ -338,16 +343,30 @@ class LiveMarketPage(QWidget):
             if not futures:
                 service = OptionContractService()
                 futures = {symbol: service.get_front_month_future(symbol) for symbol in ("NIFTY", "BANKNIFTY", "SENSEX")}
+            else:
+                service = OptionContractService()
             request = {"NSE": ["99926000", "99926009"], "BSE": ["99919000"]}
             for future in futures.values():
                 request.setdefault(future["exchange"], []).append(future["token"])
+            vix_instrument = self.vix_instrument
+            if not vix_instrument:
+                try:
+                    vix_instrument = service.get_india_vix_instrument()
+                except RuntimeError:
+                    vix_instrument = None
+            if vix_instrument:
+                request.setdefault(vix_instrument["exchange"], []).append(vix_instrument["token"])
             quotes = LiveSession.client.get_market_quotes(request)
-            self.overview_received.emit({"quotes": {str(quote.get("symbolToken", quote.get("symboltoken", ""))): quote for quote in quotes}, "futures": futures})
+            self.overview_received.emit({
+                "quotes": {str(quote.get("symbolToken", quote.get("symboltoken", ""))): quote for quote in quotes},
+                "futures": futures, "vix_instrument": vix_instrument,
+            })
         except RuntimeError as error:
             self.overview_error.emit(str(error))
 
     def show_overview(self, result):
         quotes, self.future_contracts = result["quotes"], result["futures"]
+        self.vix_instrument = result.get("vix_instrument")
         token_map = {"99926000": "NIFTY", "99926009": "BANKNIFTY", "99919000": "SENSEX"}
         for token, symbol in token_map.items():
             quote = quotes.get(token)
@@ -372,6 +391,15 @@ class LiveMarketPage(QWidget):
                 )
             else:
                 self.overview_cards[f"{symbol} FUT"].set_value("Future quote unavailable")
+        vix_quote = quotes.get(str((self.vix_instrument or {}).get("token", "")))
+        if vix_quote:
+            vix = float(vix_quote.get("ltp", 0) or 0)
+            zone, _risk_multiplier = classify_india_vix(vix)
+            self.overview_cards["INDIA VIX"].set_value(
+                f"{vix:.2f}  |  {zone}\nUpdated {datetime.now().strftime('%H:%M:%S')}"
+            )
+        else:
+            self.overview_cards["INDIA VIX"].set_value("Live VIX quote unavailable")
         self.overview_loading = False
 
     def show_overview_error(self, _message):

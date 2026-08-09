@@ -1,10 +1,15 @@
 import unittest
 from datetime import datetime
 
-from engine.market_environment import analyze_market_environment
+from engine.market_environment import analyze_market_environment, classify_india_vix
 
 
 class MarketEnvironmentTests(unittest.TestCase):
+    def test_india_vix_card_and_engine_share_zone_classification(self):
+        self.assertEqual(classify_india_vix(11.5)[0], "CALM / RANGE")
+        self.assertEqual(classify_india_vix(14.2)[0], "HEALTHY TREND")
+        self.assertEqual(classify_india_vix(18.0)[0], "HIGH VOLATILITY")
+        self.assertEqual(classify_india_vix(24.0)[0], "EXTREME RISK")
     def capture(self):
         return {"close": "25000", "atr_14": "100", "ema_5": "25050", "ema_20": "25000",
                 "ema_50": "24800", "volume_ratio": "1.6"}
