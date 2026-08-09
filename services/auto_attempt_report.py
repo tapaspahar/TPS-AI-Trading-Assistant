@@ -18,6 +18,7 @@ def format_auto_paper_attempt(result):
         ))
     if chart:
         strategy = chart.get("strategy") or {}
+        environment = strategy.get("market_environment") or chart.get("market_environment") or {}
         sides = strategy.get("side_evaluations") or {}
         ce, pe = sides.get("CE") or {}, sides.get("PE") or {}
         lines.append(
@@ -41,13 +42,33 @@ def format_auto_paper_attempt(result):
         reasons = chart.get("reasons") or []
         if reasons:
             lines.append("Conditions passed: " + "; ".join(reasons))
-        environment = strategy.get("market_environment") or chart.get("market_environment") or {}
         if environment:
             lines.append(
                 f"Market environment: {environment.get('regime')} | VIX {environment.get('vix') or 'Unavailable'} "
                 f"({environment.get('vix_zone')}) | ATR {environment.get('atr_percent')}% | "
                 f"Risk multiplier {environment.get('risk_multiplier')} | Strike {environment.get('strike_preference')}"
             )
+            lines.append(
+                f"Opening range {environment.get('opening_range_low')} - {environment.get('opening_range_high')} | "
+                f"Previous day H/L {environment.get('previous_day_high')} / {environment.get('previous_day_low')} | "
+                f"{environment.get('gap_state')} {environment.get('gap_points')} | "
+                f"Strategy {(environment.get('expiry_strategy') or {}).get('strategy', environment.get('strategy_preference'))}"
+            )
+            event = environment.get("event_risk") or {}
+            lines.append(f"Economic calendar: {event.get('status', 'Unavailable')} | Feed available {event.get('available', False)}")
+            lines.extend(
+                f"Event: {item.get('name')} | {item.get('country')} | {item.get('time')} | impact {item.get('importance')} | "
+                f"forecast {item.get('forecast') or '-'} | actual {item.get('actual') or '-'} | previous {item.get('previous') or '-'} | "
+                f"{item.get('minutes_from_now')} min"
+                for item in event.get("nearby_events", [])[:5]
+            )
+    proposed = result.get("proposed_plan") or result.get("plan") or {}
+    safety = proposed.get("execution_safety") or {}
+    if safety:
+        lines.append(
+            f"Execution safety: {'PASS' if safety.get('allowed') else 'BLOCKED'} | R:R {safety.get('rr_ratio')} | "
+            f"Spread {safety.get('spread_percent')}%"
+        )
     chain = attempt.get("chain") or {}
     if chain:
         oi_pcr = f"{chain['pcr_oi']:.2f}" if chain.get("pcr_oi") is not None else "Unavailable"

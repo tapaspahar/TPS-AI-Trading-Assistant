@@ -85,7 +85,10 @@ class Database:
                 last_ltp REAL,
                 min_ltp REAL,
                 max_ltp REAL,
-                last_alert_level TEXT
+                last_alert_level TEXT,
+                initial_stoploss REAL,
+                trailing_stoploss REAL,
+                plan_json TEXT
             )
             """
         )
@@ -112,7 +115,8 @@ class Database:
         if "closed_at" not in columns:
             self.cursor.execute("ALTER TABLE trades ADD COLUMN closed_at TEXT")
         paper_columns = {row["name"] for row in self.cursor.execute("PRAGMA table_info(paper_trade_links)")}
-        for name, definition in (("last_ltp", "REAL"), ("min_ltp", "REAL"), ("max_ltp", "REAL"), ("last_alert_level", "TEXT")):
+        for name, definition in (("last_ltp", "REAL"), ("min_ltp", "REAL"), ("max_ltp", "REAL"), ("last_alert_level", "TEXT"),
+                                 ("initial_stoploss", "REAL"), ("trailing_stoploss", "REAL"), ("plan_json", "TEXT")):
             if name not in paper_columns:
                 self.cursor.execute(f"ALTER TABLE paper_trade_links ADD COLUMN {name} {definition}")
         self.cursor.execute(
@@ -233,13 +237,16 @@ class Database:
             raise ValueError("Quantity must be greater than zero.")
 
         analysis = TPSEngine().calculate(trade)
+        ai_score = int(trade.ai_score) if int(trade.ai_score or 0) > 0 else int(analysis["score"])
+        ai_decision = str(trade.ai_decision or analysis["decision"])
+        ai_review = str(trade.ai_review or ", ".join(analysis["reasons"]) or "No technical confirmations recorded.")
         values = (
             trade.trade_date, trade.trade_time, trade.market, trade.symbol.upper(),
             trade.expiry, trade.strike, trade.option, trade.entry, 0.0,
             trade.stoploss, trade.target, trade.quantity, 0.0, 0.0, trade.setup,
             int(trade.trend), int(trade.vwap), int(trade.ema), int(trade.volume), int(trade.oi),
             trade.psychology_before, trade.psychology_after, trade.mistake, trade.confidence,
-            analysis["score"], analysis["decision"], ", ".join(analysis["reasons"]) or "No technical confirmations recorded.",
+            ai_score, ai_decision, ai_review,
             trade.notes, trade.screenshot, "OPEN", "PENDING", None, datetime.now().isoformat(timespec="seconds"),
         )
         self.cursor.execute(
@@ -267,20 +274,37 @@ class Database:
             exit=0.0, stoploss=float(plan["stoploss"]), target=float(plan["target"]), quantity=int(plan["quantity"]),
             setup=plan.get("rule_version", "TPS paper trade"), confidence=int(plan.get("confidence", 0)),
             trend=True, vwap=True, ema=True, volume=True, oi=True, psychology_before="Paper simulation",
-            notes="TPS PAPER TRADE: automatically monitored from Angel One option LTP; no broker order was sent.",
+            ai_score=int(plan.get("confidence", 0)), ai_decision="PAPER TRADE CAPTURED",
+            ai_review=json.dumps(plan.get("decision_audit", {}), ensure_ascii=False, default=str),
+            notes=json.dumps({"paper_trade": True, "plan": plan}, ensure_ascii=False, default=str),
         )
         trade_id = self.save_open_trade(trade)
         self.cursor.execute(
-            "INSERT INTO paper_trade_links (trade_id, exchange, token, contract_symbol) VALUES (?, ?, ?, ?)",
-            (trade_id, str(contract["exchange"]), str(contract["token"]), str(contract["symbol"])),
+            """INSERT INTO paper_trade_links
+               (trade_id, exchange, token, contract_symbol, initial_stoploss, trailing_stoploss, plan_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (trade_id, str(contract["exchange"]), str(contract["token"]), str(contract["symbol"]),
+             float(plan["stoploss"]), float(plan["stoploss"]), json.dumps(plan, ensure_ascii=False, default=str)),
+        )
+        self.cursor.execute(
+            "INSERT OR IGNORE INTO trade_alerts (trade_id, created_at, alert_type, title, message) VALUES (?, ?, ?, ?, ?)",
+            (trade_id, datetime.now().isoformat(timespec="seconds"), "PAPER_ENTRY", "Paper trade captured",
+             f"{contract['symbol']} entry {float(plan['entry']):.2f}; stop {float(plan['stoploss']):.2f}; target {float(plan['target']):.2f}."),
         )
         self.connection.commit()
         return trade_id
 
-    def monitor_paper_trades(self, client) -> list[dict]:
+    def monitor_paper_trades(self, client, settings=None, now=None) -> list[dict]:
         """Close simulated trades on a verified option quote only; no order API is used."""
+        from core.market_session import IST, MARKET_CLOSE
+        from datetime import timedelta
+
+        settings = settings or {}
+        now = now or datetime.now(IST)
+        now = now.astimezone(IST) if now.tzinfo else now.replace(tzinfo=IST)
         rows = self.cursor.execute(
-            """SELECT t.*, p.exchange, p.token, p.contract_symbol, p.last_ltp, p.min_ltp, p.max_ltp, p.last_alert_level FROM trades t
+            """SELECT t.*, p.exchange, p.token, p.contract_symbol, p.last_ltp, p.min_ltp, p.max_ltp,
+                      p.last_alert_level, p.initial_stoploss, p.trailing_stoploss FROM trades t
                JOIN paper_trade_links p ON p.trade_id = t.id WHERE t.status = 'OPEN'"""
         ).fetchall()
         closed = []
@@ -291,24 +315,41 @@ class Database:
                 continue
             minimum = min(ltp, float(row["min_ltp"])) if row["min_ltp"] is not None else ltp
             maximum = max(ltp, float(row["max_ltp"])) if row["max_ltp"] is not None else ltp
-            risk = max(float(row["entry"]) - float(row["stoploss"]), 0.000001)
+            initial_stop = float(row["initial_stoploss"] if row["initial_stoploss"] is not None else row["stoploss"])
+            active_stop = float(row["trailing_stoploss"] if row["trailing_stoploss"] is not None else row["stoploss"])
+            risk = max(float(row["entry"]) - initial_stop, 0.000001)
+            if settings.get("trailing_stop_enabled", True) and maximum >= float(row["entry"]) + float(settings.get("trailing_stop_trigger_r", 1)) * risk:
+                active_stop = max(active_stop, float(row["entry"]) + float(settings.get("trailing_stop_lock_r", .25)) * risk)
+            if active_stop > float(row["trailing_stoploss"] or initial_stop):
+                self.cursor.execute(
+                    "INSERT OR IGNORE INTO trade_alerts (trade_id, created_at, alert_type, title, message) VALUES (?, ?, ?, ?, ?)",
+                    (int(row["id"]), datetime.now().isoformat(timespec="seconds"), f"TRAIL_{active_stop:.2f}",
+                     "Premium trailing stop raised", f"{row['contract_symbol']} trailing stop moved to {active_stop:.2f}."),
+                )
             loss_progress = (float(row["entry"]) - ltp) / risk
             alert_level = "CRITICAL" if loss_progress >= .90 else "STRONG" if loss_progress >= .75 else "EARLY" if loss_progress >= .50 else None
             self.cursor.execute(
-                "UPDATE paper_trade_links SET last_ltp = ?, min_ltp = ?, max_ltp = ?, last_alert_level = COALESCE(?, last_alert_level) WHERE trade_id = ?",
-                (ltp, minimum, maximum, alert_level, int(row["id"])),
+                """UPDATE paper_trade_links SET last_ltp = ?, min_ltp = ?, max_ltp = ?,
+                          last_alert_level = COALESCE(?, last_alert_level), trailing_stoploss = ? WHERE trade_id = ?""",
+                (ltp, minimum, maximum, alert_level, active_stop, int(row["id"])),
             )
             if alert_level:
                 self.cursor.execute(
                     "INSERT OR IGNORE INTO trade_alerts (trade_id, created_at, alert_type, title, message) VALUES (?, ?, ?, ?, ?)",
                     (int(row["id"]), datetime.now().isoformat(timespec="seconds"), f"PREMIUM_SL_{alert_level}",
                      f"{alert_level.title()} option-premium stop warning",
-                     f"{row['contract_symbol']} LTP {ltp:.2f}; stop {float(row['stoploss']):.2f}; "
+                     f"{row['contract_symbol']} LTP {ltp:.2f}; active stop {active_stop:.2f}; "
                      f"{max(0, loss_progress) * 100:.0f}% of entry-to-stop risk used."),
                 )
-            outcome = "TARGET HIT" if ltp >= float(row["target"]) else "STOP LOSS HIT" if ltp <= float(row["stoploss"]) else None
+            close_at = datetime.combine(now.date(), MARKET_CLOSE, IST)
+            exit_window = settings.get("time_exit_minutes_before_close")
+            time_exit = exit_window is not None and now >= close_at - timedelta(minutes=int(exit_window))
+            stop_outcome = "TRAILING STOP HIT" if active_stop > initial_stop else "STOP LOSS HIT"
+            outcome = "TARGET HIT" if ltp >= float(row["target"]) else stop_outcome if ltp <= active_stop else "TIME EXIT" if time_exit else None
             if outcome and self.close_trade(int(row["id"]), ltp, outcome):
                 closed.append({"trade_id": int(row["id"]), "symbol": row["contract_symbol"], "ltp": ltp, "outcome": outcome})
+            elif not outcome:
+                self.evaluate_open_trade_alerts(row["symbol"])
         self.connection.commit()
         return closed
 
@@ -316,7 +357,7 @@ class Database:
         """Return live premium, MAE/MFE and active stop-proximity alerts."""
         rows = self.cursor.execute(
             """SELECT t.id, t.entry, t.stoploss, t.target, p.contract_symbol, p.last_ltp,
-                      p.min_ltp, p.max_ltp, p.last_alert_level
+                      p.min_ltp, p.max_ltp, p.last_alert_level, p.trailing_stoploss
                FROM trades t JOIN paper_trade_links p ON p.trade_id = t.id
                WHERE t.status = 'OPEN' ORDER BY t.id DESC"""
         ).fetchall()
@@ -324,7 +365,8 @@ class Database:
             "trade_id": int(row["id"]), "symbol": row["contract_symbol"], "ltp": row["last_ltp"],
             "mae": round(float(row["entry"]) - float(row["min_ltp"]), 2) if row["min_ltp"] is not None else 0,
             "mfe": round(float(row["max_ltp"]) - float(row["entry"]), 2) if row["max_ltp"] is not None else 0,
-            "alert": row["last_alert_level"], "stoploss": float(row["stoploss"]), "target": float(row["target"]),
+            "alert": row["last_alert_level"], "stoploss": float(row["trailing_stoploss"] or row["stoploss"]),
+            "initial_stoploss": float(row["stoploss"]), "target": float(row["target"]),
         } for row in rows]
 
     def paper_trade_progress(self, trade_date: str | None = None) -> dict:
@@ -336,18 +378,42 @@ class Database:
             f"""SELECT COUNT(*) AS trades, COUNT(DISTINCT t.trade_date) AS days,
                        SUM(CASE WHEN t.status = 'OPEN' THEN 1 ELSE 0 END) AS open_trades,
                        SUM(CASE WHEN t.status = 'CLOSED' AND t.outcome = 'TARGET HIT' THEN 1 ELSE 0 END) AS target_hits,
-                       SUM(CASE WHEN t.status = 'CLOSED' AND t.outcome = 'STOP LOSS HIT' THEN 1 ELSE 0 END) AS stoploss_hits
+                       SUM(CASE WHEN t.status = 'CLOSED' AND t.outcome IN ('STOP LOSS HIT','TRAILING STOP HIT') THEN 1 ELSE 0 END) AS stoploss_hits
                 FROM trades t JOIN paper_trade_links p ON p.trade_id = t.id {where}""", values,
         ).fetchone()
-        return {key: int(row[key] or 0) for key in ("trades", "days", "open_trades", "target_hits", "stoploss_hits")}
+        result = {key: int(row[key] or 0) for key in ("trades", "days", "open_trades", "target_hits", "stoploss_hits")}
+        pnl_row = self.cursor.execute(
+            f"SELECT COALESCE(SUM(pnl), 0) AS realized_pnl FROM trades t JOIN paper_trade_links p ON p.trade_id=t.id {where} AND t.status='CLOSED'" if where
+            else "SELECT COALESCE(SUM(t.pnl), 0) AS realized_pnl FROM trades t JOIN paper_trade_links p ON p.trade_id=t.id WHERE t.status='CLOSED'",
+            values,
+        ).fetchone()
+        result["realized_pnl"] = float(pnl_row["realized_pnl"] or 0)
+        return result
+
+    def paper_trade_cooldown_remaining(self, minutes: int, now=None) -> int:
+        """Return whole minutes remaining since the latest paper execution."""
+        from datetime import timedelta
+
+        if int(minutes) <= 0:
+            return 0
+        row = self.cursor.execute(
+            """SELECT t.created_at FROM trades t JOIN paper_trade_links p ON p.trade_id=t.id
+               ORDER BY t.created_at DESC LIMIT 1"""
+        ).fetchone()
+        if not row:
+            return 0
+        now = now or datetime.now()
+        created = datetime.fromisoformat(row["created_at"])
+        remaining = created + timedelta(minutes=int(minutes)) - now.replace(tzinfo=None)
+        return max(0, int((remaining.total_seconds() + 59) // 60))
 
     def close_trade(self, trade_id: int, exit_price: float, outcome: str = "MANUAL EXIT") -> bool:
         """Record the actual exit for one previously saved open trade."""
         if exit_price <= 0:
             raise ValueError("Enter an actual exit price greater than zero.")
         outcome = str(outcome).upper()
-        if outcome not in {"TARGET HIT", "STOP LOSS HIT", "MANUAL EXIT"}:
-            raise ValueError("Choose Target Hit, Stop Loss Hit, or Manual Exit.")
+        if outcome not in {"TARGET HIT", "STOP LOSS HIT", "MANUAL EXIT", "TIME EXIT", "TRAILING STOP HIT"}:
+            raise ValueError("Choose Target Hit, Stop Loss Hit, Time Exit, Trailing Stop Hit, or Manual Exit.")
         row = self.cursor.execute("SELECT entry, stoploss, target, quantity, status FROM trades WHERE id = ?", (int(trade_id),)).fetchone()
         if not row:
             return False
@@ -362,6 +428,12 @@ class Database:
             (float(exit_price), pnl, rr_ratio, outcome, datetime.now().isoformat(timespec="seconds"), int(trade_id)),
         )
         closed = result.rowcount == 1
+        if closed:
+            self.cursor.execute(
+                "INSERT OR IGNORE INTO trade_alerts (trade_id, created_at, alert_type, title, message) VALUES (?, ?, ?, ?, ?)",
+                (int(trade_id), datetime.now().isoformat(timespec="seconds"), f"PAPER_EXIT_{outcome}",
+                 f"Paper trade closed: {outcome}", f"Exit {float(exit_price):.2f}; P&L {pnl:.2f}; R:R {rr_ratio:.2f}."),
+            )
         self.connection.commit()
         if closed:
             self.cursor.execute("UPDATE trade_alerts SET status = 'RESOLVED' WHERE trade_id = ? AND status = 'ACTIVE'", (int(trade_id),))

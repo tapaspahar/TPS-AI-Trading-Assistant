@@ -2,7 +2,7 @@ from threading import Thread
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QApplication, QComboBox, QFormLayout, QFrame, QGroupBox, QHBoxLayout, QLabel, QLayout,
+    QApplication, QCheckBox, QComboBox, QFormLayout, QFrame, QGroupBox, QHBoxLayout, QLabel, QLayout,
     QLineEdit, QMessageBox, QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 
@@ -46,6 +46,10 @@ class SettingsPage(QWidget):
         self.risk_percent = QLineEdit(str(values["risk_percent"]))
         self.daily_loss_percent = QLineEdit(str(values["daily_loss_percent"]))
         self.max_trades = QLineEdit(str(values["max_trades_per_day"]))
+        self.cooldown = QLineEdit(str(values["paper_trade_cooldown_minutes"]))
+        self.minimum_rr = QLineEdit(str(values["minimum_rr_ratio"]))
+        self.max_spread = QLineEdit(str(values["maximum_option_spread_percent"]))
+        self.minimum_volume = QLineEdit(str(values["minimum_option_volume"]))
         self.theme = QComboBox()
         self.theme.addItem("Midnight Blue  •  focused trading terminal", "dark")
         self.theme.addItem("Arctic Light  •  clean daylight workspace", "light")
@@ -72,6 +76,8 @@ class SettingsPage(QWidget):
         self.ui_style.currentIndexChanged.connect(self.preview_theme)
         for label, field in (("Account capital", self.capital), ("Risk per trade (%)", self.risk_percent),
                              ("Daily loss limit (%)", self.daily_loss_percent), ("Maximum trades per day", self.max_trades),
+                             ("Paper-trade cooldown (minutes)", self.cooldown), ("Minimum risk:reward", self.minimum_rr),
+                             ("Maximum option spread (%)", self.max_spread), ("Minimum option volume", self.minimum_volume),
                              ("Colour Theme", self.theme), ("UI Design Style", self.ui_style)):
             field.setMinimumHeight(36)
             form.addRow(label, field)
@@ -83,6 +89,26 @@ class SettingsPage(QWidget):
         save.clicked.connect(self.save)
         layout.addWidget(save)
         layout.addWidget(QLabel("Settings are stored only on this computer. They do not connect to a broker or place trades."))
+        safety_box = QGroupBox("Economic calendar and lifecycle safety")
+        safety_form = QFormLayout(safety_box)
+        self.calendar_enabled = QCheckBox("Use automatic economic calendar")
+        self.calendar_enabled.setChecked(values["economic_calendar_enabled"])
+        self.calendar_key = QLineEdit(values["economic_calendar_api_key"]); self.calendar_key.setEchoMode(QLineEdit.Password)
+        self.calendar_key.setPlaceholderText("Trading Economics API key (optional; provider account required)")
+        self.fail_closed = QCheckBox("Block auto entries if calendar feed is unavailable")
+        self.fail_closed.setChecked(values["event_feed_fail_closed"])
+        self.trailing_enabled = QCheckBox("Enable premium trailing stop")
+        self.trailing_enabled.setChecked(values["trailing_stop_enabled"])
+        self.trailing_trigger = QLineEdit(str(values["trailing_stop_trigger_r"]))
+        self.trailing_lock = QLineEdit(str(values["trailing_stop_lock_r"]))
+        self.time_exit = QLineEdit(str(values["time_exit_minutes_before_close"]))
+        safety_form.addRow(self.calendar_enabled); safety_form.addRow("Calendar API key", self.calendar_key)
+        safety_form.addRow(self.fail_closed); safety_form.addRow(self.trailing_enabled)
+        safety_form.addRow("Trail trigger (R)", self.trailing_trigger); safety_form.addRow("Trail lock (R)", self.trailing_lock)
+        safety_form.addRow("Time exit before close (minutes)", self.time_exit)
+        safety_note = QLabel("Calendar source: Trading Economics API. If no key is configured, TPS clearly reports feed unavailable and uses the emergency News Risk switch; it never invents an event.")
+        safety_note.setWordWrap(True); safety_form.addRow(safety_note)
+        layout.addWidget(safety_box)
         broker_box = QGroupBox("Angel One live data")
         broker_form = QFormLayout(broker_box)
         broker_form.setContentsMargins(18, 28, 18, 16)
@@ -135,6 +161,12 @@ class SettingsPage(QWidget):
             self.store.save({
                 "capital": self.capital.text(), "risk_percent": self.risk_percent.text(),
                 "daily_loss_percent": self.daily_loss_percent.text(), "max_trades_per_day": self.max_trades.text(),
+                "paper_trade_cooldown_minutes": self.cooldown.text(), "minimum_rr_ratio": self.minimum_rr.text(),
+                "maximum_option_spread_percent": self.max_spread.text(), "minimum_option_volume": self.minimum_volume.text(),
+                "economic_calendar_enabled": self.calendar_enabled.isChecked(),
+                "economic_calendar_api_key": self.calendar_key.text(), "event_feed_fail_closed": self.fail_closed.isChecked(),
+                "trailing_stop_enabled": self.trailing_enabled.isChecked(), "trailing_stop_trigger_r": self.trailing_trigger.text(),
+                "trailing_stop_lock_r": self.trailing_lock.text(), "time_exit_minutes_before_close": self.time_exit.text(),
                 "theme": self.theme.currentData(),
                 "ui_style": self.ui_style.currentData(),
             })

@@ -47,6 +47,7 @@ class AboutPage(QWidget):
           <li>Evaluate EMA 5/20/50, VWAP, SuperTrend, volume, candle behaviour and support/resistance.</li>
           <li>Use OI, change in OI, volume PCR and OI PCR as confirmation—not as a standalone signal.</li>
           <li>Create reviewable CE/PE plans only when configured rules and risk limits permit.</li>
+          <li>Combine India VIX, ATR regime, opening range, previous-day levels, gap context and verified economic events.</li>
           <li>Record every automated paper-trade evaluation for later audit.</li>
         </ul>
         <h3>Credits</h3>
@@ -74,6 +75,8 @@ class AboutPage(QWidget):
           trend inputs must agree.</li>
           <li>Open <b>Options Workspace</b>, load the expiry and contract, then analyse OI/PCR. CE is considered
           for confirmed bullish structure and PE for confirmed bearish structure.</li>
+          <li>Review <b>Market Environment</b>: India VIX, ATR regime, opening range, previous-day high/low,
+          overnight gap, nearby economic events and the directional-versus-hedge research note.</li>
           <li>Check the generated plan in <b>Risk Control Center</b>. Quantity uses predefined index lots:
           NIFTY 65, BANKNIFTY 30 and SENSEX 20.</li>
           <li>Use <b>Trade Journal</b> for planned entry, stop loss, target, actual exit and review notes.</li>
@@ -92,6 +95,13 @@ class AboutPage(QWidget):
         the candle had closed, trend votes agreed, directional volume was sufficient, support/resistance allowed
         safe room, OI context did not conflict, and daily risk limits were not reached. Lowering a score threshold
         is useful for testing but does not bypass core safety blockers.</p>
+        <h3>Automatic paper safety</h3>
+        <p>A setup can still be blocked by stale candles, invalid quotes, low option volume, wide bid/ask spread,
+        poor risk:reward, cooldown, daily limits, market-close time or a high-impact event window. Configure the
+        optional Trading Economics key in Settings for automatic calendar data. Without a valid key TPS reports
+        the feed as unavailable; it never creates an event. The event override is for paper testing only and is
+        written into the audit. Open paper trades use premium stop/target, optional trailing stop and time exit,
+        while underlying 5-minute and 15-minute structure alerts continue independently.</p>
         """
 
     @staticmethod
@@ -108,6 +118,8 @@ class AboutPage(QWidget):
           main trend conditions ka same direction me hona zaroori hai.</li>
           <li><b>Options Workspace</b> me expiry aur contract load karke OI/PCR analyse kijiye. Confirmed bullish
           structure me CE aur confirmed bearish structure me PE consider hoga.</li>
+          <li><b>Market Environment</b> me India VIX, ATR regime, opening range, previous-day high/low, gap,
+          economic event aur directional/hedge research note dekhiye.</li>
           <li><b>Risk Control Center</b> me plan ka risk dekhiye. Quantity predefined lots se niklegi:
           NIFTY 65, BANKNIFTY 30 aur SENSEX 20.</li>
           <li><b>Trade Journal</b> me entry, stop loss, target, actual exit aur review notes record kijiye.</li>
@@ -126,6 +138,13 @@ class AboutPage(QWidget):
         hui thi, trend votes same direction me the, directional volume strong tha, support/resistance ke paas
         sufficient room tha, OI context conflict nahi kar raha tha aur daily risk limit complete nahi hui thi.
         Testing ke liye score kam kiya ja sakta hai, lekin core safety blockers bypass nahi honge.</p>
+        <h3>Auto paper safety</h3>
+        <p>Score pass hone ke baad bhi stale candle, invalid quote, kam option volume, zyada bid/ask spread,
+        kam risk:reward, cooldown, daily limit, market-close time ya high-impact event trade ko rok sakta hai.
+        Automatic calendar ke liye Settings me optional Trading Economics key dijiye. Key na hone par TPS feed
+        unavailable clearly batata hai; koi event banata nahi hai. Event override sirf paper testing ke liye hai
+        aur audit me save hota hai. Open paper trade me premium stop/target, optional trailing stop aur time exit
+        ke saath underlying 5-minute aur 15-minute structure alerts bhi independently check hote hain.</p>
         <h3>Zaroori baat</h3>
         <p>TPS analysis aur learning ke liye hai. Profit guarantee nahi karta aur financial advice nahi hai.
         Application broker order place, modify ya cancel nahi karti. Manual trade se pehle har value khud verify kijiye.</p>

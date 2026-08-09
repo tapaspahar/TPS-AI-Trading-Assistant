@@ -78,6 +78,9 @@ class OptionsPage(QWidget):
         self.news_pause = QCheckBox("Emergency News Risk Pause - block all new paper entries")
         self.news_pause.setChecked(bool(saved_settings.get("news_risk_pause", False)))
         self.news_pause.toggled.connect(self.save_news_risk_controls)
+        self.event_override = QCheckBox("Override automatic event block for this paper-test session")
+        self.event_override.setChecked(bool(saved_settings.get("event_risk_override", False)))
+        self.event_override.toggled.connect(self.save_news_risk_controls)
         self.event_window = QComboBox(); self.event_window.addItems(("15 minutes", "30 minutes", "60 minutes"))
         self.event_window.setCurrentText(f"{saved_settings.get('event_no_trade_minutes', 30)} minutes")
         self.event_window.currentIndexChanged.connect(self.save_news_risk_controls)
@@ -106,6 +109,7 @@ class OptionsPage(QWidget):
         form.addRow("Auto quantity", self.quantity_preview)
         form.addRow("News / event check", self.event_check)
         form.addRow(self.news_pause)
+        form.addRow(self.event_override)
         form.addRow("Event no-trade window", self.event_window)
         form.addRow("Testing trade-plan score (0-100)", self.minimum_score)
         form.addRow(refresh)
@@ -460,6 +464,7 @@ class OptionsPage(QWidget):
     def save_news_risk_controls(self, *_args):
         settings = SettingsStore().load()
         settings["news_risk_pause"] = self.news_pause.isChecked()
+        settings["event_risk_override"] = self.event_override.isChecked()
         settings["event_no_trade_minutes"] = int(self.event_window.currentText().split()[0])
         SettingsStore().save(settings)
         if self.news_pause.isChecked() and self.auto_paper_enabled.isChecked():
@@ -552,7 +557,7 @@ class OptionsPage(QWidget):
     def _monitor_paper_trades(self):
         database = Database()
         try:
-            closed = database.monitor_paper_trades(LiveSession.client)
+            closed = database.monitor_paper_trades(LiveSession.client, SettingsStore().load())
             monitoring = database.get_paper_trade_monitoring()
             if closed:
                 self.paper_trade_closed.emit(closed)
@@ -698,6 +703,22 @@ class OptionsPage(QWidget):
                     f"({environment.get('vix_zone')}) | ATR {environment.get('atr_percent')}% | "
                     f"Risk multiplier {environment.get('risk_multiplier')}"
                 )
+                event = environment.get("event_risk") or {}
+                lines.append(
+                    f"Opening range {environment.get('opening_range_low')} - {environment.get('opening_range_high')} | "
+                    f"Previous day H/L {environment.get('previous_day_high')} / {environment.get('previous_day_low')} | "
+                    f"{environment.get('gap_state')} {environment.get('gap_points')} | Event {event.get('status', 'Unavailable')}"
+                )
+                for item in event.get("nearby_events", [])[:5]:
+                    lines.append(
+                        f"Economic event: {item.get('name')} | {item.get('country')} | {item.get('time')} | "
+                        f"Impact {item.get('importance')} | Forecast {item.get('forecast') or '-'} | "
+                        f"Actual {item.get('actual') or '-'} | Previous {item.get('previous') or '-'} | "
+                        f"{item.get('minutes_from_now')} minute(s) from check"
+                    )
+                expiry_strategy = environment.get("expiry_strategy") or {}
+                if expiry_strategy:
+                    lines.append(f"Expiry strategy: {expiry_strategy.get('strategy')} | {expiry_strategy.get('reason')}")
         chain = attempt.get("chain") or {}
         if chain:
             oi_pcr = f"{chain['pcr_oi']:.2f}" if chain.get("pcr_oi") is not None else "Unavailable"
@@ -728,7 +749,12 @@ class OptionsPage(QWidget):
                     f"Market environment: {environment.get('regime')} | India VIX {environment.get('vix') or 'Unavailable'} "
                     f"({environment.get('vix_zone')}) | Expected daily range "
                     f"{'±' + format(expected, ',.2f') if expected is not None else 'Unavailable'} | "
-                    f"Risk quantity {environment.get('risk_multiplier', 1) * 100:.0f}% | {environment.get('strike_preference')}"
+                    f"Risk quantity {environment.get('risk_multiplier', 1) * 100:.0f}% | {environment.get('strike_preference')}\n"
+                    f"Opening range {environment.get('opening_range_low')}–{environment.get('opening_range_high')} | "
+                    f"Previous day H/L {environment.get('previous_day_high')}/{environment.get('previous_day_low')} | "
+                    f"{environment.get('gap_state')} {environment.get('gap_points')} | "
+                    f"Event {(environment.get('event_risk') or {}).get('status', 'Unavailable')} | "
+                    f"{(environment.get('expiry_strategy') or {}).get('strategy', environment.get('strategy_preference', 'Directional'))}"
                 )
         self.auto_paper_progress.setText(f"{details}\nForward-test progress: {progress['days']}/20 trading days | {progress['trades']} paper trades | {progress['target_hits']} targets | {progress['stoploss_hits']} stop losses.")
 

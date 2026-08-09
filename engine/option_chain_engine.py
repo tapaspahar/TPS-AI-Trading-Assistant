@@ -8,11 +8,16 @@ def analyze_option_chain(contracts, quotes):
     rows = []
     for contract in contracts:
         quote = quote_by_token.get(str(contract["token"]), {})
+        depth = quote.get("depth") or {}
+        buys, sells = depth.get("buy") or [], depth.get("sell") or []
+        bid = quote.get("bestBidPrice") or (buys[0].get("price") if buys else 0)
+        ask = quote.get("bestAskPrice") or (sells[0].get("price") if sells else 0)
         rows.append({
             **contract,
             "oi": float(quote.get("opnInterest", 0) or 0),
             "volume": float(quote.get("tradeVolume", 0) or 0),
             "ltp": float(quote.get("ltp", 0) or 0),
+            "bid": float(bid or 0), "ask": float(ask or 0),
         })
     calls = [row for row in rows if row["option_type"] == "CE"]
     puts = [row for row in rows if row["option_type"] == "PE"]
