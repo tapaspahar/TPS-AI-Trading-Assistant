@@ -5,6 +5,23 @@ from datetime import datetime
 from math import sqrt
 
 
+def classify_india_vix(value):
+    """Return the shared TPS volatility label and risk multiplier."""
+    try:
+        vix = float(value)
+    except (TypeError, ValueError):
+        vix = 0
+    if not 0 < vix < 100:
+        return "VIX UNAVAILABLE", 0.75
+    if vix < 12:
+        return "CALM / RANGE", 0.75
+    if vix < 16:
+        return "HEALTHY TREND", 1.0
+    if vix <= 20:
+        return "HIGH VOLATILITY", 0.75
+    return "EXTREME RISK", 0.50
+
+
 def _candle_day(value):
     try:
         return datetime.fromisoformat(str(value).replace("Z", "+00:00")).date()
@@ -43,16 +60,7 @@ def analyze_market_environment(candles, capture, spot_price, india_vix=None, now
     atr_percent = atr / close * 100 if close else 0
     trend_spread = abs(ema5 - ema50) / max(atr, 0.000001)
     aligned = ema5 > ema20 > ema50 or ema5 < ema20 < ema50
-    if vix is None:
-        vix_zone, risk_multiplier = "VIX unavailable", 0.75
-    elif vix < 12:
-        vix_zone, risk_multiplier = "CALM / RANGE", 0.75
-    elif vix < 16:
-        vix_zone, risk_multiplier = "HEALTHY TREND", 1.0
-    elif vix <= 20:
-        vix_zone, risk_multiplier = "HIGH VOLATILITY", 0.75
-    else:
-        vix_zone, risk_multiplier = "EXTREME RISK", 0.50
+    vix_zone, risk_multiplier = classify_india_vix(vix)
     if (vix is not None and vix > 20) or atr_percent >= .65:
         regime = "HIGH VOLATILITY"
     elif aligned and trend_spread >= .75:
