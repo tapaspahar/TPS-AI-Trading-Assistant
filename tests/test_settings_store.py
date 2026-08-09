@@ -71,3 +71,17 @@ class SettingsStoreTests(unittest.TestCase):
             settings["ui_style"] = "unknown"
             with self.assertRaisesRegex(ValueError, "UI design style"):
                 store.save(settings)
+
+    def test_execution_and_calendar_controls_persist(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = SettingsStore(Path(directory) / "settings.json")
+            settings = store.load()
+            settings.update({"economic_calendar_api_key": "client:key", "event_feed_fail_closed": True,
+                             "paper_trade_cooldown_minutes": 30, "minimum_rr_ratio": 2,
+                             "maximum_option_spread_percent": 5, "minimum_option_volume": 500,
+                             "trailing_stop_trigger_r": 1.5, "trailing_stop_lock_r": .5,
+                             "time_exit_minutes_before_close": 15})
+            saved = store.save(settings)
+            self.assertEqual(saved["paper_trade_cooldown_minutes"], 30)
+            self.assertTrue(saved["event_feed_fail_closed"])
+            self.assertEqual(saved["minimum_rr_ratio"], 2)

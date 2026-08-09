@@ -18,6 +18,7 @@ CONDITION_WEIGHTS = {
     "Pullback and reversal": 12,
     "Directional volume": 12,
     "OI/PCR context": 10,
+    "Market environment / VIX": 10,
 }
 DEFAULT_ENABLED = tuple(CONDITION_WEIGHTS)
 
@@ -65,6 +66,13 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
     recent_bullish_touch = any(any(abs(float(c["low"]) - zone) <= tolerance for zone in zones) for c in prior)
     recent_bearish_touch = any(any(abs(float(c["high"]) - zone) <= tolerance for zone in zones) for c in prior)
     environment = environment or {}
+    environment_ok = not environment or (
+        float(environment.get("risk_multiplier", 1)) >= .75 and environment.get("vix_zone") != "EXTREME RISK"
+    )
+    environment_detail = (
+        f"{environment.get('regime', 'unavailable')}; VIX {environment.get('vix_zone', 'unavailable')}; "
+        f"risk multiplier {environment.get('risk_multiplier', 1)}"
+    )
     volume_threshold = float(environment.get("volume_threshold", 1.5))
     strong_quality = volume_ratio >= volume_threshold and not capture.get("fake_breakout_risk", True)
 
@@ -77,6 +85,7 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
             _side_condition("Pullback and reversal", recent_bullish_touch and close > opening, f"EMA/VWAP touch within {tolerance:.2f}; candle {candle_direction}"),
             _side_condition("Directional volume", strong_quality and candle_direction == "BULLISH", f"{volume_ratio:.2f}x Volume EMA20; required {volume_threshold:.2f}x; candle {candle_direction}"),
             _side_condition("OI/PCR context", pcr_oi is not None and pcr_volume is not None and pcr_oi >= .75 and pcr_volume <= 1.25, f"OI PCR {pcr_oi if pcr_oi is not None else '-'}; Volume PCR {pcr_volume if pcr_volume is not None else '-'}"),
+            _side_condition("Market environment / VIX", environment_ok, environment_detail),
         ],
         "PE": [
             _side_condition("Market structure", structure_state.startswith("Bearish"), structure_state),
@@ -86,6 +95,7 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
             _side_condition("Pullback and reversal", recent_bearish_touch and close < opening, f"EMA/VWAP touch within {tolerance:.2f}; candle {candle_direction}"),
             _side_condition("Directional volume", strong_quality and candle_direction == "BEARISH", f"{volume_ratio:.2f}x Volume EMA20; required {volume_threshold:.2f}x; candle {candle_direction}"),
             _side_condition("OI/PCR context", pcr_oi is not None and pcr_volume is not None and pcr_oi <= 1.25 and pcr_volume >= .80, f"OI PCR {pcr_oi if pcr_oi is not None else '-'}; Volume PCR {pcr_volume if pcr_volume is not None else '-'}"),
+            _side_condition("Market environment / VIX", environment_ok, environment_detail),
         ],
     }
 

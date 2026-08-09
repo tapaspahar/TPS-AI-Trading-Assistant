@@ -25,3 +25,15 @@ class MarketEnvironmentTests(unittest.TestCase):
         result = analyze_market_environment([], self.capture(), 25000, None)
         self.assertIsNone(result["vix"])
         self.assertTrue(any("unavailable" in item for item in result["warnings"]))
+
+    def test_opening_range_gap_and_previous_day_levels_are_recorded(self):
+        candles = [
+            {"time": "2026-08-04T15:25:00+05:30", "open": 24900, "high": 25000, "low": 24800, "close": 24950},
+            {"time": "2026-08-05T09:15:00+05:30", "open": 25020, "high": 25060, "low": 25010, "close": 25050},
+            {"time": "2026-08-05T09:20:00+05:30", "open": 25050, "high": 25080, "low": 25030, "close": 25070},
+            {"time": "2026-08-05T09:25:00+05:30", "open": 25070, "high": 25090, "low": 25040, "close": 25060},
+        ]
+        result = analyze_market_environment(candles, self.capture(), 25000, 14, datetime(2026, 8, 5, 10, 0))
+        self.assertEqual(result["opening_range_high"], 25090)
+        self.assertEqual(result["previous_day_low"], 24800)
+        self.assertEqual(result["gap_state"], "GAP UP")

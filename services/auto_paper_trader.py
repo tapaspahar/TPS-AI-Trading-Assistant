@@ -7,10 +7,13 @@ from core.database_manager import Database
 from engine.decision_engine import ChartSnapshot, DecisionEngine
 from engine.live_setup_capture import build_live_capture
 from engine.market_environment import analyze_market_environment
+from engine.execution_safety import assess_execution_safety
+from engine.expiry_strategy_engine import analyze_expiry_strategy
 from engine.option_chain_engine import analyze_option_chain
 from engine.trade_plan_engine import create_review_plan
 from engine.tps_entry_confirmation import evaluate_tps_entry_v2
 from services.option_contract_service import UNDERLYING_QUOTES, OptionContractService, contracts_near_spot
+from services.economic_calendar_service import EconomicCalendarService
 
 
 def _attempt(status, checked_at, *, capture=None, chart=None, candidate=None, future=None, blockers=None, chain=None):
@@ -88,7 +91,27 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             india_vix = float(client.get_option_quote(vix_config["exchange"], vix_config["token"]).get("ltp", 0) or 0)
         except (RuntimeError, ValueError, TypeError, KeyError):
             india_vix = None
-        environment = analyze_market_environment(candles, capture, spot, india_vix, checked_at)
+        event_risk = EconomicCalendarService(settings.get("economic_calendar_api_key", "")).assess(
+            checked_at, settings.get("event_no_trade_minutes", 30)
+        ) if settings.get("economic_calendar_enabled", True) else {
+            "available": False, "blocked": False, "status": "DISABLED", "nearby_events": [],
+            "risk_multiplier": 1.0, "confidence_penalty": 0,
+        }
+        expiry_date = expiry if hasattr(expiry, "year") else datetime.fromisoformat(str(expiry)).date()
+        expiry_day = expiry_date == checked_at.date()
+        environment = analyze_market_environment(candles, capture, spot, india_vix, checked_at, event_risk)
+        environment["expiry_day"] = expiry_day
+        environment["strategy_preference"] = (
+            "HEDGE WATCH - ATM straddle/strangle research" if expiry_day and (
+                environment["regime"] == "HIGH VOLATILITY" or event_risk.get("blocked")
+            ) else "DIRECTIONAL CE/PE"
+        )
+        expiry_strategy = analyze_expiry_strategy(spot, chain, environment, (expiry_date - checked_at.date()).days)
+        environment["expiry_strategy"] = expiry_strategy
+        environment["adaptive_max_trades"] = min(
+            int(settings.get("max_trades_per_day", 5)),
+            1 if environment["vix_zone"] == "EXTREME RISK" else 2 if environment["regime"] == "LOW VOLATILITY" else int(settings.get("max_trades_per_day", 5)),
+        )
         strategy = evaluate_tps_entry_v2(candles, capture, chain, settings, environment)
         candidate = strategy["candidate"]
         selected_confirmations = strategy.get("selected_confirmations") or strategy.get("confirmations") or []
@@ -103,14 +126,19 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             "ce_score": (side_evaluations.get("CE") or {}).get("score"),
             "pe_score": (side_evaluations.get("PE") or {}).get("score"),
             "market_environment": environment,
+            "event_risk": event_risk,
+            "final_confidence": max(0, round(strategy["score"] * float(environment.get("risk_multiplier", 1)))),
         }
+        daily_limit = float(settings.get("capital", 100000)) * float(settings.get("daily_loss_percent", 3)) / 100
+        progress["daily_remaining"] = max(0, daily_limit - max(0, -float(progress.get("realized_pnl", 0))))
         operational_blockers = []
-        if settings.get("news_risk_pause"):
-            operational_blockers.append("Emergency News Risk Pause is ON")
-        if progress["open_trades"]:
-            operational_blockers.append("An open paper trade is already being monitored")
-        if progress["trades"] >= int(settings["max_trades_per_day"]):
-            operational_blockers.append(f"Daily paper-trade limit reached ({progress['trades']}/{settings['max_trades_per_day']})")
+        if settings.get("news_risk_pause"): operational_blockers.append("Emergency News Risk Pause is ON")
+        if event_risk.get("blocked") and not settings.get("event_risk_override"): operational_blockers.append("High-impact economic event no-trade window is active")
+        if not event_risk.get("available") and settings.get("event_feed_fail_closed"): operational_blockers.append("Economic-calendar feed unavailable (fail-closed)")
+        if progress["open_trades"]: operational_blockers.append("An open paper trade is already being monitored")
+        adaptive_limit = environment["adaptive_max_trades"]
+        if progress["trades"] >= adaptive_limit: operational_blockers.append(f"Adaptive daily paper-trade limit reached ({progress['trades']}/{adaptive_limit})")
+        if progress["daily_remaining"] <= 0: operational_blockers.append("Daily loss limit exhausted")
         if operational_blockers:
             chart["warnings"].extend(operational_blockers)
             result = _attempt(
@@ -132,13 +160,33 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             symbol, spot, contracts, chain["quote_rows"], chart, chain, settings,
             requested_lots=1, minimum_score=int(settings.get("trade_plan_min_score", 95)),
         )
+        plan["confidence"] = chart["final_confidence"]
+        plan["event_context"] = event_risk
         plan["rule_version"] = "TPS Entry Confirmation System v3 - independent CE/PE + selected checklist"
         plan["decision_audit"] = {
             "ce": side_evaluations.get("CE"), "pe": side_evaluations.get("PE"),
             "enabled_conditions": strategy.get("enabled_conditions"),
             "required_matches": strategy.get("required"), "required_score": strategy.get("minimum_score"),
             "hard_blockers": strategy.get("hard_blockers", []),
+            "event_context": event_risk, "market_environment": environment,
         }
+        selected_quote = next((row for row in chain["quote_rows"] if str(row.get("token")) == str(plan["contract"]["token"])), {})
+        cooldown = database.paper_trade_cooldown_remaining(settings.get("paper_trade_cooldown_minutes", 15), checked_at)
+        safety_settings = {**settings, "max_trades_per_day": adaptive_limit}
+        safety = assess_execution_safety(
+            now=checked_at, candle_time=capture.get("candle_time"), quote=selected_quote, plan=plan,
+            settings=safety_settings, progress=progress, cooldown_remaining=cooldown, event_risk=event_risk, expiry_day=expiry_day,
+        )
+        plan["execution_safety"] = safety
+        if not safety["allowed"]:
+            chart["warnings"].extend(safety["blockers"])
+            result = _attempt(
+                "No new paper trade: evidence passed, but operational hard-risk validation blocked execution.",
+                checked_at, capture=capture, chart=chart, candidate=candidate, future=future,
+                blockers=safety["blockers"] + safety["warnings"], chain=chain,
+            )
+            result["proposed_plan"] = plan
+            return _record(database, symbol, result)
         trade_id = database.save_paper_trade(plan)
         result = _attempt("Paper trade captured", checked_at, capture=capture, chart=chart, candidate=candidate, future=future, chain=chain)
         result.update({"trade_id": trade_id, "plan": plan, "capture": capture})

@@ -68,6 +68,10 @@ def audit_tps_day(candles, snapshots, symbol, trade_date):
         hypothetical_outcome, hypothetical_exit, hypothetical_mfe, hypothetical_mae = _paper_outcome(
             candles, index, candidate_direction, float(capture["close"]), float(capture["atr_14"])
         )
+        hypothetical_entry = float(capture["close"])
+        hypothetical_risk = max(float(capture["atr_14"]), hypothetical_entry * .002)
+        hypothetical_stop = hypothetical_entry - hypothetical_risk if candidate_direction == "BULLISH" else hypothetical_entry + hypothetical_risk
+        hypothetical_target = hypothetical_entry + hypothetical_risk * 2 if candidate_direction == "BULLISH" else hypothetical_entry - hypothetical_risk * 2
         if strategy["trade_ready"]:
             outcome, exit_price, _mfe, _mae = _paper_outcome(
                 candles, index, strategy["direction"], float(capture["close"]), float(capture["atr_14"])
@@ -77,6 +81,8 @@ def audit_tps_day(candles, snapshots, symbol, trade_date):
             "oi_available": snapshot is not None, "outcome": outcome, "exit_price": exit_price,
             "hypothetical_outcome": hypothetical_outcome, "hypothetical_exit": hypothetical_exit,
             "hypothetical_mfe": round(hypothetical_mfe, 2), "hypothetical_mae": round(hypothetical_mae, 2),
+            "hypothetical_entry": round(hypothetical_entry, 2), "hypothetical_stop": round(hypothetical_stop, 2),
+            "hypothetical_target": round(hypothetical_target, 2),
         })
     setups = [row for row in evaluations if row["strategy"]["trade_ready"]]
     return {
@@ -112,7 +118,9 @@ def format_tps_day_audit(audit):
             lines.append(
                 f"{row['time']} | {strategy['direction']} / {strategy['candidate'] or '-'} | "
                 f"{strategy['passed']}/{strategy.get('total', 7)} | OI {'matched' if row['oi_available'] else 'unavailable'} | "
-                f"Hypothetical {row['hypothetical_outcome']} (MFE {row['hypothetical_mfe']:.2f}, MAE {row['hypothetical_mae']:.2f}) | {blockers}"
+                f"Hypothetical {row['hypothetical_outcome']} | Entry {row['hypothetical_entry']:.2f} | "
+                f"SL {row['hypothetical_stop']:.2f} | Target {row['hypothetical_target']:.2f} | "
+                f"MFE {row['hypothetical_mfe']:.2f}, MAE {row['hypothetical_mae']:.2f} | {blockers}"
             )
     lines.append("Outcome uses underlying-future candles, a conservative stop-first rule, and excludes option premium/slippage/taxes.")
     return "\n".join(lines)

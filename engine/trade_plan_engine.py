@@ -27,24 +27,39 @@ def create_review_plan(underlying, spot_price, contracts, quote_rows, chart_cont
     option_type = "CE" if chart_context["direction"] == "BULLISH" else "PE"
     quote_by_token = {str(row.get("token", row.get("symbolToken", row.get("symboltoken", "")))): row for row in quote_rows}
     candidates = []
+    environment = chart_context.get("market_environment") or {}
     for contract in contracts:
         if contract["option_type"] != option_type:
             continue
         quote = quote_by_token.get(str(contract["token"]), {})
         premium = float(quote.get("ltp", 0) or 0)
         volume = float(quote.get("volume", quote.get("tradeVolume", 0)) or 0)
-        if premium > 0 and volume > 0:
-            candidates.append((contract, quote, premium, volume))
+        bid, ask = float(quote.get("bid", 0) or 0), float(quote.get("ask", 0) or 0)
+        spread = (ask - bid) / max((ask + bid) / 2, .01) * 100 if bid > 0 and ask >= bid else None
+        if premium > 0 and volume >= float(settings.get("minimum_option_volume", 100)) and (
+            spread is None or spread <= float(settings.get("maximum_option_spread_percent", 8))
+        ):
+            candidates.append((contract, quote, premium, volume, spread))
     if not candidates:
         raise ValueError(f"No liquid {option_type} candidate is available in the focused strikes.")
 
     # Prefer the closest tradeable strike; volume breaks a distance tie.
-    contract, quote, premium, volume = min(
-        candidates, key=lambda item: (abs(float(item[0]["strike"]) - float(spot_price)), -item[3])
-    )
-    stop_loss = round(premium * 0.80, 2)
-    target = round(premium + (premium - stop_loss) * 2, 2)
-    risk = buying_risk(premium, contract["lot_size"], settings["capital"], settings["risk_percent"])
+    prefer_itm = "ITM" in str(environment.get("strike_preference", "ATM"))
+    def contract_rank(item):
+        strike = float(item[0]["strike"])
+        itm_penalty = 0
+        if prefer_itm:
+            itm = strike <= float(spot_price) if option_type == "CE" else strike >= float(spot_price)
+            itm_penalty = 0 if itm else 1
+        return (itm_penalty, abs(strike - float(spot_price)), -item[3])
+    contract, quote, premium, volume, spread = min(candidates, key=contract_rank)
+    stop_fraction = min(.35, max(.12, .20 * float(environment.get("stop_atr_multiplier", 1))))
+    stop_loss = round(premium * (1 - stop_fraction), 2)
+    minimum_rr = float(settings.get("minimum_rr_ratio", 1.5))
+    target_multiple = max(minimum_rr, float(environment.get("target_atr_multiplier", 2)))
+    target = round(premium + (premium - stop_loss) * target_multiple, 2)
+    adjusted_risk_percent = float(settings["risk_percent"]) * float(environment.get("risk_multiplier", 1))
+    risk = buying_risk(premium - stop_loss, contract["lot_size"], settings["capital"], adjusted_risk_percent)
     safe_lots = risk["lots"]
     if requested_lots is None:
         requested_lots = safe_lots
@@ -78,11 +93,16 @@ def create_review_plan(underlying, spot_price, contracts, quote_rows, chart_cont
         "risk_within_cap": risk_within_cap,
         "confidence": int(chart_context["score"]),
         "minimum_score": minimum_score,
+        "rr_ratio": round((target - premium) / max(premium - stop_loss, .01), 2),
+        "market_environment": environment,
+        "spread_percent": round(spread, 2) if spread is not None else None,
+        "adaptive_risk_percent": round(adjusted_risk_percent, 3),
         "rule_version": "TPS V2 configurable review — chart/volume/OI confirmation",
         "reasons": [
             f"Chart score {chart_context['score']}/100 meets configured minimum {minimum_score}",
             f"Focused OI/PCR context: {chain_context.get('context', 'available')}",
             f"Near-ATM liquid contract selected (volume {volume:,.0f})",
+            f"Adaptive environment: {environment.get('regime', 'unavailable')}; strike {environment.get('strike_preference', 'ATM')}",
         ],
         "warning": "Conditional review plan: verify live premium, bid/ask, volume, stop-loss and target in Angel One before manually placing an order. " + risk_warning,
     }
