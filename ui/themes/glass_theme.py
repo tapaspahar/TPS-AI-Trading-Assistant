@@ -84,7 +84,7 @@ QHeaderView::section {{ background: {p['table_header']}; color: {p['text']}; bor
 QTableWidget {{ gridline-color: {p['border_soft']}; alternate-background-color: {p['table_alt']}; }}
 QTableWidget::item {{ padding: 5px; }}
 QTableWidget::item:selected {{ background: {p['accent']}; color: white; }}
-QScrollBar:vertical {{ background: transparent; width: 11px; margin: 3px; }}
+QScrollBar:vertical {{ background: transparent; width: 16px; margin: 20px 3px 20px 3px; }}
 QScrollBar:horizontal {{ background: transparent; height: 11px; margin: 3px; }}
 QScrollBar::handle:vertical, QScrollBar::handle:horizontal {{ background: {p['scroll']}; min-height: 26px; min-width: 26px; border-radius: 4px; }}
 QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover {{ background: {p['accent_soft']}; }}

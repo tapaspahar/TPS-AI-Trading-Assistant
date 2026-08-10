@@ -1,5 +1,5 @@
 from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QHBoxLayout, QStackedWidget, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QScrollArea, QStackedWidget, QVBoxLayout, QWidget
 
 from ui.widgets.header import Header
 from ui.widgets.information_panel import InformationPanel
@@ -26,6 +26,7 @@ from ui.pages.cas_analysis_page import CasAnalysisPage
 from ui.pages.stock_options_watch_page import StockOptionsWatchPage
 from ui.pages.option_strategies_page import OptionStrategiesPage
 from ui.widgets.glass_effects import add_glass_shadow
+from ui.widgets.accessible_scroll import configure_scroll_area
 
 
 class DashboardScreen(QWidget):
@@ -110,6 +111,10 @@ class DashboardScreen(QWidget):
         self.informationPanel = InformationPanel()
         add_glass_shadow(self.informationPanel, blur=16, y_offset=2, opacity=60)
         main_layout.addWidget(self.informationPanel)
+        # Apply one predictable scrolling experience after every page has
+        # joined the dashboard widget tree.
+        for scroll_area in self.findChildren(QScrollArea):
+            configure_scroll_area(scroll_area)
         QTimer.singleShot(0, self.settingsPage.auto_connect_saved_credentials)
 
     def show_page(self, index: int):
