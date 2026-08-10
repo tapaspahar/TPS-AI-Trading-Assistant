@@ -81,6 +81,7 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
     hard_blockers: Counter[str] = Counter()
     score_pass = checklist_pass = both_pass = 0
     best_attempts: list[dict] = []
+    attempt_audit: list[dict] = []
     observed: set[datetime] = set()
 
     for row in attempts:
@@ -91,6 +92,15 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
         except (TypeError, ValueError):
             pass
         if row not in evaluated:
+            attempt_audit.append(
+                {
+                    "sort": str(row["candle_time"] or row["checked_at"] or ""),
+                    "text": (
+                        f"- {_short_time(row['candle_time'] or row['checked_at'])} {row['candidate'] or '-'}: "
+                        f"complete trade evaluation nahi hui; {row['outcome']}. Reason: {row['status_text']}"
+                    ),
+                }
+            )
             continue
         details = _details(row)
         strategy, evaluation = _candidate_evaluation(row, details)
@@ -117,6 +127,24 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
                 "total": int(row["confirmations_total"] or 0),
                 "blockers": [_normalise_blocker(str(value)) for value in blockers],
                 "decision": str(row["decision"] or "NO TRADE"),
+            }
+        )
+        passed_names = [str(value.get("name") or "condition") for value in selected if value.get("passed")]
+        failed_names = [str(value.get("name") or "condition") for value in selected if not value.get("passed")]
+        normalized_blockers = sorted({_normalise_blocker(str(value)) for value in blockers})
+        if row["outcome"] == "TRADE CAPTURED":
+            why = "trade liya kyunki " + (", ".join(passed_names) or "strategy aur safety gates pass hue")
+        else:
+            reasons = failed_names + normalized_blockers
+            why = "trade nahi liya kyunki " + (", ".join(reasons) or str(row["status_text"] or "final plan gate pass nahi hua"))
+        attempt_audit.append(
+            {
+                "sort": str(row["candle_time"] or row["checked_at"] or ""),
+                "text": (
+                    f"- {_short_time(row['candle_time'])} {row['candidate'] or '-'} | {row['outcome']} | "
+                    f"score {int(row['score'] or 0)}/100 | confirmations "
+                    f"{int(row['confirmations_passed'] or 0)}/{int(row['confirmations_total'] or 0)}: {why}."
+                ),
             }
         )
 
@@ -165,7 +193,10 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
     )
     if missing_ranges:
         lines.append("Missing time ranges: " + ", ".join(missing_ranges) + ". In gaps me TPS decision ka proof available nahi hai.")
-    lines.append("Candidate watch: " + ", ".join(f"{key} {value}" for key, value in candidate_counts.items()) + ".")
+    if candidate_counts:
+        lines.append("Candidate watch: " + ", ".join(f"{key} {value}" for key, value in candidate_counts.items()) + ".")
+    else:
+        lines.append("Candidate watch ka koi saved record available nahi hai.")
 
     lines.extend(["", "3. Trade kyon nahi hua / rejection ka main reason"])
     if evaluated:
@@ -193,10 +224,16 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
     else:
         lines.append("Near-setup compare karne ke liye evaluated candle data available nahi tha.")
 
+    lines.extend(["", "5. Har saved trade attempt ka candle-wise record"])
+    if attempt_audit:
+        lines.extend(item["text"] for item in sorted(attempt_audit, key=lambda item: item["sort"]))
+    else:
+        lines.append("Is date par koi saved automatic trade attempt nahi mila.")
+
     lines.extend(
         [
             "",
-            "5. TPS ka post-market conclusion",
+            "6. TPS ka post-market conclusion",
             "Aaj 'trade nahi mila' ka matlab sirf market me opportunity nahi thi, aisa maanna sahi nahi hoga. "
             "TPS ke saved evidence me strategy rejection aur monitoring gaps dono ko alag dekhna zaroori hai.",
             "Agli review me best rejected candles ko actual chart ke saath compare karein. Safety rule ko sirf ek din ke result par loose na karein; pehle repeated evidence aur forward-test outcome dekhein.",
@@ -225,6 +262,7 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
         "hard_blockers": dict(hard_blockers),
         "retry_reasons": dict(retry_reasons),
         "best_attempts": best_attempts[:10],
+        "attempt_audit_count": len(attempt_audit),
     }
     return {
         "trade_date": trade_date,
@@ -239,3 +277,57 @@ def generate_and_save_post_market_analysis(database: Database, trade_date: str, 
     analysis = build_post_market_analysis(database, trade_date, now=now)
     analysis["id"] = database.save_post_market_tps_analysis(analysis)
     return analysis
+
+
+def _source_signature(database: Database, trade_date: str) -> tuple[int, int, int, str]:
+    attempts = database.get_auto_trade_attempts(trade_date, limit=5000)
+    trades = database.get_trades_for_date(trade_date)
+    snapshots = database.get_market_snapshots(trade_date)
+    latest = max((str(row["checked_at"]) for row in attempts), default="")
+    return len(attempts), len(trades), len(snapshots), latest
+
+
+def ensure_completed_post_market_reports(
+    database: Database,
+    now: datetime | None = None,
+    limit: int = 60,
+) -> list[str]:
+    """Generate missing/stale reports after close and backfill past dates.
+
+    The one-minute close buffer lets the 15:25-15:30 candle audit finish first.
+    A later attempt/trade/snapshot changes the source signature, so the report
+    is refreshed automatically on the next scheduler tick.
+    """
+    current = now or datetime.now()
+    updated_dates: list[str] = []
+    source_dates = database.get_post_market_source_dates()
+    current_trade_date = current.strftime("%d-%m-%Y")
+    if current.weekday() < 5 and current.time() >= time(15, 31) and current_trade_date not in source_dates:
+        # If TPS stayed open but no attempt was made, that zero-activity fact is
+        # itself important and must be recorded instead of silently vanishing.
+        source_dates.insert(0, current_trade_date)
+    for trade_date in source_dates[: max(1, int(limit))]:
+        day = datetime.strptime(trade_date, "%d-%m-%Y").date()
+        if day > current.date() or (day == current.date() and current.time() < time(15, 31)):
+            continue
+        signature = _source_signature(database, trade_date)
+        if not any(signature[:3]) and trade_date != current_trade_date:
+            continue
+        existing = database.get_post_market_tps_analysis(trade_date)
+        stale = existing is None
+        if existing is not None:
+            try:
+                metrics = json.loads(existing["metrics_json"] or "{}")
+            except (TypeError, ValueError, json.JSONDecodeError):
+                metrics = {}
+            saved_signature = (
+                int(metrics.get("source_attempt_count", -1)),
+                int(metrics.get("source_trade_count", -1)),
+                int(metrics.get("source_snapshot_count", -1)),
+                str(metrics.get("latest_checked_at", "")),
+            )
+            stale = saved_signature != signature
+        if stale:
+            generate_and_save_post_market_analysis(database, trade_date, now=current)
+            updated_dates.append(trade_date)
+    return updated_dates

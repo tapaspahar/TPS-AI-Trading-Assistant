@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, time
+from datetime import datetime
 
 from PySide6.QtCore import QDate
 from PySide6.QtWidgets import (
@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.database_manager import Database
-from services.post_market_tps_analysis import generate_and_save_post_market_analysis
+from services.post_market_tps_analysis import ensure_completed_post_market_reports, generate_and_save_post_market_analysis
 
 
 class PostMarketTpsAnalysisPage(QWidget):
@@ -79,35 +79,9 @@ class PostMarketTpsAnalysisPage(QWidget):
         latest = max((str(row["checked_at"]) for row in attempts), default="")
         return len(attempts), len(trades), len(snapshots), latest
 
-    def _ensure_completed_reports(self) -> None:
-        today = datetime.now()
-        for trade_date in self.db.get_post_market_source_dates()[:60]:
-            day = datetime.strptime(trade_date, "%d-%m-%Y").date()
-            if day > today.date() or (day == today.date() and today.time() < time(15, 30)):
-                continue
-            existing = self.db.get_post_market_tps_analysis(trade_date)
-            signature = self._source_signature(trade_date)
-            if not any(signature[:3]):
-                continue
-            stale = existing is None
-            if existing is not None:
-                try:
-                    metrics = json.loads(existing["metrics_json"] or "{}")
-                except (TypeError, ValueError, json.JSONDecodeError):
-                    metrics = {}
-                saved_signature = (
-                    int(metrics.get("source_attempt_count", -1)),
-                    int(metrics.get("source_trade_count", -1)),
-                    int(metrics.get("source_snapshot_count", -1)),
-                    str(metrics.get("latest_checked_at", "")),
-                )
-                stale = saved_signature != signature
-            if stale:
-                generate_and_save_post_market_analysis(self.db, trade_date)
-
     def refresh(self, _checked: bool = False, auto_generate: bool = True):
         if auto_generate:
-            self._ensure_completed_reports()
+            ensure_completed_post_market_reports(self.db)
         selected_date = self.date_input.date().toString("dd-MM-yyyy")
         self.date_list.blockSignals(True)
         self.date_list.clear()
@@ -161,4 +135,3 @@ class PostMarketTpsAnalysisPage(QWidget):
             self.report.setPlainText(str(row["summary_text"]))
             generated = datetime.fromisoformat(str(row["generated_at"])).strftime("%d-%m-%Y %H:%M:%S")
             self.status.setText(f"Saved date: {trade_date} | Last generated: {generated}")
-

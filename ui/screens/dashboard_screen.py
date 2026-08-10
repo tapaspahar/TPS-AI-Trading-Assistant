@@ -28,6 +28,7 @@ from ui.pages.option_strategies_page import OptionStrategiesPage
 from ui.pages.post_market_tps_analysis_page import PostMarketTpsAnalysisPage
 from ui.widgets.glass_effects import add_glass_shadow
 from ui.widgets.accessible_scroll import configure_scroll_area
+from services.post_market_tps_analysis import ensure_completed_post_market_reports
 
 
 class DashboardScreen(QWidget):
@@ -119,7 +120,23 @@ class DashboardScreen(QWidget):
         # joined the dashboard widget tree.
         for scroll_area in self.findChildren(QScrollArea):
             configure_scroll_area(scroll_area)
+        self.post_market_report_timer = QTimer(self)
+        self.post_market_report_timer.setInterval(60_000)
+        self.post_market_report_timer.timeout.connect(self.update_completed_post_market_reports)
+        self.post_market_report_timer.start()
+        QTimer.singleShot(0, self.update_completed_post_market_reports)
         QTimer.singleShot(0, self.settingsPage.auto_connect_saved_credentials)
+
+    def update_completed_post_market_reports(self):
+        """Finalize daily TPS audit after close and backfill missed app days."""
+        try:
+            updated = ensure_completed_post_market_reports(self.postMarketTpsAnalysisPage.db)
+        except Exception:
+            # A temporary database lock must not interrupt the trading UI;
+            # the one-minute scheduler will retry automatically.
+            return
+        if updated and self.stack.currentIndex() == 22:
+            self.postMarketTpsAnalysisPage.refresh(auto_generate=False)
 
     def show_page(self, index: int):
         self.sidebar.set_active(index)

@@ -101,7 +101,8 @@ class AboutPage(QWidget):
         <b>Candle Replay:</b> review decisions candle by candle without future information.<br>
         <b>Post-Market Report:</b> inspect the raw saved candle and option-chain timeline.<br>
         <b>Post Market Analysis of TPS:</b> keep a permanent date-wise Roman Hindi journal explaining why
-        automatic paper trades were captured or rejected, including coverage gaps and the best near-setups.</p>
+        automatic paper trades were captured or rejected, including coverage gaps and the best near-setups.
+        TPS generates it automatically after 3:31 PM and backfills a missed completed date after restart.</p>
         <h3>If no trade appears</h3>
         <p>Open Auto Attempt Report and read the exact failed conditions. Check whether live data was available,
         the candle had closed, trend votes agreed, directional volume was sufficient, support/resistance allowed
@@ -156,7 +157,8 @@ class AboutPage(QWidget):
         <b>Candle Replay:</b> future data dekhe bina candle-by-candle practice.<br>
         <b>Post-Market Report:</b> saved candle aur option-chain ka raw timeline.<br>
         <b>Post Market Analysis of TPS:</b> date-wise permanent Roman Hindi journal jisme trade capture/reject
-        hone ka reason, monitoring gap aur best near-setup baad me kabhi bhi padha ja sakta hai.</p>
+        hone ka reason, monitoring gap aur best near-setup baad me kabhi bhi padha ja sakta hai. TPS is report ko
+        3:31 PM ke baad khud generate karta hai; app band ho to agle restart par missed date backfill hoti hai.</p>
         <h3>Agar trade na mile</h3>
         <p>Auto Attempt Report kholkar failed conditions padhiye. Check kijiye ki live data mila tha, candle close
         hui thi, trend votes same direction me the, directional volume strong tha, support/resistance ke paas
