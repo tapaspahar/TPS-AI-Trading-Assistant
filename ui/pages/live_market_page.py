@@ -3,8 +3,8 @@ from threading import Thread
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
-    QComboBox, QFrame, QGridLayout, QGroupBox, QLabel, QMessageBox,
-    QPushButton, QScrollArea, QVBoxLayout, QWidget,
+    QComboBox, QGridLayout, QGroupBox, QLabel, QMessageBox,
+    QPushButton, QVBoxLayout, QWidget,
 )
 
 from services.angel_one_stream import AngelOneStream
@@ -41,33 +41,27 @@ class LiveMarketPage(QWidget):
 
     def __init__(self):
         super().__init__()
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        self.scroll = QScrollArea()
-        self.scroll.setObjectName("liveMarketScroll")
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setFrameShape(QFrame.NoFrame)
-        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        content = QWidget()
-        content.setObjectName("liveMarketContent")
-        layout = QVBoxLayout(content)
-        layout.setContentsMargins(10, 8, 10, 10)
-        layout.setSpacing(8)
-        self.scroll.setWidget(content)
-        outer.addWidget(self.scroll)
+        self.setObjectName("liveMarketContent")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 6, 10, 6)
+        layout.setSpacing(5)
         self.status = QLabel()
         layout.addWidget(self.status)
         buttons = QGridLayout()
+        buttons.setHorizontalSpacing(8)
         for index, symbol in enumerate(("NIFTY", "BANKNIFTY", "SENSEX")):
             button = QPushButton(symbol)
+            button.setFixedHeight(32)
             button.clicked.connect(lambda _checked=False, name=symbol: self.select_symbol(name))
             buttons.addWidget(button, 0, index)
         layout.addLayout(buttons)
         self.timeframe = QComboBox()
+        self.timeframe.setFixedHeight(32)
         self.timeframe.addItems(("5m", "15m", "1h", "1D", "All timeframes"))
         self.timeframe.currentTextChanged.connect(lambda _value: self.load_selected_timeframe())
         layout.addWidget(self.timeframe)
         self.multi_timeframe_button = QPushButton("Analyze Selected Timeframe")
+        self.multi_timeframe_button.setFixedHeight(32)
         self.multi_timeframe_button.clicked.connect(self.load_selected_timeframe)
         layout.addWidget(self.multi_timeframe_button)
         grid = QGridLayout()
@@ -77,6 +71,7 @@ class LiveMarketPage(QWidget):
         )}
         for index, card in enumerate(self.cards.values()):
             card.set_compact(True)
+            card.setFixedHeight(64)
             grid.addWidget(card, index // 3, index % 3)
         layout.addLayout(grid)
         layout.addWidget(QLabel("Live feed values will auto-fill Decision Engine V2. This workspace is read-only and cannot place orders."))
@@ -85,13 +80,14 @@ class LiveMarketPage(QWidget):
         self.snapshot_status = QLabel("Snapshot recorder: waiting for a live symbol.")
         layout.addWidget(self.snapshot_status)
         self.capture_snapshot_button = QPushButton("Save Market Snapshot Now (5m + 15m)")
+        self.capture_snapshot_button.setFixedHeight(32)
         self.capture_snapshot_button.clicked.connect(lambda _checked=False: self.capture_market_snapshot())
         layout.addWidget(self.capture_snapshot_button)
         self.overview_box = QGroupBox("Live Index & Current-Month Futures (updates every 30 seconds)")
         self.overview_grid = QGridLayout(self.overview_box)
-        self.overview_grid.setContentsMargins(16, 22, 16, 16)
-        self.overview_grid.setHorizontalSpacing(14)
-        self.overview_grid.setVerticalSpacing(16)
+        self.overview_grid.setContentsMargins(10, 18, 10, 8)
+        self.overview_grid.setHorizontalSpacing(8)
+        self.overview_grid.setVerticalSpacing(8)
         self.overview_cards = {
             **{symbol: DashboardCard(f"{symbol} Spot", "Waiting") for symbol in ("NIFTY", "BANKNIFTY", "SENSEX")},
             **{f"{symbol} FUT": DashboardCard(f"{symbol} Future", "Loading") for symbol in ("NIFTY", "BANKNIFTY", "SENSEX")},
@@ -99,10 +95,10 @@ class LiveMarketPage(QWidget):
         }
         for card in self.overview_cards.values():
             card.set_compact(True)
-            card.setFixedHeight(82)
+            card.setFixedHeight(62)
         self._layout_overview_cards(6)
         layout.addWidget(self.overview_box)
-        layout.addStretch()
+        layout.addStretch(1)
         self.tick_received.connect(self.show_tick)
         self.feed_status.connect(self.show_status)
         self.structure_received.connect(self.show_structure)
@@ -135,28 +131,35 @@ class LiveMarketPage(QWidget):
         for column in range(6):
             self.overview_grid.setColumnStretch(column, 1 if column < columns else 0)
         symbols = ("NIFTY", "BANKNIFTY", "SENSEX")
-        ordered_cards = [card for symbol in symbols for card in (
-            self.overview_cards[symbol], self.overview_cards[f"{symbol} FUT"]
-        )]
-        for index, card in enumerate(ordered_cards):
-            self.overview_grid.addWidget(card, index // columns, index % columns)
-        rows = (len(ordered_cards) + columns - 1) // columns
+        if columns == 6:
+            ordered_cards = [card for symbol in symbols for card in (
+                self.overview_cards[symbol], self.overview_cards[f"{symbol} FUT"]
+            )]
+            for index, card in enumerate(ordered_cards):
+                self.overview_grid.addWidget(card, 0, index)
+            rows = 1
+        else:
+            # On a narrower window, each future stays directly below its spot.
+            for column, symbol in enumerate(symbols):
+                self.overview_grid.addWidget(self.overview_cards[symbol], 0, column)
+                self.overview_grid.addWidget(self.overview_cards[f"{symbol} FUT"], 1, column)
+            rows = 2
         self.overview_grid.addWidget(self.overview_cards["INDIA VIX"], rows, 0, 1, columns)
         rows += 1
-        height = 58 + rows * 82 + max(0, rows - 1) * 16
+        height = 38 + rows * 62 + max(0, rows - 1) * 8
         self.overview_box.setFixedHeight(height)
         self._overview_columns = columns
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        columns = 6 if event.size().width() >= 1100 else 2 if event.size().width() >= 560 else 1
+        columns = 6 if event.size().width() >= 900 else 3
         if getattr(self, "_overview_columns", None) != columns:
             self._layout_overview_cards(columns)
 
     def showEvent(self, event):
         """Reflow after this stacked page becomes visible at its real width."""
         super().showEvent(event)
-        columns = 6 if self.width() >= 1100 else 2 if self.width() >= 560 else 1
+        columns = 6 if self.width() >= 900 else 3
         if getattr(self, "_overview_columns", None) != columns:
             self._layout_overview_cards(columns)
 
