@@ -1,6 +1,8 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel
 
+from release_info import FOOTER_UPDATE_TEXT
+
 
 class InformationPanel(QFrame):
     """Persistent attribution panel shown below the application workspace."""
@@ -16,9 +18,10 @@ class InformationPanel(QFrame):
         design.setObjectName("informationLabel")
         divider = QLabel("|")
         divider.setObjectName("informationDivider")
-        brand = QLabel("TPS AI Trading Assistant")
+        brand = QLabel(FOOTER_UPDATE_TEXT)
         brand.setObjectName("informationBrand")
         brand.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        brand.setToolTip("Open Help → Release Notes to review everything included in this development update.")
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(16, 6, 16, 6)

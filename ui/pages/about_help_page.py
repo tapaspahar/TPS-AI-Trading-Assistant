@@ -1,7 +1,7 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QScrollArea, QTabWidget, QVBoxLayout, QWidget
 
-from release_info import DISPLAY_VERSION
+from release_info import DISPLAY_VERSION, LAST_UPDATED_AT, RELEASE_NOTES, SOFTWARE_UPDATE_VERSION
 
 
 def _scrolling_text(html: str) -> QScrollArea:
@@ -170,6 +170,23 @@ class AboutPage(QWidget):
         Application broker order place, modify ya cancel nahi karti. Manual trade se pehle har value khud verify kijiye.</p>
         """
 
+    @staticmethod
+    def _release_notes_html() -> str:
+        notes = "".join(f"<li>{note}</li>" for note in RELEASE_NOTES)
+        return f"""
+        <h2>Software Update — {SOFTWARE_UPDATE_VERSION}</h2>
+        <p><b>Updated:</b> {LAST_UPDATED_AT}<br>
+        <b>Release status:</b> Release 1.1 development build; published Release 1.0 remains unchanged.</p>
+        <h3>What was built today</h3>
+        <ul>{notes}</ul>
+        <h3>Roman Hindi summary</h3>
+        <p>Aaj ke development update me CAS Analysis, Stock Options Watch, adaptive market rules,
+        limited-risk Option Strategies, Market Snapshot layout improvements, reliable scrolling,
+        default event status aur visible update history add ki gayi hai.</p>
+        <p>Ye notes sirf completed application changes dikhate hain. Kisi diagnostic suggestion ko
+        tab tak completed nahi maana jayega jab tak uska code update aur testing finish na ho.</p>
+        """
+
 
 class HelpPage(QWidget):
     """Offline operating guide in English and Roman Hindi."""
@@ -188,4 +205,5 @@ class HelpPage(QWidget):
         tabs = QTabWidget()
         tabs.addTab(_scrolling_text(AboutPage._english_help()), "English")
         tabs.addTab(_scrolling_text(AboutPage._hindi_help()), "Roman Hindi")
+        tabs.addTab(_scrolling_text(AboutPage._release_notes_html()), "Release Notes")
         layout.addWidget(tabs, 1)
