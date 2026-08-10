@@ -5,7 +5,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtWidgets import QApplication, QLabel, QTabWidget
 
-from release_info import FOOTER_UPDATE_TEXT, LAST_UPDATED_AT, RELEASE_NOTES, SOFTWARE_UPDATE_VERSION
+from release_info import DISPLAY_VERSION, FOOTER_UPDATE_TEXT, LAST_UPDATED_AT, RELEASE_DATE, RELEASE_NOTES, SOFTWARE_UPDATE_VERSION, VERSION
 from ui.pages.about_help_page import AboutPage, HelpPage
 from ui.widgets.information_panel import InformationPanel
 
@@ -34,6 +34,18 @@ class ReleaseNotesTests(unittest.TestCase):
         self.assertIn(LAST_UPDATED_AT, html)
         for note in RELEASE_NOTES:
             self.assertIn(note, html)
+
+    def test_release_1_1_metadata_and_packaging_are_aligned(self):
+        self.assertEqual(VERSION, "1.1.0")
+        self.assertEqual(DISPLAY_VERSION, "Release 1.1")
+        self.assertEqual(RELEASE_DATE, "10-08-2026")
+        with open("packaging/installer.iss", encoding="utf-8") as file:
+            installer = file.read()
+        with open("packaging/windows_version_info.txt", encoding="utf-8") as file:
+            windows_info = file.read()
+        self.assertIn('#define MyAppVersion "1.1.0"', installer)
+        self.assertIn("TPS-AI-Trading-Assistant-Setup-1.1.0", installer)
+        self.assertIn("ProductVersion', '1.1.0'", windows_info)
 
 
 if __name__ == "__main__":

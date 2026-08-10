@@ -1,16 +1,16 @@
 """Application release metadata kept in one place."""
 
 APP_NAME = "TPS AI Trading Assistant"
-VERSION = "1.0.0"
-DISPLAY_VERSION = "Release 1.0"
-RELEASE_DATE = "04-08-2026"
+VERSION = "1.1.0"
+DISPLAY_VERSION = "Release 1.1"
+RELEASE_DATE = "10-08-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
-SOFTWARE_UPDATE_VERSION = "v1.1.0-dev.20260810"
-LAST_UPDATED_AT = "10-08-2026 15:58:55 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.1-dev • 10-08-2026 15:58 IST"
+SOFTWARE_UPDATE_VERSION = "v1.1.0"
+LAST_UPDATED_AT = "10-08-2026 16:12:26 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.1.0 • 10-08-2026 16:12 IST"
 RELEASE_NOTES = (
     "Added CAS Analysis and Stock Options Watch workspaces.",
     "Added adaptive market-regime rules and limited-risk Option Strategies.",

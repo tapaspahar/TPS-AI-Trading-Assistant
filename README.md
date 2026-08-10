@@ -1,6 +1,6 @@
 # TPS AI Trading Assistant
 
-Version: 1.0
+Version: 1.1
 
 Developed By:
 Tapas Kumar Pahar
