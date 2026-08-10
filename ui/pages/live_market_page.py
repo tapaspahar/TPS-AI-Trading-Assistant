@@ -4,7 +4,7 @@ from threading import Thread
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QComboBox, QGridLayout, QGroupBox, QLabel, QMessageBox,
-    QPushButton, QVBoxLayout, QWidget,
+    QPushButton, QSizePolicy, QVBoxLayout, QWidget,
 )
 
 from services.angel_one_stream import AngelOneStream
@@ -42,6 +42,18 @@ class LiveMarketPage(QWidget):
     def __init__(self):
         super().__init__()
         self.setObjectName("liveMarketContent")
+        # Keep the information-dense market cards clean across every visual
+        # theme. Some style overlays add large padding/margins which otherwise
+        # pushes multi-line values outside compact cards.
+        self.setStyleSheet("""
+            QWidget#liveMarketContent QFrame#dashboardCard[marketSnapshotCard="true"] {
+                padding: 3px;
+                margin: 0px;
+            }
+            QWidget#liveMarketContent QFrame#dashboardCard[marketSnapshotCard="true"] QLabel#cardValue[density="compact"] {
+                font-size: 12px;
+            }
+        """)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 6, 10, 6)
         layout.setSpacing(5)
@@ -65,16 +77,18 @@ class LiveMarketPage(QWidget):
         self.multi_timeframe_button.clicked.connect(self.load_selected_timeframe)
         layout.addWidget(self.multi_timeframe_button)
         grid = QGridLayout()
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(8)
         self.cards = {name: DashboardCard(title, "Waiting for live feed") for name, title in (
             ("ltp", "Live Price"), ("trend", "Market State"), ("support", "Support Zone"),
             ("resistance", "Resistance Zone"), ("breakout", "Breakout Condition"), ("breakdown", "Breakdown Condition"),
         )}
         for index, card in enumerate(self.cards.values()):
+            card.setProperty("marketSnapshotCard", True)
             card.set_compact(True)
-            card.setFixedHeight(64)
+            card.setFixedHeight(82)
             grid.addWidget(card, index // 3, index % 3)
         layout.addLayout(grid)
-        layout.addWidget(QLabel("Live feed values will auto-fill Decision Engine V2. This workspace is read-only and cannot place orders."))
         self.multi_timeframe_detail = QLabel("Select a live symbol, then run multi-timeframe chart analysis.")
         layout.addWidget(self.multi_timeframe_detail)
         self.snapshot_status = QLabel("Snapshot recorder: waiting for a live symbol.")
@@ -84,6 +98,7 @@ class LiveMarketPage(QWidget):
         self.capture_snapshot_button.clicked.connect(lambda _checked=False: self.capture_market_snapshot())
         layout.addWidget(self.capture_snapshot_button)
         self.overview_box = QGroupBox("Live Index & Current-Month Futures (updates every 30 seconds)")
+        self.overview_box.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         self.overview_grid = QGridLayout(self.overview_box)
         self.overview_grid.setContentsMargins(10, 18, 10, 8)
         self.overview_grid.setHorizontalSpacing(8)
@@ -94,8 +109,9 @@ class LiveMarketPage(QWidget):
             "INDIA VIX": DashboardCard("India VIX", "Loading live volatility"),
         }
         for card in self.overview_cards.values():
+            card.setProperty("marketSnapshotCard", True)
             card.set_compact(True)
-            card.setFixedHeight(62)
+            card.setFixedHeight(82)
         self._layout_overview_cards(6)
         layout.addWidget(self.overview_box)
         layout.addStretch(1)
@@ -145,9 +161,8 @@ class LiveMarketPage(QWidget):
                 self.overview_grid.addWidget(self.overview_cards[f"{symbol} FUT"], 1, column)
             rows = 2
         self.overview_grid.addWidget(self.overview_cards["INDIA VIX"], rows, 0, 1, columns)
-        rows += 1
-        height = 38 + rows * 62 + max(0, rows - 1) * 8
-        self.overview_box.setFixedHeight(height)
+        self.overview_grid.invalidate()
+        self.overview_box.updateGeometry()
         self._overview_columns = columns
 
     def resizeEvent(self, event):
