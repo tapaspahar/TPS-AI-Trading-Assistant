@@ -99,7 +99,9 @@ class AboutPage(QWidget):
         <b>Reports:</b> performance summaries from journal records.<br>
         <b>Backtesting:</b> test rules on historical candles before trusting them live.<br>
         <b>Candle Replay:</b> review decisions candle by candle without future information.<br>
-        <b>Post-Market Report:</b> inspect the completed session and missed/blocked setups.</p>
+        <b>Post-Market Report:</b> inspect the raw saved candle and option-chain timeline.<br>
+        <b>Post Market Analysis of TPS:</b> keep a permanent date-wise Roman Hindi journal explaining why
+        automatic paper trades were captured or rejected, including coverage gaps and the best near-setups.</p>
         <h3>If no trade appears</h3>
         <p>Open Auto Attempt Report and read the exact failed conditions. Check whether live data was available,
         the candle had closed, trend votes agreed, directional volume was sufficient, support/resistance allowed
@@ -152,7 +154,9 @@ class AboutPage(QWidget):
         <b>Reports:</b> journal data se performance summary.<br>
         <b>Backtesting:</b> live use se pehle historical candles par rules test karna.<br>
         <b>Candle Replay:</b> future data dekhe bina candle-by-candle practice.<br>
-        <b>Post-Market Report:</b> market band hone ke baad poore session aur missed/blocked setups ka review.</p>
+        <b>Post-Market Report:</b> saved candle aur option-chain ka raw timeline.<br>
+        <b>Post Market Analysis of TPS:</b> date-wise permanent Roman Hindi journal jisme trade capture/reject
+        hone ka reason, monitoring gap aur best near-setup baad me kabhi bhi padha ja sakta hai.</p>
         <h3>Agar trade na mile</h3>
         <p>Auto Attempt Report kholkar failed conditions padhiye. Check kijiye ki live data mila tha, candle close
         hui thi, trend votes same direction me the, directional volume strong tha, support/resistance ke paas

@@ -178,6 +178,18 @@ class Database:
             )
             """
         )
+        self.cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS post_market_tps_analysis (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                trade_date TEXT NOT NULL UNIQUE,
+                generated_at TEXT NOT NULL,
+                title TEXT NOT NULL,
+                summary_text TEXT NOT NULL,
+                metrics_json TEXT NOT NULL
+            )
+            """
+        )
         self.connection.commit()
 
     @staticmethod
@@ -652,6 +664,77 @@ class Database:
         query += " ORDER BY COALESCE(candle_time, checked_at) DESC, id DESC LIMIT ?"
         values.append(max(1, min(int(limit), 5000)))
         return self.cursor.execute(query, values).fetchall()
+
+    def get_trades_for_date(self, trade_date: str) -> list[sqlite3.Row]:
+        """Return full journal records for one trading date."""
+        return self.cursor.execute(
+            "SELECT * FROM trades WHERE trade_date = ? ORDER BY trade_time ASC, id ASC",
+            (trade_date,),
+        ).fetchall()
+
+    def save_post_market_tps_analysis(self, analysis: dict) -> int:
+        """Create or refresh one permanent date-wise TPS post-market note."""
+        values = (
+            str(analysis["trade_date"]),
+            str(analysis["generated_at"]),
+            str(analysis.get("title") or "Post Market Analysis of TPS"),
+            str(analysis["summary_text"]),
+            json.dumps(analysis.get("metrics") or {}, ensure_ascii=False, default=str),
+        )
+        self.cursor.execute(
+            """
+            INSERT INTO post_market_tps_analysis
+                (trade_date, generated_at, title, summary_text, metrics_json)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(trade_date) DO UPDATE SET
+                generated_at = excluded.generated_at,
+                title = excluded.title,
+                summary_text = excluded.summary_text,
+                metrics_json = excluded.metrics_json
+            """,
+            values,
+        )
+        self.connection.commit()
+        row = self.cursor.execute(
+            "SELECT id FROM post_market_tps_analysis WHERE trade_date = ?",
+            (values[0],),
+        ).fetchone()
+        return int(row["id"])
+
+    def get_post_market_tps_analysis(self, trade_date: str) -> sqlite3.Row | None:
+        return self.cursor.execute(
+            "SELECT * FROM post_market_tps_analysis WHERE trade_date = ?",
+            (trade_date,),
+        ).fetchone()
+
+    def get_post_market_tps_analyses(self, limit: int = 500) -> list[sqlite3.Row]:
+        return self.cursor.execute(
+            """
+            SELECT * FROM post_market_tps_analysis
+            ORDER BY substr(trade_date, 7, 4) || substr(trade_date, 4, 2) || substr(trade_date, 1, 2) DESC
+            LIMIT ?
+            """,
+            (max(1, min(int(limit), 5000)),),
+        ).fetchall()
+
+    def get_post_market_source_dates(self) -> list[str]:
+        """Return dates which contain attempts, trades, or saved market data."""
+        rows = self.cursor.execute(
+            """
+            SELECT trade_date FROM auto_trade_attempts
+            UNION SELECT trade_date FROM trades
+            UNION SELECT trade_date FROM market_snapshots
+            """
+        ).fetchall()
+        valid_dates = []
+        for row in rows:
+            value = str(row["trade_date"] or "")
+            try:
+                datetime.strptime(value, "%d-%m-%Y")
+            except ValueError:
+                continue
+            valid_dates.append(value)
+        return sorted(valid_dates, key=lambda value: datetime.strptime(value, "%d-%m-%Y"), reverse=True)
 
     def export_auto_trade_attempts(self, destination: str | Path, trade_date: str | None = None) -> int:
         rows = self.get_auto_trade_attempts(trade_date, limit=5000)
