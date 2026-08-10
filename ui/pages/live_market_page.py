@@ -104,15 +104,14 @@ class LiveMarketPage(QWidget):
         self.overview_grid.setHorizontalSpacing(8)
         self.overview_grid.setVerticalSpacing(8)
         self.overview_cards = {
-            **{symbol: DashboardCard(f"{symbol} Spot", "Waiting") for symbol in ("NIFTY", "BANKNIFTY", "SENSEX")},
-            **{f"{symbol} FUT": DashboardCard(f"{symbol} Future", "Loading") for symbol in ("NIFTY", "BANKNIFTY", "SENSEX")},
+            **{symbol: DashboardCard(f"{symbol} Spot + Future", "Waiting") for symbol in ("NIFTY", "BANKNIFTY", "SENSEX")},
             "INDIA VIX": DashboardCard("India VIX", "Loading live volatility"),
         }
         for card in self.overview_cards.values():
             card.setProperty("marketSnapshotCard", True)
             card.set_compact(True)
-            card.setFixedHeight(82)
-        self._layout_overview_cards(6)
+            card.setFixedHeight(104)
+        self._layout_overview_cards()
         layout.addWidget(self.overview_box)
         layout.addStretch(1)
         self.tick_received.connect(self.show_tick)
@@ -138,45 +137,18 @@ class LiveMarketPage(QWidget):
         self.refresh_status()
         self.start_market_overview()
 
-    def _layout_overview_cards(self, columns):
-        """Keep each compact spot card immediately beside its matching future."""
+    def _layout_overview_cards(self):
+        """Show each index's spot and future together in one collision-free row."""
         while self.overview_grid.count():
             item = self.overview_grid.takeAt(0)
             if item.widget():
                 item.widget().setParent(self.overview_box)
-        for column in range(6):
-            self.overview_grid.setColumnStretch(column, 1 if column < columns else 0)
-        symbols = ("NIFTY", "BANKNIFTY", "SENSEX")
-        if columns == 6:
-            ordered_cards = [card for symbol in symbols for card in (
-                self.overview_cards[symbol], self.overview_cards[f"{symbol} FUT"]
-            )]
-            for index, card in enumerate(ordered_cards):
-                self.overview_grid.addWidget(card, 0, index)
-            rows = 1
-        else:
-            # On a narrower window, each future stays directly below its spot.
-            for column, symbol in enumerate(symbols):
-                self.overview_grid.addWidget(self.overview_cards[symbol], 0, column)
-                self.overview_grid.addWidget(self.overview_cards[f"{symbol} FUT"], 1, column)
-            rows = 2
-        self.overview_grid.addWidget(self.overview_cards["INDIA VIX"], rows, 0, 1, columns)
+        ordered_keys = ("NIFTY", "BANKNIFTY", "SENSEX", "INDIA VIX")
+        for column, key in enumerate(ordered_keys):
+            self.overview_grid.setColumnStretch(column, 1)
+            self.overview_grid.addWidget(self.overview_cards[key], 0, column)
         self.overview_grid.invalidate()
         self.overview_box.updateGeometry()
-        self._overview_columns = columns
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        columns = 6 if event.size().width() >= 900 else 3
-        if getattr(self, "_overview_columns", None) != columns:
-            self._layout_overview_cards(columns)
-
-    def showEvent(self, event):
-        """Reflow after this stacked page becomes visible at its real width."""
-        super().showEvent(event)
-        columns = 6 if self.width() >= 900 else 3
-        if getattr(self, "_overview_columns", None) != columns:
-            self._layout_overview_cards(columns)
 
     def refresh_status(self):
         self.status.setText("Angel One: Connected (read-only)" if LiveSession.connected() else "Angel One: Not connected — connect from Settings first")
@@ -402,10 +374,11 @@ class LiveMarketPage(QWidget):
         quotes, self.future_contracts = result["quotes"], result["futures"]
         self.vix_instrument = result.get("vix_instrument")
         token_map = {"99926000": "NIFTY", "99926009": "BANKNIFTY", "99919000": "SENSEX"}
+        spot_summaries = {}
         for token, symbol in token_map.items():
             quote = quotes.get(token)
             if not quote:
-                self.overview_cards[symbol].set_value("Live quote unavailable")
+                spot_summaries[symbol] = "Spot quote unavailable"
                 continue
             price = float(quote.get("ltp", 0) or 0)
             change = float(quote.get("netChange", 0) or 0)
@@ -416,15 +389,24 @@ class LiveMarketPage(QWidget):
                 bias = "Bearish day bias"
             else:
                 bias = "Flat day bias"
-            self.overview_cards[symbol].set_value(f"{price:,.2f}\n{bias} ({percent_change:+.2f}%)")
-        for symbol, future in self.future_contracts.items():
+            spot_summaries[symbol] = f"Spot  {price:,.2f}  |  {bias} ({percent_change:+.2f}%)"
+        for symbol in ("NIFTY", "BANKNIFTY", "SENSEX"):
+            future = self.future_contracts.get(symbol)
+            future_summary = "Future contract unavailable"
+            if not future:
+                self.overview_cards[symbol].set_value(
+                    f"{spot_summaries.get(symbol, 'Spot quote unavailable')}\n{future_summary}"
+                )
+                continue
             quote = quotes.get(future["token"])
             if quote:
-                self.overview_cards[f"{symbol} FUT"].set_value(
-                    f"{float(quote.get('ltp', 0) or 0):,.2f}\nExpires {future['expiry'].strftime('%d %b')}"
+                future_summary = (
+                    f"Future  {float(quote.get('ltp', 0) or 0):,.2f}"
+                    f"  |  Expiry {future['expiry'].strftime('%d %b')}"
                 )
-            else:
-                self.overview_cards[f"{symbol} FUT"].set_value("Future quote unavailable")
+            self.overview_cards[symbol].set_value(
+                f"{spot_summaries.get(symbol, 'Spot quote unavailable')}\n{future_summary}"
+            )
         vix_quote = quotes.get(str((self.vix_instrument or {}).get("token", "")))
         if vix_quote:
             vix = float(vix_quote.get("ltp", 0) or 0)

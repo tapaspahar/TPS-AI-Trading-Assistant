@@ -21,8 +21,10 @@ class LiveMarketLayoutTests(unittest.TestCase):
         page.cards["breakout"].set_value("5m close > 24,606.07\nvolume confirmation")
         page.cards["breakdown"].set_value("5m close < 24,581.28\nvolume confirmation")
         for symbol in ("NIFTY", "BANKNIFTY", "SENSEX"):
-            page.overview_cards[symbol].set_value("24,588.75\nBearish day bias (-0.70%)")
-            page.overview_cards[f"{symbol} FUT"].set_value("24,672.20\nExpires 25 Aug")
+            page.overview_cards[symbol].set_value(
+                "Spot  24,588.75  |  Bearish day bias (-0.70%)\n"
+                "Future  24,672.20  |  Expiry 25 Aug"
+            )
         page.overview_cards["INDIA VIX"].set_value(
             "12.56  |  HEALTHY TREND\nUpdated 11:44:53"
         )
