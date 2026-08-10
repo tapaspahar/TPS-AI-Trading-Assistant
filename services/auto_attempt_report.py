@@ -25,7 +25,8 @@ def format_auto_paper_attempt(result):
             f"Decision: {chart.get('decision', '-')} | Candidate: {attempt.get('candidate') or '-'} | "
             f"CE score {ce.get('score', '-')} ({ce.get('passed', '-')}/{ce.get('total', '-')}) | "
             f"PE score {pe.get('score', '-')} ({pe.get('passed', '-')}/{pe.get('total', '-')}) | "
-            f"Required: {strategy.get('required', '-')} matches + score {strategy.get('minimum_score', '-')}"
+                f"Required: {strategy.get('required', '-')} matches + score {strategy.get('minimum_score', '-')} | "
+                f"{strategy.get('required_reason', strategy.get('match_mode', '-'))}"
         )
         confirmations = strategy.get("confirmations") or []
         if confirmations:
@@ -62,6 +63,13 @@ def format_auto_paper_attempt(result):
                 f"Previous day H/L {environment.get('previous_day_high')} / {environment.get('previous_day_low')} | "
                 f"{environment.get('gap_state')} {environment.get('gap_points')} | "
                 f"Strategy {(environment.get('expiry_strategy') or {}).get('strategy', environment.get('strategy_preference'))}"
+            )
+            lines.append(
+                f"VIX range budget: expected {environment.get('expected_daily_range')} points | "
+                f"session used {environment.get('session_range')} ({environment.get('range_consumed_percent')}%) | "
+                f"remaining {environment.get('remaining_expected_range')} | regular objective "
+                f"{environment.get('regular_move_target_points')} points | adaptive extension "
+                f"{environment.get('max_entry_extension_atr')} ATR"
             )
             event = environment.get("event_risk") or {}
             lines.append(f"Economic calendar: {event.get('status', 'Unavailable')} | Feed available {event.get('available', False)}")

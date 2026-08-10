@@ -12,6 +12,7 @@ class SettingsStoreTests(unittest.TestCase):
             self.assertEqual(store.load()["capital"], 100000.0)
             self.assertEqual(store.load()["trade_plan_min_score"], 95)
             self.assertEqual(store.load()["ui_style"], "glassmorphism")
+            self.assertEqual(store.load()["tps_match_mode"], "adaptive")
             saved = store.save({"capital": "250000", "risk_percent": "0.5", "daily_loss_percent": "2", "max_trades_per_day": "3", "theme": "light"})
             self.assertEqual(saved["max_trades_per_day"], 3)
             self.assertEqual(store.load()["theme"], "light")
@@ -40,6 +41,9 @@ class SettingsStoreTests(unittest.TestCase):
             saved = store.save(settings)
             self.assertEqual(saved["tps_required_matches"], 1)
             self.assertEqual(len(saved["tps_enabled_conditions"]), 2)
+            settings = store.load(); settings["tps_match_mode"] = "adaptive"
+            self.assertEqual(store.save(settings)["tps_match_mode"], "adaptive")
+            settings = store.load()
             settings["tps_required_matches"] = 3
             with self.assertRaisesRegex(ValueError, "fit within"):
                 store.save(settings)

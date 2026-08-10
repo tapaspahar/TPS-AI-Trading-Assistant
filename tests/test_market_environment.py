@@ -19,12 +19,15 @@ class MarketEnvironmentTests(unittest.TestCase):
         self.assertEqual(result["vix_zone"], "HIGH VOLATILITY")
         self.assertEqual(result["risk_multiplier"], .75)
         self.assertGreater(result["expected_daily_range"], 0)
+        self.assertGreater(result["regular_move_target_points"], 0)
+        self.assertEqual(result["max_entry_extension_atr"], .9)
 
     def test_low_vix_requires_stronger_volume(self):
         capture = self.capture(); capture.update({"atr_14": "20", "ema_5": "25001", "ema_20": "25000", "ema_50": "24999"})
         result = analyze_market_environment([], capture, 25000, 10, datetime(2026, 8, 5, 11, 0))
         self.assertEqual(result["regime"], "LOW VOLATILITY")
         self.assertEqual(result["volume_threshold"], 1.7)
+        self.assertEqual(result["max_entry_extension_atr"], .65)
 
     def test_missing_vix_is_explicit_not_guessed(self):
         result = analyze_market_environment([], self.capture(), 25000, None)

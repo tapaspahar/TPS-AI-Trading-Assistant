@@ -14,7 +14,7 @@ DEFAULT_SETTINGS = {
     "max_trades_per_day": 5,
     "trade_plan_min_score": 95,
     "tps_required_matches": 5,
-    "tps_match_mode": "count",
+    "tps_match_mode": "adaptive",
     "tps_enabled_conditions": [
         "Market structure", "Price vs VWAP", "EMA 5/20/50 alignment",
         "SuperTrend confirmation", "Pullback and reversal", "Directional volume", "OI/PCR context",
@@ -91,8 +91,8 @@ class SettingsStore:
         }
         if not values["tps_enabled_conditions"] or not set(values["tps_enabled_conditions"]) <= allowed_conditions:
             raise ValueError("Select at least one valid TPS checklist condition.")
-        if values["tps_match_mode"] not in {"count", "all"}:
-            raise ValueError("TPS checklist mode must be count or all.")
+        if values["tps_match_mode"] not in {"count", "all", "adaptive"}:
+            raise ValueError("TPS checklist mode must be count, all, or adaptive.")
         if not 1 <= values["tps_required_matches"] <= len(values["tps_enabled_conditions"]):
             raise ValueError("Required TPS matches must fit within the enabled checklist.")
         if values["event_no_trade_minutes"] not in {15, 30, 60}:

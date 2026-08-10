@@ -6,6 +6,8 @@ stronger CE or PE watch candidate without silently authorising a trade.
 """
 from __future__ import annotations
 
+from math import ceil
+
 from engine.live_setup_capture import ema, supertrend
 from engine.market_structure import analyze_candles
 
@@ -67,8 +69,8 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
     enabled = [name for name in settings.get("tps_enabled_conditions", DEFAULT_ENABLED) if name in CONDITION_WEIGHTS]
     if not enabled:
         enabled = list(DEFAULT_ENABLED)
-    match_mode = settings.get("tps_match_mode", "count")
-    required = len(enabled) if match_mode == "all" else max(1, min(int(settings.get("tps_required_matches", 5)), len(enabled)))
+    match_mode = settings.get("tps_match_mode", "adaptive")
+    requested_required = max(1, min(int(settings.get("tps_required_matches", 5)), len(enabled)))
     minimum_score = max(0, min(int(settings.get("trade_plan_min_score", 95)), 100))
 
     close = float(capture["close"]); opening = float(capture["open"])
@@ -96,6 +98,15 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
     recent_bullish_touch = any(any(abs(float(c["low"]) - zone) <= tolerance for zone in zones) for c in trigger_window)
     recent_bearish_touch = any(any(abs(float(c["high"]) - zone) <= tolerance for zone in zones) for c in trigger_window)
     environment = environment or {}
+    regime = environment.get("regime")
+    if match_mode == "all":
+        required, required_reason = len(enabled), "all selected conditions"
+    elif match_mode == "adaptive" and environment:
+        ratio = .75 if regime == "TRENDING" else .80 if regime == "HIGH VOLATILITY" else .90
+        required = max(1, min(len(enabled), ceil(len(enabled) * ratio)))
+        required_reason = f"adaptive {regime or 'unknown'} regime ({ratio * 100:.0f}% of selected conditions)"
+    else:
+        required, required_reason = requested_required, f"configured count {requested_required}"
     environment_ok = not environment or (
         float(environment.get("risk_multiplier", 1)) >= .75 and environment.get("vix_zone") != "EXTREME RISK"
     )
@@ -152,8 +163,11 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
     resistance_gap = abs(chart_resistance - oi_resistance) if oi_resistance is not None else None
     support_confluence = support_gap is not None and support_gap <= zone_tolerance
     resistance_confluence = resistance_gap is not None and resistance_gap <= zone_tolerance
-    required_room = max(atr * .75, close * .001)
-    max_extension_atr = max(.30, min(float(settings.get("tps_max_entry_extension_atr", DEFAULT_MAX_ENTRY_EXTENSION_ATR)), 2.0))
+    regular_target = float(environment.get("regular_move_target_points") or 0)
+    required_room = max(close * .0005, min(atr * .75, regular_target) if regular_target > 0 else atr * .75)
+    configured_extension = settings.get("tps_max_entry_extension_atr")
+    adaptive_extension = environment.get("max_entry_extension_atr", DEFAULT_MAX_ENTRY_EXTENSION_ATR)
+    max_extension_atr = max(.30, min(float(configured_extension if configured_extension is not None else adaptive_extension), 2.0))
     ce_max_rsi = max(60.0, min(float(settings.get("tps_ce_max_rsi", DEFAULT_CE_MAX_RSI)), 90.0))
     pe_min_rsi = max(10.0, min(float(settings.get("tps_pe_min_rsi", DEFAULT_PE_MIN_RSI)), 40.0))
     side_results = {}
@@ -214,6 +228,9 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
                 "extension_atr": round(extension_atr, 2), "maximum_extension_atr": max_extension_atr,
                 "rsi": rsi, "rsi_limit": ce_max_rsi if side == "CE" else pe_min_rsi,
                 "fresh_pullback_reversal": trigger_ok,
+                "required_room_points": round(required_room, 2),
+                "regular_move_target_points": round(regular_target, 2) if regular_target else None,
+                "environment_regime": environment.get("regime", "unavailable"),
                 "timely": extension_atr <= max_extension_atr and (
                     rsi is None or (rsi < ce_max_rsi if side == "CE" else rsi > pe_min_rsi)
                 ) and trigger_ok,
@@ -238,6 +255,7 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
         "confirmations": selected["confirmations"], "selected_confirmations": selected["selected_confirmations"],
         "passed": selected["passed"], "required": required, "total": selected["total"], "score": selected["score"],
         "minimum_score": minimum_score, "enabled_conditions": enabled,
+        "match_mode": match_mode, "required_reason": required_reason,
         "trade_ready": bool(selected["trade_ready"]),
         "decision": f"TPS V3 {selected['candidate']} PAPER ENTRY CONFIRMED" if selected["trade_ready"] else f"{selected['candidate']} {selected['state']}",
         "blockers": selected["hard_blockers"], "hard_blockers": selected["hard_blockers"],

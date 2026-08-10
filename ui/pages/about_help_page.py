@@ -73,6 +73,8 @@ class AboutPage(QWidget):
           <li>Use <b>Chart Capture</b> or live capture to load EMA 5/20/50, VWAP, SuperTrend, RSI, ATR and volume.</li>
           <li>Review the result in <b>AI Analysis</b>. A bullish candle alone is not a bullish structure; the core
           trend inputs must agree.</li>
+          <li>In <b>Options Workspace</b>, keep the recommended Adaptive match rule when you want the required
+          checklist count, entry extension and regular-move objective to respond to the live VIX/market regime.</li>
           <li>Open <b>Options Workspace</b>, load the expiry and contract, then analyse OI/PCR. CE is considered
           for confirmed bullish structure and PE for confirmed bearish structure.</li>
           <li>Review <b>Market Environment</b>: India VIX, ATR regime, opening range, previous-day high/low,
@@ -84,6 +86,9 @@ class AboutPage(QWidget):
           imbalance data is unavailable through the broker feed.</li>
           <li>Use <b>Stock Options Watch</b> to maintain up to 8 active NSE F&amp;O shares. The completed-candle
           scan shows CE/PE side, score, entry timing and a one-lot paper plan with entry, stop, target and quantity.</li>
+          <li>Use <b>Option Strategies</b> to review a VIX/regime-aware limited-risk structure. TPS may suggest a
+          Bull Call Debit Spread, Bear Put Debit Spread or Defined-Risk Iron Condor, and shows every leg plus
+          one-lot maximum profit/loss. WAIT means the live payoff is not clean enough.</li>
           <li>Use <b>Trade Journal</b> for planned entry, stop loss, target, actual exit and review notes.</li>
         </ol>
         <h3>Workspace guide</h3>
@@ -121,6 +126,8 @@ class AboutPage(QWidget):
           <li><b>Chart Capture</b> se EMA 5/20/50, VWAP, SuperTrend, RSI, ATR aur volume values load kijiye.</li>
           <li><b>AI Analysis</b> me result verify kijiye. Sirf ek bullish candle ka matlab bullish market nahi hota;
           main trend conditions ka same direction me hona zaroori hai.</li>
+          <li><b>Options Workspace</b> me recommended Adaptive match rule rakhiye. Is mode me required checklist
+          count, entry extension aur regular-move objective live VIX/market regime ke hisaab se badlenge.</li>
           <li><b>Options Workspace</b> me expiry aur contract load karke OI/PCR analyse kijiye. Confirmed bullish
           structure me CE aur confirmed bearish structure me PE consider hoga.</li>
           <li><b>Market Environment</b> me India VIX, ATR regime, opening range, previous-day high/low, gap,
@@ -132,6 +139,9 @@ class AboutPage(QWidget):
           TPS result ko estimate ke roop me clearly dikhayega.</li>
           <li><b>Stock Options Watch</b> me maximum 8 active NSE F&amp;O shares rakhiye. Completed 5-minute candle
           scan CE/PE side, score, entry timing aur one-lot paper plan ka entry, stop, target aur quantity dikhayega.</li>
+          <li><b>Option Strategies</b> me VIX aur market regime ke hisaab se limited-risk structure review kijiye.
+          TPS Bull Call Debit Spread, Bear Put Debit Spread ya Defined-Risk Iron Condor suggest kar sakta hai aur
+          har leg ke saath one-lot maximum profit/loss dikhayega. WAIT ka matlab clean payoff abhi nahi bana.</li>
           <li><b>Trade Journal</b> me entry, stop loss, target, actual exit aur review notes record kijiye.</li>
         </ol>
         <h3>Har page ka kaam</h3>

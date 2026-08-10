@@ -58,6 +58,11 @@ def create_review_plan(underlying, spot_price, contracts, quote_rows, chart_cont
     minimum_rr = float(settings.get("minimum_rr_ratio", 1.5))
     target_multiple = max(minimum_rr, float(environment.get("target_atr_multiplier", 2)))
     target = round(premium + (premium - stop_loss) * target_multiple, 2)
+    underlying_target_points = float(environment.get("regular_move_target_points") or 0)
+    underlying_target = (
+        round(float(spot_price) + underlying_target_points, 2) if option_type == "CE"
+        else round(float(spot_price) - underlying_target_points, 2)
+    ) if underlying_target_points > 0 else None
     adjusted_risk_percent = float(settings["risk_percent"]) * float(environment.get("risk_multiplier", 1))
     risk = buying_risk(premium - stop_loss, contract["lot_size"], settings["capital"], adjusted_risk_percent)
     safe_lots = risk["lots"]
@@ -94,6 +99,8 @@ def create_review_plan(underlying, spot_price, contracts, quote_rows, chart_cont
         "confidence": int(chart_context["score"]),
         "minimum_score": minimum_score,
         "rr_ratio": round((target - premium) / max(premium - stop_loss, .01), 2),
+        "underlying_target_points": round(underlying_target_points, 2) if underlying_target_points else None,
+        "underlying_target": underlying_target,
         "market_environment": environment,
         "spread_percent": round(spread, 2) if spread is not None else None,
         "adaptive_risk_percent": round(adjusted_risk_percent, 3),

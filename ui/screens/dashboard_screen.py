@@ -24,6 +24,7 @@ from ui.pages.next_day_bias_page import NextDayBiasPage
 from ui.pages.smart_money_page import SmartMoneyPage
 from ui.pages.cas_analysis_page import CasAnalysisPage
 from ui.pages.stock_options_watch_page import StockOptionsWatchPage
+from ui.pages.option_strategies_page import OptionStrategiesPage
 from ui.widgets.glass_effects import add_glass_shadow
 
 
@@ -66,11 +67,12 @@ class DashboardScreen(QWidget):
         self.smartMoneyPage = SmartMoneyPage()
         self.casAnalysisPage = CasAnalysisPage()
         self.stockOptionsWatchPage = StockOptionsWatchPage()
+        self.optionStrategiesPage = OptionStrategiesPage()
         for page in (self.dashboardPage, self.liveMarketPage, self.optionsPage, self.chartCapturePage, self.journalPage,
                      self.checklistPage, self.aiPage, self.riskPage, self.reportsPage, self.settingsPage,
                      self.backtestPage, self.postMarketPage, self.replayPage, self.equityPage,
                      self.autoAttemptReportPage, self.aboutPage, self.helpPage, self.nextDayBiasPage,
-                     self.smartMoneyPage, self.casAnalysisPage, self.stockOptionsWatchPage):
+                     self.smartMoneyPage, self.casAnalysisPage, self.stockOptionsWatchPage, self.optionStrategiesPage):
             self.stack.addWidget(page)
         self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
         self.journalPage.trade_saved.connect(self.reportsPage.refresh)
@@ -102,6 +104,7 @@ class DashboardScreen(QWidget):
             button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
         for button, index in ((self.sidebar.casAnalysisButton, 19), (self.sidebar.stockOptionsWatchButton, 20)):
             button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
+        self.sidebar.optionStrategiesButton.clicked.connect(lambda _checked=False: self.show_page(21))
         body_layout.addWidget(self.stack)
         main_layout.addLayout(body_layout, 1)
         self.informationPanel = InformationPanel()

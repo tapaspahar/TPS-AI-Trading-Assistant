@@ -123,7 +123,10 @@ def analyse_volume_candle(candles, period=20, heavy_ratio=1.5):
     elif heavy:
         signal, fake_risk = "High-volume rejection — fake-move risk", True
     else:
-        signal, fake_risk = "Volume below heavy-confirmation threshold", True
+        # Low volume is insufficient confirmation, but it is not evidence of
+        # a fake breakout by itself. Treating every quiet candle as a hard
+        # rejection blocker double-counted one soft volume failure.
+        signal, fake_risk = "Volume below heavy-confirmation threshold", False
     return {
         "volume_ratio": volume_ratio, "volume_signal": signal,
         "candle_direction": "BULLISH" if bullish else "BEARISH" if bearish else "NEUTRAL",

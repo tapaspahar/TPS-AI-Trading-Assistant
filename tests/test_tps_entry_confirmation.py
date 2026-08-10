@@ -129,6 +129,21 @@ class TpsEntryConfirmationTests(unittest.TestCase):
 
     @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
     @patch("engine.tps_entry_confirmation.ema", return_value=95)
+    def test_trending_environment_uses_adaptive_entry_extension(self, _ema, _supertrend):
+        self.capture.update({"open": "110", "close": "114", "rsi_14": "60"})
+        environment = {
+            "regime": "TRENDING", "vix_zone": "HEALTHY TREND", "risk_multiplier": 1,
+            "volume_threshold": 1.5, "max_entry_extension_atr": 1.0,
+            "regular_move_target_points": 20,
+        }
+        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain, self.settings, environment)
+        quality = result["side_evaluations"]["CE"]["entry_quality"]
+        self.assertEqual(quality["maximum_extension_atr"], 1.0)
+        self.assertEqual(quality["regular_move_target_points"], 20)
+        self.assertTrue(quality["timely"])
+
+    @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
+    @patch("engine.tps_entry_confirmation.ema", return_value=95)
     def test_just_closed_reversal_candle_does_not_wait_an_extra_candle(self, _ema, _supertrend):
         for candle in self.candles[-3:]:
             candle["low"] = 90

@@ -124,7 +124,7 @@ class OptionsPage(QWidget):
             check = QCheckBox(name); check.setChecked(name in enabled_conditions)
             check.toggled.connect(self.save_tps_checklist)
             self.condition_checks[name] = check; checklist_form.addRow(check)
-        self.match_mode = QComboBox(); self.match_mode.addItem("Selected count", "count"); self.match_mode.addItem("All selected", "all")
+        self.match_mode = QComboBox(); self.match_mode.addItem("Adaptive by market regime (recommended)", "adaptive"); self.match_mode.addItem("Selected count", "count"); self.match_mode.addItem("All selected", "all")
         self.match_mode.setCurrentIndex(max(0, self.match_mode.findData(saved_settings["tps_match_mode"])))
         self.match_mode.currentIndexChanged.connect(self.save_tps_checklist)
         self.required_matches = QSpinBox(); self.required_matches.setRange(1, len(CONDITION_WEIGHTS)); self.required_matches.setValue(saved_settings["tps_required_matches"])
@@ -508,6 +508,8 @@ class OptionsPage(QWidget):
         self.decision.setText(
             f"REVIEW PLAN — {plan['contract']['symbol']}\n"
             f"Entry reference: ₹{plan['entry']:,.2f} | Stop: ₹{plan['stoploss']:,.2f} | Target: ₹{plan['target']:,.2f}\n"
+            f"Underlying regular-move objective: {plan.get('underlying_target') or '-'} "
+            f"({plan.get('underlying_target_points') or '-'} points)\n"
             f"Quantity: {plan['quantity']} ({plan['lots']} lot(s) × {plan['lot_size']})\n"
             + "\n".join(f"• {reason}" for reason in plan["reasons"]) + f"\n\n{plan['warning']}"
         )
@@ -622,7 +624,7 @@ class OptionsPage(QWidget):
             return
         self.auto_paper_running = True
         settings = SettingsStore().load()
-        mode = "all selected" if settings["tps_match_mode"] == "all" else f"{settings['tps_required_matches']} matches"
+        mode = "adaptive market regime" if settings["tps_match_mode"] == "adaptive" else "all selected" if settings["tps_match_mode"] == "all" else f"{settings['tps_required_matches']} matches"
         self.auto_paper_status.emit(
             f"Checking completed 5-minute candle independently for CE and PE: {mode}, "
             f"score {settings['trade_plan_min_score']}+, then hard-risk blockers..."
@@ -679,7 +681,8 @@ class OptionsPage(QWidget):
                 f"Decision: {chart.get('decision', '-')} | Candidate: {attempt.get('candidate') or '-'} | "
                 f"CE {ce.get('passed', '-')}/{ce.get('total', '-')} score {ce.get('score', '-')} | "
                 f"PE {pe.get('passed', '-')}/{pe.get('total', '-')} score {pe.get('score', '-')} | "
-                f"Required {strategy.get('required', '-')} matches + {strategy.get('minimum_score', '-')} score"
+                f"Required {strategy.get('required', '-')} matches + {strategy.get('minimum_score', '-')} score | "
+                f"{strategy.get('required_reason', strategy.get('match_mode', '-'))}"
             )
             confirmations = strategy.get("confirmations") or []
             if confirmations:
@@ -717,6 +720,12 @@ class OptionsPage(QWidget):
                     f"Opening range {environment.get('opening_range_low')} - {environment.get('opening_range_high')} | "
                     f"Previous day H/L {environment.get('previous_day_high')} / {environment.get('previous_day_low')} | "
                     f"{environment.get('gap_state')} {environment.get('gap_points')} | Event {event.get('status', 'Unavailable')}"
+                )
+                lines.append(
+                    f"VIX range budget: expected {environment.get('expected_daily_range')} | used {environment.get('session_range')} "
+                    f"({environment.get('range_consumed_percent')}%) | remaining {environment.get('remaining_expected_range')} | "
+                    f"regular objective {environment.get('regular_move_target_points')} points | "
+                    f"adaptive extension {environment.get('max_entry_extension_atr')} ATR"
                 )
                 for item in event.get("nearby_events", [])[:5]:
                     lines.append(
@@ -763,7 +772,11 @@ class OptionsPage(QWidget):
                     f"Previous day H/L {environment.get('previous_day_high')}/{environment.get('previous_day_low')} | "
                     f"{environment.get('gap_state')} {environment.get('gap_points')} | "
                     f"Event {(environment.get('event_risk') or {}).get('status', 'Unavailable')} | "
-                    f"{(environment.get('expiry_strategy') or {}).get('strategy', environment.get('strategy_preference', 'Directional'))}"
+                    f"{(environment.get('expiry_strategy') or {}).get('strategy', environment.get('strategy_preference', 'Directional'))}\n"
+                    f"Range used {environment.get('session_range')} ({environment.get('range_consumed_percent')}%) | "
+                    f"Remaining {environment.get('remaining_expected_range')} | Regular objective "
+                    f"{environment.get('regular_move_target_points')} points | Entry extension max "
+                    f"{environment.get('max_entry_extension_atr')} ATR"
                 )
         self.auto_paper_progress.setText(f"{details}\nForward-test progress: {progress['days']}/20 trading days | {progress['trades']} paper trades | {progress['target_hits']} targets | {progress['stoploss_hits']} stop losses.")
 

@@ -61,7 +61,7 @@ def analyze_market_environment(candles, capture, spot_price, india_vix=None, now
     trend_spread = abs(ema5 - ema50) / max(atr, 0.000001)
     aligned = ema5 > ema20 > ema50 or ema5 < ema20 < ema50
     vix_zone, risk_multiplier = classify_india_vix(vix)
-    if (vix is not None and vix > 20) or atr_percent >= .65:
+    if (vix is not None and vix >= 16) or atr_percent >= .65:
         regime = "HIGH VOLATILITY"
     elif aligned and trend_spread >= .75:
         regime = "TRENDING"
@@ -71,9 +71,18 @@ def analyze_market_environment(candles, capture, spot_price, india_vix=None, now
         regime = "SIDEWAYS / TRANSITION"
     session = _session_context(candles)
     expected_range = float(spot_price) * vix / 100 / sqrt(252) if vix is not None else None
+    current_day = _candle_day(candles[-1].get("time")) if candles else None
+    current_session = [item for item in candles if _candle_day(item.get("time")) == current_day]
+    session_high = max((float(item.get("high", item.get("close", close))) for item in current_session), default=close)
+    session_low = min((float(item.get("low", item.get("close", close))) for item in current_session), default=close)
+    session_range = max(0.0, session_high - session_low)
+    remaining_range = max(0.0, expected_range - session_range) if expected_range is not None else None
+    range_consumed = session_range / expected_range * 100 if expected_range else None
     volume_threshold = 1.7 if regime == "LOW VOLATILITY" else 1.3 if regime == "HIGH VOLATILITY" else 1.5
     sl_atr = 1.4 if regime == "HIGH VOLATILITY" else 1.0 if regime == "TRENDING" else .85
     target_atr = sl_atr * 2
+    regular_target = max(close * .0005, expected_range * .10) if expected_range is not None else max(close * .0008, atr * .75)
+    adaptive_extension = 1.0 if regime == "TRENDING" else .90 if regime == "HIGH VOLATILITY" else .65 if regime == "LOW VOLATILITY" else .75
     strike = "ATM/one-step ITM" if regime in {"HIGH VOLATILITY", "LOW VOLATILITY"} else "ATM"
     now = now or datetime.now()
     time_state = "OPENING VOLATILITY" if (now.hour, now.minute) < (10, 0) else "LATE SESSION" if (now.hour, now.minute) >= (14, 45) else "NORMAL SESSION"
@@ -89,8 +98,14 @@ def analyze_market_environment(candles, capture, spot_price, india_vix=None, now
         "regime": regime, "vix": vix, "vix_zone": vix_zone, "atr_percent": round(atr_percent, 3),
         "trend_strength_atr": round(trend_spread, 2), "volume_regime": "EXPANSION" if volume_ratio >= 1.5 else "NORMAL/LOW",
         "expected_daily_range": round(expected_range, 2) if expected_range is not None else None,
+        "session_range": round(session_range, 2),
+        "range_consumed_percent": round(range_consumed, 1) if range_consumed is not None else None,
+        "remaining_expected_range": round(remaining_range, 2) if remaining_range is not None else None,
+        "regular_move_target_points": round(regular_target, 2),
+        "regular_move_available": remaining_range is None or remaining_range >= regular_target,
         "risk_multiplier": round(confidence_multiplier, 2), "volume_threshold": volume_threshold,
         "stop_atr_multiplier": sl_atr, "target_atr_multiplier": target_atr,
+        "max_entry_extension_atr": adaptive_extension,
         "strike_preference": strike, "time_state": time_state, "warnings": warnings,
         "event_risk": event_risk or {}, **session,
     }
