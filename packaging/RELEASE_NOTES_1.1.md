@@ -19,6 +19,8 @@ Release date: 10-08-2026
 - Added an official read-only Paytm Money adapter with browser authorization, secure Windows token storage, daily security-master mapping, live quotes, historical candles, OI and TPS live-price support.
 - Added the experimental **Pre-Candle Probability Lab**. Its Candle DNA engine compares completed-candle shape, momentum, EMA regime, volatility, volume and intraday context with historical analogs.
 - Added leakage-safe expanding walk-forward purity validation. Directional signals remain hidden until the configured purity gate and minimum validation sample are both satisfied.
+- Added **TPS Powerful Engine**, a selective CE/PE controller that combines validated Candle DNA, 5m/15m/1h structure, EMA/VWAP/SuperTrend, price action, volume, India VIX, OI zones and ATM option liquidity.
+- Powerful Engine deliberately returns WAIT when evidence conflicts, live option liquidity is weak, VIX risk is extreme, expected range is consumed, or historical prediction purity is unproven.
 
 ## Safety
 

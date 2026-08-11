@@ -9,9 +9,11 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.1.0"
-LAST_UPDATED_AT = "11-08-2026 10:02:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.1.0 • 11-08-2026 10:02 IST"
+LAST_UPDATED_AT = "11-08-2026 10:11:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.1.0 • 11-08-2026 10:11 IST"
 RELEASE_NOTES = (
+    "Added TPS Powerful Engine, a selective CE/PE signal controller combining Candle DNA purity, 5m/15m/1h structure, EMA/VWAP/SuperTrend, price action, volume, VIX, OI and ATM liquidity.",
+    "Powerful Engine abstains on conflicting, missing, unvalidated or illiquid evidence and keeps confluence strength separate from historically measured prediction purity.",
     "Added the experimental Pre-Candle Probability Lab with Candle DNA analog matching, bullish/bearish/range probabilities and a configurable 50-95% publication gate.",
     "Added expanding walk-forward purity validation so a next-candle signal is hidden until at least 15 eligible out-of-sample historical predictions clear the selected purity threshold.",
     "Added an official read-only Paytm Money adapter with browser authorization, secure token storage, instrument mapping, quotes, candles, OI and live-price support.",
