@@ -20,8 +20,9 @@ class NextDayBiasDataService:
         future = self.contract_service.get_front_month_future(symbol)
         spot_candles = self._completed_candles(self.client.get_recent_candles(spot_exchange, spot_token, "FIVE_MINUTE", 5))
         future_candles = self._completed_candles(self.client.get_recent_candles(future["exchange"], future["token"], "FIVE_MINUTE", 5))
-        spot = build_live_capture(symbol, "5m", spot_candles, f"Angel One {symbol} spot candles")
-        future_capture = build_live_capture(symbol, "5m", future_candles, f"Angel One {future['symbol']}")
+        provider = getattr(self.client, "provider_name", "Broker")
+        spot = build_live_capture(symbol, "5m", spot_candles, f"{provider} {symbol} spot candles")
+        future_capture = build_live_capture(symbol, "5m", future_candles, f"{provider} {future['symbol']}")
 
         contracts = self.contract_service.get_contracts(symbol)
         future_expiries = [contract["expiry"] for contract in contracts if contract["expiry"] > date.today()]

@@ -209,9 +209,16 @@ class SettingsPage(QWidget):
             else:
                 field.clear()
         if definition.adapter_available:
-            self.broker_note.setText(
-                f"{definition.name} TPS adapter active: candles, quotes, option chain and live feed are read-only."
-            )
+            if broker_id == "dhan":
+                self.broker_note.setText(
+                    "Dhan TPS adapter active (read-only). Save Client ID, Dhan PIN and the TOTP setup secret once. "
+                    "TPS automatically generates a fresh 24-hour access token on startup and before expiry; "
+                    "you do not need to paste a daily token."
+                )
+            else:
+                self.broker_note.setText(
+                    f"{definition.name} TPS adapter active: candles, quotes, option chain and live feed are read-only."
+                )
             self.broker_status.setText("Connection status: not connected")
         else:
             self.broker_note.setText(

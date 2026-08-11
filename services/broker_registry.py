@@ -37,7 +37,10 @@ BROKERS = {
         ),
     ),
     "dhan": BrokerDefinition(
-        "dhan", "Dhan", (("client_id", "Client ID", False), ("access_token", "Access Token", True)),
+        "dhan", "Dhan", (
+            ("client_id", "Client ID", False), ("pin", "Dhan PIN", True),
+            ("totp_secret", "TOTP Secret", True),
+        ), True,
     ),
     "fyers": BrokerDefinition(
         "fyers", "Fyers", (
@@ -78,6 +81,10 @@ def create_broker_client(broker_id: str, credentials: dict):
             credentials["api_key"], credentials["client_code"],
             credentials["mpin"], credentials["totp_secret"],
         )
+    if broker_id == "dhan":
+        from services.dhan_client import DhanClient
+
+        return DhanClient(credentials["client_id"], credentials["pin"], credentials["totp_secret"])
     raise RuntimeError(
         f"{definition.name} credentials can be stored securely, but its TPS market-data adapter is not installed yet. "
         "Each broker uses different instrument tokens, login, candle, quote, option-chain and websocket APIs."

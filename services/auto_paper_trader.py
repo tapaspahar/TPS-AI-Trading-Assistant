@@ -64,7 +64,8 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
         candles = _completed_candles(candles, checked_at)
         if len(candles) < 51:
             raise ValueError("At least 51 completed 5-minute candles are required for the automatic TPS v2 check.")
-        capture = build_live_capture(symbol, "5m", candles, f"Angel One current-month future {future['symbol']}")
+        provider = getattr(client, "provider_name", "Broker")
+        capture = build_live_capture(symbol, "5m", candles, f"{provider} current-month future {future['symbol']}")
         capture["candle_time"] = candles[-1].get("time")
         snapshot = ChartSnapshot(
             price=float(capture["close"]), ema_5=float(capture["ema_5"]), ema_20=float(capture["ema_20"]), ema_50=float(capture["ema_50"]),

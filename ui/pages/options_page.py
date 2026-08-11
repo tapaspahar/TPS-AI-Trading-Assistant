@@ -171,7 +171,7 @@ class OptionsPage(QWidget):
         self.send_plan_button.clicked.connect(self.send_plan_to_journal)
         self.send_plan_button.setEnabled(False)
         layout.addWidget(self.send_plan_button)
-        layout.addWidget(QLabel("TPS only analyses data. It does not place, modify, or cancel an Angel One order."))
+        layout.addWidget(QLabel("TPS only analyses data. It does not place, modify, or cancel a broker order."))
         layout.addStretch()
         self.contracts_loaded.connect(self.show_contracts)
         self.load_error.connect(self.show_error)
@@ -192,7 +192,7 @@ class OptionsPage(QWidget):
 
     def load_contracts(self):
         if not LiveSession.connected():
-            QMessageBox.warning(self, "Angel One", "Connect live data from Settings first so TPS can use the current spot price.")
+            QMessageBox.warning(self, "Broker", "Connect live data from Settings first so TPS can use the current spot price.")
             return
         self.details.setText("Downloading today's instrument master…")
         Thread(target=self._load_contracts, args=(self.underlying.currentText(),), daemon=True).start()
@@ -204,7 +204,7 @@ class OptionsPage(QWidget):
             quote = LiveSession.client.get_option_quote(quote_config["exchange"], quote_config["token"])
             spot_price = float(quote.get("ltp", 0) or 0)
             if spot_price <= 0:
-                raise RuntimeError("Angel One did not return a usable spot price.")
+                raise RuntimeError("The connected broker did not return a usable spot price.")
             focused = contracts_near_spot(contracts, spot_price, wings=5)
             self.contracts_loaded.emit({"contracts": focused, "spot_price": spot_price})
         except (RuntimeError, ValueError) as error:
@@ -258,7 +258,7 @@ class OptionsPage(QWidget):
 
     def load_quote(self):
         if not LiveSession.connected():
-            QMessageBox.warning(self, "Angel One", "Connect live data from Settings first.")
+            QMessageBox.warning(self, "Broker", "Connect live data from Settings first.")
             return
         try:
             contract = self.selected_contract()
@@ -324,7 +324,7 @@ class OptionsPage(QWidget):
 
     def load_chain_analysis(self):
         if not LiveSession.connected():
-            QMessageBox.warning(self, "Angel One", "Connect live data from Settings first.")
+            QMessageBox.warning(self, "Broker", "Connect live data from Settings first.")
             return
         if not self.contracts or self.expiry.currentIndex() < 0:
             QMessageBox.warning(self, "Options", "Load current expiries first.")
@@ -373,7 +373,7 @@ class OptionsPage(QWidget):
             f"{selected_text}\n"
             f"Focused expiry analysis ({analysis['quoted_contracts']}/{analysis['total_contracts']} contracts quoted)\n"
             f"Focused OI PCR: {number(analysis['pcr_oi'])} | Focused volume PCR: {number(analysis['pcr_volume'])}\n"
-            f"Angel One market PCR: {number(analysis['official_pcr'])}\n"
+            f"Broker market PCR: {number(analysis['official_pcr'])}\n"
             f"Put-OI support zone: {analysis['put_support'] or 'unavailable'} | "
             f"Call-OI resistance zone: {analysis['call_resistance'] or 'unavailable'}\n"
             f"Context: {analysis['context']}"
@@ -545,7 +545,7 @@ class OptionsPage(QWidget):
 
     def show_paper_trade_captured(self, plan):
         self.details.setText(
-            f"PAPER TRADE CAPTURED - no Angel One order was sent.\n{plan['contract']['symbol']} | ATM / 1 lot | "
+            f"PAPER TRADE CAPTURED - no broker order was sent.\n{plan['contract']['symbol']} | ATM / 1 lot | "
             f"Entry {plan['entry']:.2f} | Stop {plan['stoploss']:.2f} | Target {plan['target']:.2f}.\n"
             "TPS will check the live option LTP every 30 seconds and book the first hit in the Trade Journal."
         )
@@ -590,7 +590,7 @@ class OptionsPage(QWidget):
         self.details.setText("PAPER TRADE PREMIUM MONITOR (30-second quote check)\n" + "\n".join(lines))
 
     def show_paper_trade_error(self, message):
-        self.details.setText(f"Paper-trade monitor paused: {message}. No broker order was sent; retry after Angel One data is available.")
+        self.details.setText(f"Paper-trade monitor paused: {message}. No broker order was sent; retry after broker data is available.")
 
     def set_auto_paper_enabled(self, enabled: bool):
         if enabled:
@@ -604,7 +604,7 @@ class OptionsPage(QWidget):
                 return
             if not LiveSession.connected():
                 self.auto_paper_enabled.blockSignals(True); self.auto_paper_enabled.setChecked(False); self.auto_paper_enabled.blockSignals(False)
-                QMessageBox.warning(self, "Auto paper trading", "Connect Angel One read-only data first.")
+                QMessageBox.warning(self, "Auto paper trading", "Connect read-only broker data first.")
                 return
             self.auto_paper_progress.setText("Enabled: waits for each new completed 5-minute candle. One open paper trade at a time; daily cap comes from Risk Settings.")
             self.auto_paper_timer.start(30_000)

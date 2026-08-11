@@ -30,4 +30,4 @@ class SmartMoneyDataService:
             raise RuntimeError("At least 55 completed future candles are required.")
         return {"symbol": symbol, "future_symbol": future["symbol"], "timeframe": timeframe,
                 "candles": candles, "candle_time": str(candles[-1].get("time", "")),
-                "source": f"Angel One {future['symbol']} completed {timeframe} OHLCV candles"}
+                "source": f"{getattr(self.client, 'provider_name', 'Broker')} {future['symbol']} completed {timeframe} OHLCV candles"}

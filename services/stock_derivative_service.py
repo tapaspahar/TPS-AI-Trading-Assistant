@@ -49,7 +49,8 @@ class StockDerivativeService:
         candles = _completed(self.client.get_recent_candles(future["exchange"], future["token"], "FIVE_MINUTE", 5))
         if len(candles) < 51:
             raise RuntimeError("At least 51 completed stock-future candles are required.")
-        capture = build_live_capture(underlying, "5m", candles, f"Angel One {future['symbol']} stock-future candles")
+        provider = getattr(self.client, "provider_name", "Broker")
+        capture = build_live_capture(underlying, "5m", candles, f"{provider} {future['symbol']} stock-future candles")
         capture["candle_time"] = candles[-1].get("time")
         spot = float(self.client.get_option_quote(equity["exchange"], equity["token"]).get("ltp", 0) or 0)
         if spot <= 0:

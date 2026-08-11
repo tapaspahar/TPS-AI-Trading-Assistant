@@ -8,9 +8,11 @@ class BrokerRegistryTests(unittest.TestCase):
     def test_common_broker_profiles_are_available(self):
         self.assertTrue({"angel_one", "zerodha", "upstox", "dhan", "fyers", "shoonya", "other"} <= set(BROKERS))
 
-    def test_unimplemented_adapter_is_reported_instead_of_fake_connection(self):
-        with self.assertRaisesRegex(RuntimeError, "adapter is not installed"):
-            create_broker_client("dhan", {"client_id": "123", "access_token": "token"})
+    @patch("services.dhan_client.DhanClient")
+    def test_dhan_profile_uses_automatic_token_adapter(self, client_type):
+        result = create_broker_client("dhan", {"client_id": "123", "pin": "123456", "totp_secret": "secret"})
+        self.assertIs(result, client_type.return_value)
+        client_type.assert_called_once_with("123", "123456", "secret")
 
     @patch("services.angel_one_client.AngelOneClient")
     def test_angel_profile_uses_existing_working_adapter(self, client_type):

@@ -13,6 +13,7 @@ from time import monotonic, sleep
 
 
 class AngelOneClient:
+    provider_name = "Angel One"
     # Historical candle requests have a stricter SmartAPI limit than quotes.
     # Serialising them also avoids several UI pages exhausting the limit together.
     CANDLE_REQUEST_INTERVAL_SECONDS = 3.5

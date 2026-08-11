@@ -40,7 +40,7 @@ class CredentialStoreTests(unittest.TestCase):
     def test_separate_broker_profiles_do_not_overwrite_each_other(self):
         backend = FakeKeyring()
         store = BrokerCredentialStore(backend)
-        store.save("dhan", {"client_id": "DH123", "access_token": "token"})
+        store.save("dhan", {"client_id": "DH123", "pin": "123456", "totp_secret": "secret"})
         store.save("angel_one", self.values)
-        self.assertEqual(store.load("dhan"), {"client_id": "DH123", "access_token": "token"})
+        self.assertEqual(store.load("dhan"), {"client_id": "DH123", "pin": "123456", "totp_secret": "secret"})
         self.assertEqual(store.load("angel_one"), self.values)

@@ -70,7 +70,7 @@ class ChartCapturePage(QWidget):
 
     def capture_live_setup(self):
         if not LiveSession.connected():
-            QMessageBox.warning(self, "Angel One", "Connect live data from Settings first.")
+            QMessageBox.warning(self, "Broker", "Connect live data from Settings first.")
             return
         symbol = self.fields["symbol"].text().strip().upper() or "NIFTY"
         timeframe = self.fields["timeframe"].text().strip() or "5m"
@@ -81,7 +81,7 @@ class ChartCapturePage(QWidget):
             QMessageBox.warning(self, "Live capture", "Use one of: 5m, 15m, 1h, 1D.")
             return
         self.live_capture_button.setEnabled(False)
-        self.live_capture_button.setText("Capturing Angel One setup…")
+        self.live_capture_button.setText("Capturing broker setup…")
         Thread(target=self._capture_live_setup, args=(symbol, timeframe), daemon=True).start()
 
     def _capture_live_setup(self, symbol, timeframe):

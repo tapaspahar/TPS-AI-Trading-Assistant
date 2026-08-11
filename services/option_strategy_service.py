@@ -40,7 +40,8 @@ class OptionStrategyService:
         spot_exchange, spot_token = INSTRUMENTS[symbol]
         future = self.contract_service.get_front_month_future(symbol)
         candles = _completed(self.client.get_recent_candles(future["exchange"], future["token"], "FIVE_MINUTE", 5))
-        capture = build_live_capture(symbol, "5m", candles, f"Angel One {future['symbol']} index-future candles")
+        provider = getattr(self.client, "provider_name", "Broker")
+        capture = build_live_capture(symbol, "5m", candles, f"{provider} {future['symbol']} index-future candles")
         spot = float(self.client.get_option_quote(spot_exchange, spot_token).get("ltp", 0) or capture["close"])
         try:
             vix_instrument = self.contract_service.get_india_vix_instrument()

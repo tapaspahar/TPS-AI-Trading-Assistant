@@ -7,7 +7,8 @@ from PySide6.QtWidgets import (
     QPushButton, QSizePolicy, QVBoxLayout, QWidget,
 )
 
-from services.angel_one_stream import AngelOneStream
+from services.broker_stream import create_broker_stream
+from services.broker_registry import broker_definition
 from services.live_session import LiveSession
 from services.option_contract_service import OptionContractService
 from services.market_snapshot_recorder import MarketSnapshotRecorder
@@ -151,7 +152,8 @@ class LiveMarketPage(QWidget):
         self.overview_box.updateGeometry()
 
     def refresh_status(self):
-        self.status.setText("Angel One: Connected (read-only)" if LiveSession.connected() else "Angel One: Not connected — connect from Settings first")
+        broker = broker_definition(LiveSession.broker_id or "angel_one").name
+        self.status.setText(f"{broker}: Connected (read-only)" if LiveSession.connected() else "Broker: Not connected — connect from Settings first")
 
     def start_market_overview(self):
         if not LiveSession.connected():
@@ -174,7 +176,9 @@ class LiveMarketPage(QWidget):
         if not self.snapshot_timer.isActive():
             self.snapshot_timer.start(30_000)
         self.start_market_overview()
-        LiveSession.stream = AngelOneStream(LiveSession.client, self.tick_received.emit, self.feed_status.emit)
+        LiveSession.stream = create_broker_stream(
+            LiveSession.broker_id, LiveSession.client, self.tick_received.emit, self.feed_status.emit
+        )
         try:
             LiveSession.stream.start(exchange_type, token)
         except RuntimeError as error:
@@ -212,7 +216,7 @@ class LiveMarketPage(QWidget):
         if isinstance(timeframes, bool):
             timeframes = ("5m", "15m")
         if not LiveSession.connected() or not self.selected_symbol:
-            self.snapshot_status.setText("Snapshot recorder: select a live symbol after Angel One connects.")
+            self.snapshot_status.setText("Snapshot recorder: select a live symbol after the broker connects.")
             return
         symbol = self.selected_symbol[0]
         self.snapshot_status.setText(f"Snapshot recorder: saving {symbol} 5m / 15m + focused option-chain data…")
@@ -285,7 +289,8 @@ class LiveMarketPage(QWidget):
         self.cards["breakdown"].set_value(
             f"{timeframe} close < {result['breakdown_level']:,.2f}\n{result['volume_condition']}"
         )
-        self.status.setText(f"Angel One: {result['symbol']} {timeframe} levels refreshed from {result['candle_count']} candles")
+        broker = broker_definition(LiveSession.broker_id or "angel_one").name
+        self.status.setText(f"{broker}: {result['symbol']} {timeframe} levels refreshed from {result['candle_count']} candles")
         if result.get("timeframe"):
             self.multi_timeframe_detail.setText(
                 f"{result['symbol']} {result['timeframe']} analysis: {result['state']}. "
@@ -296,11 +301,12 @@ class LiveMarketPage(QWidget):
         self.cards["trend"].set_value("Structure unavailable")
         self.cards["support"].set_value("No reliable level")
         self.cards["resistance"].set_value("No reliable level")
-        self.status.setText(f"Angel One: live price connected; candle levels unavailable ({message})")
+        broker = broker_definition(LiveSession.broker_id or "angel_one").name
+        self.status.setText(f"{broker}: live price connected; candle levels unavailable ({message})")
 
     def load_multi_timeframe(self):
         if not LiveSession.connected() or not self.selected_symbol:
-            self.multi_timeframe_detail.setText("Select NIFTY, BANKNIFTY, or SENSEX after Angel One connects first.")
+            self.multi_timeframe_detail.setText("Select NIFTY, BANKNIFTY, or SENSEX after the broker connects first.")
             return
         symbol, exchange_type, token = self.selected_symbol
         self.multi_timeframe_detail.setText(f"Loading {symbol} 5m, 15m, 1h and 1D chart history…")
@@ -424,7 +430,8 @@ class LiveMarketPage(QWidget):
             card.set_value("Overview temporarily unavailable")
 
     def show_status(self, status):
-        self.status.setText(f"Angel One: {status}")
+        broker = broker_definition(LiveSession.broker_id or "angel_one").name
+        self.status.setText(f"{broker}: {status}")
 
     def show_tick(self, tick):
         value = tick.get("last_traded_price") or tick.get("ltp") or tick.get("last_traded_price")

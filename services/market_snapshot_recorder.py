@@ -33,7 +33,8 @@ class MarketSnapshotRecorder:
             for timeframe in timeframes:
                 interval, days = TIMEFRAMES[timeframe]
                 candles = self.client.get_recent_candles(exchange, token, interval, days)
-                data = build_live_capture(symbol, timeframe, candles, f"Angel One current-month {symbol} future")
+                provider = getattr(self.client, "provider_name", "Broker")
+                data = build_live_capture(symbol, timeframe, candles, f"{provider} current-month {symbol} future")
                 latest = candles[-1]
                 previous = database.get_latest_market_snapshot(symbol, timeframe)
                 oi_change = self._change(option_context.get("oi_pcr"), previous["oi_pcr"] if previous else None)
