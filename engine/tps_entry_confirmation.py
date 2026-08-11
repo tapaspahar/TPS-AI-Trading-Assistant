@@ -32,12 +32,17 @@ DEFAULT_CE_MAX_RSI = 75.0
 DEFAULT_PE_MIN_RSI = 25.0
 
 
-def _side_condition(name, passed, detail):
-    return {"name": name, "passed": bool(passed), "detail": detail}
+def _side_condition(name, passed, detail, applicable=True):
+    """Build one candle-local checklist result; non-applicable is never a pass."""
+    return {
+        "name": name, "passed": bool(passed) if applicable else False,
+        "applicable": bool(applicable), "status": "PASS" if applicable and passed else "FAIL" if applicable else "N/A",
+        "detail": detail,
+    }
 
 
 def _side_score(confirmations, enabled):
-    selected = [item for item in confirmations if item["name"] in enabled]
+    selected = [item for item in confirmations if item["name"] in enabled and item.get("applicable", True)]
     possible = sum(CONDITION_WEIGHTS[item["name"]] for item in selected)
     earned = sum(CONDITION_WEIGHTS[item["name"]] for item in selected if item["passed"])
     return round(earned / possible * 100) if possible else 0, selected
@@ -99,14 +104,6 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
     recent_bearish_touch = any(any(abs(float(c["high"]) - zone) <= tolerance for zone in zones) for c in trigger_window)
     environment = environment or {}
     regime = environment.get("regime")
-    if match_mode == "all":
-        required, required_reason = len(enabled), "all selected conditions"
-    elif match_mode == "adaptive" and environment:
-        ratio = .75 if regime == "TRENDING" else .80 if regime == "HIGH VOLATILITY" else .90
-        required = max(1, min(len(enabled), ceil(len(enabled) * ratio)))
-        required_reason = f"adaptive {regime or 'unknown'} regime ({ratio * 100:.0f}% of selected conditions)"
-    else:
-        required, required_reason = requested_required, f"configured count {requested_required}"
     environment_ok = not environment or (
         float(environment.get("risk_multiplier", 1)) >= .75 and environment.get("vix_zone") != "EXTREME RISK"
     )
@@ -139,21 +136,21 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
         "CE": [
             _side_condition("Market structure", structure_state.startswith("Bullish"), structure_state),
             _side_condition("Price vs VWAP", vwap is not None and close > vwap, f"Close {close:.2f} > VWAP {vwap:.2f}" if vwap is not None else "VWAP unavailable"),
-            _side_condition("EMA 5/20/50 alignment", ema_5 > ema_20 > ema_50, f"EMA5 {ema_5:.2f} > EMA20 {ema_20:.2f} > EMA50 {ema_50:.2f}"),
-            _side_condition("SuperTrend confirmation", close > trend_line, f"Close {close:.2f} > SuperTrend {trend_line:.2f}"),
+            _side_condition("EMA 5/20/50 alignment", ema_5 > ema_20 > ema_50, f"EMA5 {ema_5:.2f} > EMA20 {ema_20:.2f} > EMA50 {ema_50:.2f}", regime not in {"LOW VOLATILITY", "SIDEWAYS / TRANSITION"}),
+            _side_condition("SuperTrend confirmation", close > trend_line, f"Close {close:.2f} > SuperTrend {trend_line:.2f}", regime != "LOW VOLATILITY"),
             _side_condition("Pullback and reversal", recent_bullish_touch and close > opening, f"EMA/VWAP touch within {tolerance:.2f}; candle {candle_direction}"),
             _side_condition("Directional volume", ce_volume_ok, ce_volume_detail),
-            _side_condition("OI/PCR context", pcr_oi is not None and pcr_volume is not None and pcr_oi >= .75 and pcr_volume <= 1.25, f"OI PCR {pcr_oi if pcr_oi is not None else '-'}; Volume PCR {pcr_volume if pcr_volume is not None else '-'}"),
+            _side_condition("OI/PCR context", pcr_oi is not None and pcr_volume is not None and pcr_oi >= .75 and pcr_volume <= 1.25, f"OI PCR {pcr_oi if pcr_oi is not None else '-'}; Volume PCR {pcr_volume if pcr_volume is not None else '-'}", pcr_oi is not None and pcr_volume is not None),
             _side_condition("Market environment / VIX", environment_ok, environment_detail),
         ],
         "PE": [
             _side_condition("Market structure", structure_state.startswith("Bearish"), structure_state),
             _side_condition("Price vs VWAP", vwap is not None and close < vwap, f"Close {close:.2f} < VWAP {vwap:.2f}" if vwap is not None else "VWAP unavailable"),
-            _side_condition("EMA 5/20/50 alignment", ema_5 < ema_20 < ema_50, f"EMA5 {ema_5:.2f} < EMA20 {ema_20:.2f} < EMA50 {ema_50:.2f}"),
-            _side_condition("SuperTrend confirmation", close < trend_line, f"Close {close:.2f} < SuperTrend {trend_line:.2f}"),
+            _side_condition("EMA 5/20/50 alignment", ema_5 < ema_20 < ema_50, f"EMA5 {ema_5:.2f} < EMA20 {ema_20:.2f} < EMA50 {ema_50:.2f}", regime not in {"LOW VOLATILITY", "SIDEWAYS / TRANSITION"}),
+            _side_condition("SuperTrend confirmation", close < trend_line, f"Close {close:.2f} < SuperTrend {trend_line:.2f}", regime != "LOW VOLATILITY"),
             _side_condition("Pullback and reversal", recent_bearish_touch and close < opening, f"EMA/VWAP touch within {tolerance:.2f}; candle {candle_direction}"),
             _side_condition("Directional volume", pe_volume_ok, pe_volume_detail),
-            _side_condition("OI/PCR context", pcr_oi is not None and pcr_volume is not None and pcr_oi <= 1.25 and pcr_volume >= .80, f"OI PCR {pcr_oi if pcr_oi is not None else '-'}; Volume PCR {pcr_volume if pcr_volume is not None else '-'}"),
+            _side_condition("OI/PCR context", pcr_oi is not None and pcr_volume is not None and pcr_oi <= 1.25 and pcr_volume >= .80, f"OI PCR {pcr_oi if pcr_oi is not None else '-'}; Volume PCR {pcr_volume if pcr_volume is not None else '-'}", pcr_oi is not None and pcr_volume is not None),
             _side_condition("Market environment / VIX", environment_ok, environment_detail),
         ],
     }
@@ -173,8 +170,22 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
     side_results = {}
     for side in ("CE", "PE"):
         score, selected = _side_score(common[side], enabled)
+        applicable_count = len(selected)
+        if not applicable_count:
+            required, required_reason = 0, "no selected condition is applicable to the current regime/data"
+        elif match_mode == "all":
+            required, required_reason = applicable_count, "all applicable conditions"
+        elif match_mode == "adaptive" and environment:
+            ratio = .75 if regime == "TRENDING" else .80 if regime == "HIGH VOLATILITY" else .90
+            required = max(1, min(applicable_count, ceil(applicable_count * ratio)))
+            required_reason = f"adaptive {regime or 'unknown'} regime ({ratio * 100:.0f}% of applicable conditions)"
+        else:
+            required = max(1, min(requested_required, applicable_count))
+            required_reason = f"configured count {required} of applicable conditions"
         passed = sum(item["passed"] for item in selected)
         blockers = []
+        if not applicable_count:
+            blockers.append("No selected checklist condition is applicable to the current candle")
         if capture.get("fake_breakout_risk", True):
             blockers.append("Rejection-wick / fake-breakout risk is active")
         if side == "CE":
@@ -215,11 +226,12 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
                 blockers.append(f"Late PE entry: RSI {rsi:.1f} is below the {pe_min_rsi:.1f} chase limit")
             if not trigger_ok:
                 blockers.append("No fresh bearish EMA/VWAP pullback-and-reversal trigger")
-        checklist_matched = passed >= required
+        checklist_matched = applicable_count > 0 and passed >= required
         score_matched = score >= minimum_score
         ready = checklist_matched and score_matched and not blockers
         side_results[side] = {
             "candidate": side, "confirmations": common[side], "selected_confirmations": selected,
+            "not_applicable_confirmations": [item for item in common[side] if item["name"] in enabled and not item.get("applicable", True)],
             "passed": passed, "total": len(selected), "required": required, "score": score,
             "checklist_matched": checklist_matched, "score_matched": score_matched,
             "hard_blockers": blockers, "trade_ready": ready,

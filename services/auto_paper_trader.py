@@ -188,6 +188,28 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             )
             result["proposed_plan"] = plan
             return _record(database, symbol, result)
+        # Approval belongs only to the completed candle that produced it. If a
+        # new candle closes before capture, discard every stale tick and let the
+        # next cycle calculate the checklist from the new market scenario.
+        final_candles = _completed_candles(
+            client.get_recent_candles(future["exchange"], future["token"], "FIVE_MINUTE", 5),
+            datetime.now(),
+        )
+        final_candle_time = str(final_candles[-1].get("time", "")) if final_candles else ""
+        approved_candle_time = str(capture.get("candle_time", ""))
+        if not final_candle_time or final_candle_time != approved_candle_time:
+            reason = (
+                f"Completed candle changed from {approved_candle_time or 'unavailable'} "
+                f"to {final_candle_time or 'unavailable'}; stale checklist discarded"
+            )
+            chart["warnings"].append(reason)
+            result = _attempt(
+                "No new paper trade: candle/scenario changed before final capture; checklist will be recalculated.",
+                datetime.now(), capture=capture, chart=chart, candidate=candidate, future=future,
+                blockers=[reason], chain=chain,
+            )
+            result["proposed_plan"] = plan
+            return _record(database, symbol, result)
         trade_id = database.save_paper_trade(plan)
         result = _attempt("Paper trade captured", checked_at, capture=capture, chart=chart, candidate=candidate, future=future, chain=chain)
         result.update({"trade_id": trade_id, "plan": plan, "capture": capture})
