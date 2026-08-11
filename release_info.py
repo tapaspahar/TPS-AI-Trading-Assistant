@@ -9,8 +9,8 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.1.0"
-LAST_UPDATED_AT = "11-08-2026 09:10:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.1.0 • 11-08-2026 09:10 IST"
+LAST_UPDATED_AT = "11-08-2026 09:24:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.1.0 • 11-08-2026 09:24 IST"
 RELEASE_NOTES = (
     "Added an official read-only Paytm Money adapter with browser authorization, secure token storage, instrument mapping, quotes, candles, OI and live-price support.",
     "Made Dhan authentication rate-safe so market-data permission failures no longer trigger a second token within two minutes, and inactive Data API plans are explained clearly.",

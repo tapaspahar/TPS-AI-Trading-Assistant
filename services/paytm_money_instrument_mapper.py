@@ -34,10 +34,10 @@ class PaytmMoneyInstrumentMapper:
     """Build a daily, public cross-broker instrument map."""
 
     SPOT = {
-        ("NSE", "99926000"): PaytmMoneyInstrument("13", "NSE", "I", "INDEX", "INDEX", "NIFTY", "NIFTY"),
-        ("NSE", "99926009"): PaytmMoneyInstrument("25", "NSE", "I", "INDEX", "INDEX", "BANKNIFTY", "BANKNIFTY"),
-        ("NSE", "99926017"): PaytmMoneyInstrument("21", "NSE", "I", "INDEX", "INDEX", "INDIA VIX", "INDIA VIX"),
-        ("BSE", "99919000"): PaytmMoneyInstrument("51", "BSE", "I", "INDEX", "INDEX", "SENSEX", "SENSEX"),
+        ("NSE", "99926000"): PaytmMoneyInstrument("13", "NSE", "I", "I", "INDEX", "NIFTY", "NIFTY 50"),
+        ("NSE", "99926009"): PaytmMoneyInstrument("25", "NSE", "I", "I", "INDEX", "BANKNIFTY", "NIFTY BANK"),
+        ("NSE", "99926017"): PaytmMoneyInstrument("21", "NSE", "I", "I", "INDEX", "INDIA VIX", "INDIA VIX"),
+        ("BSE", "99919000"): PaytmMoneyInstrument("51", "BSE", "I", "I", "INDEX", "SENSEX", "SENSEX"),
     }
 
     def __init__(self, cache_dir=None):

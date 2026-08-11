@@ -34,6 +34,7 @@ class PaytmMoneyInstrumentMapperTests(unittest.TestCase):
     def test_index_ids_do_not_require_master_download(self):
         instrument = PaytmMoneyInstrumentMapper("unused").resolve("NSE", "99926000")
         self.assertEqual((instrument.security_id, instrument.scrip_type), ("13", "INDEX"))
+        self.assertEqual((instrument.instrument_type, instrument.underlying), ("I", "NIFTY 50"))
 
 
 if __name__ == "__main__":
