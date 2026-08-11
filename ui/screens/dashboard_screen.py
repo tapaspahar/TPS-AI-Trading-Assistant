@@ -26,6 +26,7 @@ from ui.pages.cas_analysis_page import CasAnalysisPage
 from ui.pages.stock_options_watch_page import StockOptionsWatchPage
 from ui.pages.option_strategies_page import OptionStrategiesPage
 from ui.pages.post_market_tps_analysis_page import PostMarketTpsAnalysisPage
+from ui.pages.pre_candle_page import PreCandlePage
 from ui.widgets.glass_effects import add_glass_shadow
 from ui.widgets.accessible_scroll import configure_scroll_area
 from services.post_market_tps_analysis import ensure_completed_post_market_reports
@@ -72,12 +73,13 @@ class DashboardScreen(QWidget):
         self.stockOptionsWatchPage = StockOptionsWatchPage()
         self.optionStrategiesPage = OptionStrategiesPage()
         self.postMarketTpsAnalysisPage = PostMarketTpsAnalysisPage()
+        self.preCandlePage = PreCandlePage()
         for page in (self.dashboardPage, self.liveMarketPage, self.optionsPage, self.chartCapturePage, self.journalPage,
                      self.checklistPage, self.aiPage, self.riskPage, self.reportsPage, self.settingsPage,
                      self.backtestPage, self.postMarketPage, self.replayPage, self.equityPage,
                      self.autoAttemptReportPage, self.aboutPage, self.helpPage, self.nextDayBiasPage,
                      self.smartMoneyPage, self.casAnalysisPage, self.stockOptionsWatchPage, self.optionStrategiesPage,
-                     self.postMarketTpsAnalysisPage):
+                     self.postMarketTpsAnalysisPage, self.preCandlePage):
             self.stack.addWidget(page)
         self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
         self.journalPage.trade_saved.connect(self.reportsPage.refresh)
@@ -111,6 +113,7 @@ class DashboardScreen(QWidget):
             button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
         self.sidebar.optionStrategiesButton.clicked.connect(lambda _checked=False: self.show_page(21))
         self.sidebar.postMarketTpsAnalysisButton.clicked.connect(lambda _checked=False: self.show_page(22))
+        self.sidebar.preCandleButton.clicked.connect(lambda _checked=False: self.show_page(23))
         body_layout.addWidget(self.stack)
         main_layout.addLayout(body_layout, 1)
         self.informationPanel = InformationPanel()

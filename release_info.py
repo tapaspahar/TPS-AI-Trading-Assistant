@@ -9,9 +9,11 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.1.0"
-LAST_UPDATED_AT = "11-08-2026 09:24:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.1.0 • 11-08-2026 09:24 IST"
+LAST_UPDATED_AT = "11-08-2026 10:02:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.1.0 • 11-08-2026 10:02 IST"
 RELEASE_NOTES = (
+    "Added the experimental Pre-Candle Probability Lab with Candle DNA analog matching, bullish/bearish/range probabilities and a configurable 50-95% publication gate.",
+    "Added expanding walk-forward purity validation so a next-candle signal is hidden until at least 15 eligible out-of-sample historical predictions clear the selected purity threshold.",
     "Added an official read-only Paytm Money adapter with browser authorization, secure token storage, instrument mapping, quotes, candles, OI and live-price support.",
     "Made Dhan authentication rate-safe so market-data permission failures no longer trigger a second token within two minutes, and inactive Data API plans are explained clearly.",
     "Added a complete read-only Dhan adapter with automatic daily access-token renewal, instrument mapping, candles, quotes, OI and live price updates.",

@@ -17,7 +17,9 @@ Release date: 10-08-2026
 - Added automatic Dhan Security ID mapping for NSE/BSE indices, India VIX, equities, futures and options, with Dhan candle, quote, OI and live-price support.
 - Made Dhan authentication rate-safe: TPS now reuses a newly issued token, preserves the original market-data error and clearly reports an inactive Data API plan instead of triggering Dhan's two-minute token limit.
 - Added an official read-only Paytm Money adapter with browser authorization, secure Windows token storage, daily security-master mapping, live quotes, historical candles, OI and TPS live-price support.
+- Added the experimental **Pre-Candle Probability Lab**. Its Candle DNA engine compares completed-candle shape, momentum, EMA regime, volatility, volume and intraday context with historical analogs.
+- Added leakage-safe expanding walk-forward purity validation. Directional signals remain hidden until the configured purity gate and minimum validation sample are both satisfied.
 
 ## Safety
 
-TPS remains a read-only analysis and paper-trading assistant. It does not place, modify or cancel broker orders and does not guarantee returns. Verify live prices, option liquidity, risk and news before any manual trade.
+TPS remains a read-only analysis and paper-trading assistant. It does not place, modify or cancel broker orders and does not guarantee returns. Pre-candle probabilities and historical purity are research measurements, not promises of future accuracy or profit. Verify live prices, option liquidity, risk and news before any manual trade.
