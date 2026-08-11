@@ -53,6 +53,11 @@ class SettingsPage(QWidget):
         self.minimum_rr = QLineEdit(str(values["minimum_rr_ratio"]))
         self.max_spread = QLineEdit(str(values["maximum_option_spread_percent"]))
         self.minimum_volume = QLineEdit(str(values["minimum_option_volume"]))
+        self.tps_match_mode = QComboBox()
+        self.tps_match_mode.addItem("Adaptive - market regime decides applicable checks", "adaptive")
+        self.tps_match_mode.addItem("Fixed Count - use configured required matches", "count")
+        self.tps_match_mode.addItem("All Applicable - every applicable check must pass", "all")
+        self.tps_match_mode.setCurrentIndex(max(0, self.tps_match_mode.findData(values["tps_match_mode"])))
         self.theme = QComboBox()
         self.theme.addItem("Midnight Blue  •  focused trading terminal", "dark")
         self.theme.addItem("Arctic Light  •  clean daylight workspace", "light")
@@ -81,6 +86,7 @@ class SettingsPage(QWidget):
                              ("Daily loss limit (%)", self.daily_loss_percent), ("Maximum trades per day", self.max_trades),
                              ("Paper-trade cooldown (minutes)", self.cooldown), ("Minimum risk:reward", self.minimum_rr),
                              ("Maximum option spread (%)", self.max_spread), ("Minimum option volume", self.minimum_volume),
+                             ("TPS checklist match mode", self.tps_match_mode),
                              ("Colour Theme", self.theme), ("UI Design Style", self.ui_style)):
             field.setMinimumHeight(36)
             form.addRow(label, field)
@@ -173,6 +179,7 @@ class SettingsPage(QWidget):
                 "daily_loss_percent": self.daily_loss_percent.text(), "max_trades_per_day": self.max_trades.text(),
                 "paper_trade_cooldown_minutes": self.cooldown.text(), "minimum_rr_ratio": self.minimum_rr.text(),
                 "maximum_option_spread_percent": self.max_spread.text(), "minimum_option_volume": self.minimum_volume.text(),
+                "tps_match_mode": self.tps_match_mode.currentData(),
                 "economic_calendar_enabled": self.calendar_enabled.isChecked(),
                 "economic_calendar_api_key": self.calendar_key.text(), "event_feed_fail_closed": self.fail_closed.isChecked(),
                 "trailing_stop_enabled": self.trailing_enabled.isChecked(), "trailing_stop_trigger_r": self.trailing_trigger.text(),
