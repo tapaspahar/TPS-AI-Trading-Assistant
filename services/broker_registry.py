@@ -42,6 +42,15 @@ BROKERS = {
             ("totp_secret", "TOTP Secret", True),
         ), True,
     ),
+    "paytm_money": BrokerDefinition(
+        "paytm_money", "Paytm Money", (
+            ("api_key", "API Key", True), ("api_secret", "API Secret", True),
+            ("request_token", "Request Token (first login)", True),
+            ("access_token", "Access Token (auto-saved)", True),
+            ("read_access_token", "Read Access Token (auto-saved)", True),
+            ("public_access_token", "Public Access Token (auto-saved)", True),
+        ), True,
+    ),
     "fyers": BrokerDefinition(
         "fyers", "Fyers", (
             ("client_id", "Client ID", False), ("secret_key", "Secret Key", True),
@@ -69,9 +78,24 @@ def broker_definition(broker_id: str) -> BrokerDefinition:
     return BROKERS.get(str(broker_id).lower(), BROKERS["angel_one"])
 
 
+def broker_credentials_complete(broker_id: str, credentials: dict) -> bool:
+    """Return whether a saved profile can connect without asking the user."""
+    if broker_id == "paytm_money":
+        base = all(str(credentials.get(key, "")).strip() for key in ("api_key", "api_secret"))
+        authorization = any(str(credentials.get(key, "")).strip() for key in (
+            "request_token", "access_token", "read_access_token",
+        ))
+        return base and authorization
+    definition = broker_definition(broker_id)
+    return all(str(credentials.get(field, "")).strip() for field, _label, _secret in definition.fields)
+
+
 def create_broker_client(broker_id: str, credentials: dict):
     definition = broker_definition(broker_id)
-    missing = [label for key, label, _secret in definition.fields if not str(credentials.get(key, "")).strip()]
+    required_fields = definition.fields
+    if broker_id == "paytm_money":
+        required_fields = definition.fields[:2]
+    missing = [label for key, label, _secret in required_fields if not str(credentials.get(key, "")).strip()]
     if missing:
         raise ValueError(f"Enter {', '.join(missing)}.")
     if broker_id == "angel_one":
@@ -85,6 +109,16 @@ def create_broker_client(broker_id: str, credentials: dict):
         from services.dhan_client import DhanClient
 
         return DhanClient(credentials["client_id"], credentials["pin"], credentials["totp_secret"])
+    if broker_id == "paytm_money":
+        from services.paytm_money_client import PaytmMoneyClient
+
+        if not any(str(credentials.get(key, "")).strip() for key in ("request_token", "access_token", "read_access_token")):
+            raise ValueError("Open Paytm Login and paste the Request Token before connecting.")
+        return PaytmMoneyClient(
+            credentials["api_key"], credentials["api_secret"], credentials.get("request_token", ""),
+            credentials.get("access_token", ""), credentials.get("read_access_token", ""),
+            credentials.get("public_access_token", ""),
+        )
     raise RuntimeError(
         f"{definition.name} credentials can be stored securely, but its TPS market-data adapter is not installed yet. "
         "Each broker uses different instrument tokens, login, candle, quote, option-chain and websocket APIs."

@@ -16,6 +16,7 @@ Release date: 10-08-2026
 - Added a complete read-only Dhan broker adapter. TPS securely stores Client ID, Dhan PIN and TOTP setup secret, then automatically generates a fresh 24-hour access token on startup and before expiry.
 - Added automatic Dhan Security ID mapping for NSE/BSE indices, India VIX, equities, futures and options, with Dhan candle, quote, OI and live-price support.
 - Made Dhan authentication rate-safe: TPS now reuses a newly issued token, preserves the original market-data error and clearly reports an inactive Data API plan instead of triggering Dhan's two-minute token limit.
+- Added an official read-only Paytm Money adapter with browser authorization, secure Windows token storage, daily security-master mapping, live quotes, historical candles, OI and TPS live-price support.
 
 ## Safety
 

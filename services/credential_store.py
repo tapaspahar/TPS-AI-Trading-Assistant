@@ -38,7 +38,10 @@ class BrokerCredentialStore:
         definition = self._definition(broker_id)
         fields = tuple(key for key, _label, _secret in definition.fields)
         credentials = {field: str(values.get(field, "")).strip() for field in fields}
-        if not all(credentials.values()):
+        from services.broker_registry import broker_credentials_complete
+        if not broker_credentials_complete(broker_id, credentials):
+            if broker_id == "paytm_money":
+                raise ValueError("Enter API Key, API Secret and either a Request Token or a saved access token.")
             raise ValueError(f"Enter all {definition.name} credential fields before saving.")
         self._get_backend().set_password(self.SERVICE_NAME, self._account_name(broker_id), json.dumps(credentials))
 

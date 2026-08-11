@@ -6,7 +6,7 @@ from services.broker_registry import BROKERS, create_broker_client
 
 class BrokerRegistryTests(unittest.TestCase):
     def test_common_broker_profiles_are_available(self):
-        self.assertTrue({"angel_one", "zerodha", "upstox", "dhan", "fyers", "shoonya", "other"} <= set(BROKERS))
+        self.assertTrue({"angel_one", "zerodha", "upstox", "dhan", "paytm_money", "fyers", "shoonya", "other"} <= set(BROKERS))
 
     @patch("services.dhan_client.DhanClient")
     def test_dhan_profile_uses_automatic_token_adapter(self, client_type):
@@ -21,6 +21,13 @@ class BrokerRegistryTests(unittest.TestCase):
         })
         self.assertIs(result, client_type.return_value)
         client_type.assert_called_once_with("key", "client", "1234", "secret")
+
+    @patch("services.paytm_money_client.PaytmMoneyClient")
+    def test_paytm_money_profile_accepts_first_login_request_token(self, client_type):
+        credentials = {"api_key": "key", "api_secret": "secret", "request_token": "request"}
+        result = create_broker_client("paytm_money", credentials)
+        self.assertIs(result, client_type.return_value)
+        client_type.assert_called_once_with("key", "secret", "request", "", "", "")
 
 
 if __name__ == "__main__":

@@ -1,13 +1,16 @@
 from threading import Thread
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QUrl, Qt, Signal
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QFormLayout, QFrame, QGroupBox, QHBoxLayout, QLabel, QLayout,
     QLineEdit, QMessageBox, QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 
 from core.settings_store import SettingsStore
-from services.broker_registry import BROKERS, broker_definition, create_broker_client
+from services.broker_registry import (
+    BROKERS, broker_credentials_complete, broker_definition, create_broker_client,
+)
 from services.credential_store import BrokerCredentialStore
 from services.live_session import LiveSession
 from ui.themes.theme_manager import apply_theme
@@ -147,6 +150,10 @@ class SettingsPage(QWidget):
         credential_actions_layout.addWidget(save_credentials)
         credential_actions_layout.addWidget(forget_credentials, 1)
         broker_form.addRow(credential_actions)
+        self.open_broker_login = QPushButton("Open Paytm Login")
+        self.open_broker_login.clicked.connect(self.open_selected_broker_login)
+        self.open_broker_login.setMinimumHeight(38)
+        broker_form.addRow(self.open_broker_login)
         connect = QPushButton("Connect Live Data")
         connect.clicked.connect(self.connect_broker)
         connect.setMinimumHeight(38)
@@ -215,6 +222,12 @@ class SettingsPage(QWidget):
                     "TPS automatically generates a fresh 24-hour access token on startup and before expiry; "
                     "you do not need to paste a daily token."
                 )
+            elif broker_id == "paytm_money":
+                self.broker_note.setText(
+                    "Paytm Money adapter active (read-only). Enter API Key and API Secret, open Paytm Login, "
+                    "authorize TPS, then paste request_token from the redirect URL and connect. TPS securely "
+                    "stores the returned access/read/public tokens; expired authorization must be renewed in Paytm."
+                )
             else:
                 self.broker_note.setText(
                     f"{definition.name} TPS adapter active: candles, quotes, option chain and live feed are read-only."
@@ -225,6 +238,20 @@ class SettingsPage(QWidget):
                 f"{definition.name} profile can be stored securely. Live connection requires its own TPS adapter because broker APIs and instrument tokens are different."
             )
             self.broker_status.setText("Connection status: adapter not installed")
+        self.open_broker_login.setVisible(broker_id == "paytm_money")
+
+    def open_selected_broker_login(self):
+        if self.broker_provider.currentData() != "paytm_money":
+            return
+        credentials = self.current_broker_credentials()
+        try:
+            from services.paytm_money_client import PaytmMoneyClient
+            url = PaytmMoneyClient(credentials.get("api_key", ""), credentials.get("api_secret", "")).login_url()
+        except ValueError as error:
+            QMessageBox.warning(self, "Paytm Money login", str(error))
+            return
+        if not QDesktopServices.openUrl(QUrl(url)):
+            QMessageBox.warning(self, "Paytm Money login", "The Paytm Money login page could not be opened.")
 
     def _save_selected_provider(self):
         values = self.store.load()
@@ -266,6 +293,7 @@ class SettingsPage(QWidget):
             return
         LiveSession.client = client
         LiveSession.broker_id = broker_id
+        self._persist_generated_credentials(broker_id, client)
         self.broker_status.setText("Connection status: connected (read-only)")
         self.live_connected.emit()
         QMessageBox.information(self, definition.name, result["message"])
@@ -281,7 +309,7 @@ class SettingsPage(QWidget):
             self.broker_status.setText(f"Connection status: secure storage unavailable ({error})")
             return
         definition = broker_definition(broker_id)
-        if not all(credentials.get(field) for field, _label, _secret in definition.fields):
+        if not broker_credentials_complete(broker_id, credentials):
             self.broker_status.setText("Connection status: save credentials once to enable auto-connect")
             return
         self.broker_status.setText("Connection status: connecting saved credentials…")
@@ -300,8 +328,23 @@ class SettingsPage(QWidget):
     def complete_auto_connection(self, client, broker_id):
         LiveSession.client = client
         LiveSession.broker_id = broker_id
+        self._persist_generated_credentials(broker_id, client)
         self.broker_status.setText("Connection status: connected automatically (read-only)")
         self.live_connected.emit()
+
+    def _persist_generated_credentials(self, broker_id, client):
+        exporter = getattr(client, "export_credentials", None)
+        if not callable(exporter):
+            return
+        try:
+            credentials = exporter()
+            self.credential_store.save(broker_id, credentials)
+        except (ValueError, RuntimeError):
+            return
+        if self.broker_provider.currentData() == broker_id:
+            definition = broker_definition(broker_id)
+            for index, (key, _label, _secret) in enumerate(definition.fields):
+                self.credential_fields[index].setText(credentials.get(key, ""))
 
     def show_auto_connection_error(self, message):
         self.broker_status.setText(f"Connection status: auto-connect failed ({message})")
