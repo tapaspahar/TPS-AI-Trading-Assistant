@@ -144,6 +144,22 @@ class TpsEntryConfirmationTests(unittest.TestCase):
 
     @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
     @patch("engine.tps_entry_confirmation.ema", return_value=95)
+    def test_low_volatility_marks_irrelevant_and_unavailable_checks_na(self, _ema, _supertrend):
+        environment = {
+            "regime": "LOW VOLATILITY", "vix_zone": "CALM / RANGE", "risk_multiplier": .75,
+            "volume_threshold": 1.7, "max_entry_extension_atr": .65,
+        }
+        result = evaluate_tps_entry_v2(self.candles, self.capture, {}, self.settings, environment)
+        ce = result["side_evaluations"]["CE"]
+        not_applicable = {item["name"]: item["status"] for item in ce["not_applicable_confirmations"]}
+        self.assertEqual(not_applicable["EMA 5/20/50 alignment"], "N/A")
+        self.assertEqual(not_applicable["SuperTrend confirmation"], "N/A")
+        self.assertEqual(not_applicable["OI/PCR context"], "N/A")
+        self.assertEqual(ce["total"], 5)
+        self.assertLessEqual(ce["required"], ce["total"])
+
+    @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
+    @patch("engine.tps_entry_confirmation.ema", return_value=95)
     def test_just_closed_reversal_candle_does_not_wait_an_extra_candle(self, _ema, _supertrend):
         for candle in self.candles[-3:]:
             candle["low"] = 90
