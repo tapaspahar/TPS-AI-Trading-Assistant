@@ -8,12 +8,10 @@ from __future__ import annotations
 import json
 
 
-class AngelOneCredentialStore:
-    """Store one user's Angel One read-only connection details securely."""
+class BrokerCredentialStore:
+    """Store separate encrypted credential profiles for supported brokers."""
 
     SERVICE_NAME = "TPS AI Trading Assistant"
-    ACCOUNT_NAME = "angel-one-live-data"
-    FIELDS = ("api_key", "client_code", "mpin", "totp_secret")
 
     def __init__(self, backend=None):
         self._backend = backend
@@ -27,26 +25,52 @@ class AngelOneCredentialStore:
             raise RuntimeError("Secure credential saving is unavailable. Install the project requirements first.") from error
         return keyring
 
-    def save(self, values):
-        credentials = {field: str(values.get(field, "")).strip() for field in self.FIELDS}
-        if not all(credentials.values()):
-            raise ValueError("Enter API Key, Client Code, MPIN, and TOTP secret before saving credentials.")
-        self._get_backend().set_password(self.SERVICE_NAME, self.ACCOUNT_NAME, json.dumps(credentials))
+    @staticmethod
+    def _definition(broker_id):
+        from services.broker_registry import broker_definition
+        return broker_definition(broker_id)
 
-    def load(self):
-        saved = self._get_backend().get_password(self.SERVICE_NAME, self.ACCOUNT_NAME)
+    @staticmethod
+    def _account_name(broker_id):
+        return "angel-one-live-data" if broker_id == "angel_one" else f"broker-live-data-{broker_id}"
+
+    def save(self, broker_id, values):
+        definition = self._definition(broker_id)
+        fields = tuple(key for key, _label, _secret in definition.fields)
+        credentials = {field: str(values.get(field, "")).strip() for field in fields}
+        if not all(credentials.values()):
+            raise ValueError(f"Enter all {definition.name} credential fields before saving.")
+        self._get_backend().set_password(self.SERVICE_NAME, self._account_name(broker_id), json.dumps(credentials))
+
+    def load(self, broker_id):
+        definition = self._definition(broker_id)
+        fields = tuple(key for key, _label, _secret in definition.fields)
+        saved = self._get_backend().get_password(self.SERVICE_NAME, self._account_name(broker_id))
         if not saved:
             return {}
         try:
             values = json.loads(saved)
         except (TypeError, json.JSONDecodeError):
             return {}
-        return {field: str(values.get(field, "")) for field in self.FIELDS}
+        return {field: str(values.get(field, "")) for field in fields}
 
-    def clear(self):
+    def clear(self, broker_id):
         try:
-            self._get_backend().delete_password(self.SERVICE_NAME, self.ACCOUNT_NAME)
+            self._get_backend().delete_password(self.SERVICE_NAME, self._account_name(broker_id))
         except Exception as error:
             # A missing entry is already the desired state; backends may differ.
             if error.__class__.__name__ != "PasswordDeleteError":
                 raise
+
+
+class AngelOneCredentialStore(BrokerCredentialStore):
+    """Backward-compatible Angel One profile used by older code and tests."""
+
+    def save(self, values):
+        return super().save("angel_one", values)
+
+    def load(self):
+        return super().load("angel_one")
+
+    def clear(self):
+        return super().clear("angel_one")

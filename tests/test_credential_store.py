@@ -1,6 +1,6 @@
 import unittest
 
-from services.credential_store import AngelOneCredentialStore
+from services.credential_store import AngelOneCredentialStore, BrokerCredentialStore
 
 
 class FakeKeyring:
@@ -36,3 +36,11 @@ class CredentialStoreTests(unittest.TestCase):
         self.store.save(self.values)
         self.store.clear()
         self.assertEqual(self.store.load(), {})
+
+    def test_separate_broker_profiles_do_not_overwrite_each_other(self):
+        backend = FakeKeyring()
+        store = BrokerCredentialStore(backend)
+        store.save("dhan", {"client_id": "DH123", "access_token": "token"})
+        store.save("angel_one", self.values)
+        self.assertEqual(store.load("dhan"), {"client_id": "DH123", "access_token": "token"})
+        self.assertEqual(store.load("angel_one"), self.values)

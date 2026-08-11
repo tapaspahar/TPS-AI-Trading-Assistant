@@ -66,7 +66,7 @@ class AboutPage(QWidget):
         return """
         <h2>Quick start</h2>
         <ol>
-          <li>Open <b>Settings</b>, enter your capital and safety limits, save Angel One credentials securely,
+          <li>Open <b>Settings</b>, enter your capital and safety limits, choose a broker profile and save its credentials securely,
           and connect live data.</li>
           <li>Use <b>Market Snapshot</b> to select NIFTY, BANKNIFTY or SENSEX and confirm the 5-minute structure,
           support, resistance and breakout/breakdown levels.</li>
@@ -122,7 +122,7 @@ class AboutPage(QWidget):
         return """
         <h2>Jaldi shuru kaise karein</h2>
         <ol>
-          <li><b>Settings</b> kholiye, capital aur safety limits bhariye, Angel One credentials securely save
+          <li><b>Settings</b> kholiye, capital aur safety limits bhariye, broker profile select karke credentials securely save
           karke live data connect kijiye.</li>
           <li><b>Market Snapshot</b> me NIFTY, BANKNIFTY ya SENSEX select karke 5-minute market structure,
           support, resistance aur breakout/breakdown level check kijiye.</li>

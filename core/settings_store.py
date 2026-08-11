@@ -36,6 +36,7 @@ DEFAULT_SETTINGS = {
     "time_exit_minutes_before_close": 10,
     "theme": "dark",
     "ui_style": "glassmorphism",
+    "broker_provider": "angel_one",
 }
 
 
@@ -77,6 +78,7 @@ class SettingsStore:
             "time_exit_minutes_before_close": int(settings.get("time_exit_minutes_before_close", self.load()["time_exit_minutes_before_close"])),
             "theme": str(settings.get("theme", self.load()["theme"])).lower(),
             "ui_style": str(settings.get("ui_style", self.load()["ui_style"])).lower(),
+            "broker_provider": str(settings.get("broker_provider", self.load()["broker_provider"])).lower(),
         }
         if values["capital"] <= 0 or not 0 < values["risk_percent"] <= 100:
             raise ValueError("Capital must be positive and risk percentage must be between 0 and 100.")
@@ -111,6 +113,9 @@ class SettingsStore:
             raise ValueError("Choose a valid TPS visual theme.")
         if values["ui_style"] not in {"skeuomorphism", "neomorphism", "glassmorphism", "claymorphism", "minimalism", "maximalism", "brutalism", "liquid_glass", "bento_grid", "spatial_ui"}:
             raise ValueError("Choose a valid TPS UI design style.")
+        from services.broker_registry import BROKERS
+        if values["broker_provider"] not in BROKERS:
+            raise ValueError("Choose a valid broker provider.")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps(values, indent=2), encoding="utf-8")
         return values

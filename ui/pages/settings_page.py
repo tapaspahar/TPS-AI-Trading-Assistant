@@ -7,8 +7,8 @@ from PySide6.QtWidgets import (
 )
 
 from core.settings_store import SettingsStore
-from services.angel_one_client import AngelOneClient
-from services.credential_store import AngelOneCredentialStore
+from services.broker_registry import BROKERS, broker_definition, create_broker_client
+from services.credential_store import BrokerCredentialStore
 from services.live_session import LiveSession
 from ui.themes.theme_manager import apply_theme
 from ui.themes.ui_styles import UI_STYLE_NAMES
@@ -22,7 +22,7 @@ class SettingsPage(QWidget):
     def __init__(self):
         super().__init__()
         self.store = SettingsStore()
-        self.credential_store = AngelOneCredentialStore()
+        self.credential_store = BrokerCredentialStore()
         values = self.store.load()
         shell = QVBoxLayout(self)
         shell.setContentsMargins(0, 0, 0, 0)
@@ -109,36 +109,37 @@ class SettingsPage(QWidget):
         safety_note = QLabel("Calendar source: Trading Economics API. If no key is configured, TPS clearly reports feed unavailable and uses the emergency News Risk switch; it never invents an event.")
         safety_note.setWordWrap(True); safety_form.addRow(safety_note)
         layout.addWidget(safety_box)
-        broker_box = QGroupBox("Angel One live data")
+        broker_box = QGroupBox("Broker live data (read-only)")
         broker_form = QFormLayout(broker_box)
         broker_form.setContentsMargins(18, 28, 18, 16)
         broker_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
         broker_form.setHorizontalSpacing(18)
         broker_form.setVerticalSpacing(12)
-        self.api_key = QLineEdit()
-        self.api_key.setEchoMode(QLineEdit.Password)
-        self.client_code = QLineEdit()
-        self.mpin = QLineEdit(); self.mpin.setEchoMode(QLineEdit.Password)
-        self.totp_secret = QLineEdit(); self.totp_secret.setEchoMode(QLineEdit.Password)
-        for label, field in (("API Key", self.api_key), ("Client Code", self.client_code), ("MPIN", self.mpin), ("TOTP secret", self.totp_secret)):
-            field.setMinimumHeight(36)
+        self.broker_provider = QComboBox()
+        for broker_id, definition in BROKERS.items():
+            suffix = " — TPS adapter ready" if definition.adapter_available else " — credentials only; adapter required"
+            self.broker_provider.addItem(definition.name + suffix, broker_id)
+        self.broker_provider.setCurrentIndex(max(0, self.broker_provider.findData(values.get("broker_provider", "angel_one"))))
+        self.broker_provider.setMinimumHeight(36)
+        broker_form.addRow("Broker provider", self.broker_provider)
+        self.credential_labels = []
+        self.credential_fields = []
+        for _index in range(6):
+            label = QLabel()
+            field = QLineEdit(); field.setMinimumHeight(36)
+            self.credential_labels.append(label); self.credential_fields.append(field)
             broker_form.addRow(label, field)
-        try:
-            saved_credentials = self.credential_store.load()
-        except RuntimeError:
-            saved_credentials = {}
-        self.api_key.setText(saved_credentials.get("api_key", ""))
-        self.client_code.setText(saved_credentials.get("client_code", ""))
-        self.mpin.setText(saved_credentials.get("mpin", ""))
-        self.totp_secret.setText(saved_credentials.get("totp_secret", ""))
+        self.broker_note = QLabel()
+        self.broker_note.setWordWrap(True)
+        broker_form.addRow(self.broker_note)
         self.broker_status = QLabel("Connection status: not connected")
         self.broker_status.setWordWrap(True)
         self.broker_status.setMinimumHeight(24)
         broker_form.addRow(self.broker_status)
         save_credentials = QPushButton("Save Credentials Securely")
-        save_credentials.clicked.connect(self.save_angel_credentials)
+        save_credentials.clicked.connect(self.save_broker_credentials)
         forget_credentials = QPushButton("Remove Saved Credentials")
-        forget_credentials.clicked.connect(self.clear_angel_credentials)
+        forget_credentials.clicked.connect(self.clear_broker_credentials)
         credential_actions = QWidget()
         credential_actions_layout = QHBoxLayout(credential_actions)
         credential_actions_layout.setContentsMargins(0, 0, 0, 0)
@@ -147,10 +148,12 @@ class SettingsPage(QWidget):
         credential_actions_layout.addWidget(forget_credentials, 1)
         broker_form.addRow(credential_actions)
         connect = QPushButton("Connect Live Data")
-        connect.clicked.connect(self.connect_angel_one)
+        connect.clicked.connect(self.connect_broker)
         connect.setMinimumHeight(38)
         broker_form.addRow(connect)
         layout.addWidget(broker_box)
+        self.broker_provider.currentIndexChanged.connect(self.on_broker_changed)
+        self.on_broker_changed()
         layout.addStretch()
         self.auto_connection_succeeded.connect(self.complete_auto_connection)
         self.auto_connection_failed.connect(self.show_auto_connection_error)
@@ -169,6 +172,7 @@ class SettingsPage(QWidget):
                 "trailing_stop_lock_r": self.trailing_lock.text(), "time_exit_minutes_before_close": self.time_exit.text(),
                 "theme": self.theme.currentData(),
                 "ui_style": self.ui_style.currentData(),
+                "broker_provider": self.broker_provider.currentData(),
             })
         except ValueError as error:
             QMessageBox.warning(self, "Invalid settings", str(error))
@@ -180,71 +184,115 @@ class SettingsPage(QWidget):
         """Preview the selected visual style; persistence remains an explicit Save action."""
         apply_theme(QApplication.instance(), self.theme.currentData(), self.ui_style.currentData())
 
-    def save_angel_credentials(self):
+    def current_broker_credentials(self):
+        definition = broker_definition(self.broker_provider.currentData())
+        return {
+            key: self.credential_fields[index].text()
+            for index, (key, _label, _secret) in enumerate(definition.fields)
+        }
+
+    def on_broker_changed(self):
+        broker_id = self.broker_provider.currentData() or "angel_one"
+        definition = broker_definition(broker_id)
         try:
-            self.credential_store.save({
-                "api_key": self.api_key.text(), "client_code": self.client_code.text(),
-                "mpin": self.mpin.text(), "totp_secret": self.totp_secret.text(),
-            })
+            saved = self.credential_store.load(broker_id)
+        except RuntimeError:
+            saved = {}
+        for index, (label_widget, field) in enumerate(zip(self.credential_labels, self.credential_fields)):
+            visible = index < len(definition.fields)
+            label_widget.setVisible(visible); field.setVisible(visible)
+            if visible:
+                key, label, secret = definition.fields[index]
+                label_widget.setText(label)
+                field.setEchoMode(QLineEdit.Password if secret else QLineEdit.Normal)
+                field.setText(saved.get(key, ""))
+            else:
+                field.clear()
+        if definition.adapter_available:
+            self.broker_note.setText(
+                f"{definition.name} TPS adapter active: candles, quotes, option chain and live feed are read-only."
+            )
+            self.broker_status.setText("Connection status: not connected")
+        else:
+            self.broker_note.setText(
+                f"{definition.name} profile can be stored securely. Live connection requires its own TPS adapter because broker APIs and instrument tokens are different."
+            )
+            self.broker_status.setText("Connection status: adapter not installed")
+
+    def _save_selected_provider(self):
+        values = self.store.load()
+        values["broker_provider"] = self.broker_provider.currentData()
+        self.store.save(values)
+
+    def save_broker_credentials(self):
+        broker_id = self.broker_provider.currentData()
+        try:
+            self.credential_store.save(broker_id, self.current_broker_credentials())
+            self._save_selected_provider()
         except (ValueError, RuntimeError) as error:
             QMessageBox.warning(self, "Secure credential storage", str(error))
             return
         QMessageBox.information(
             self, "Credentials saved",
-            "Saved in Windows Credential Manager on this computer. They are not saved in the project, database, or GitHub.",
+            f"{broker_definition(broker_id).name} profile saved in Windows Credential Manager. It is not saved in the project, database, or GitHub.",
         )
 
-    def clear_angel_credentials(self):
+    def clear_broker_credentials(self):
+        broker_id = self.broker_provider.currentData()
         try:
-            self.credential_store.clear()
+            self.credential_store.clear(broker_id)
         except RuntimeError as error:
             QMessageBox.warning(self, "Secure credential storage", str(error))
             return
-        for field in (self.api_key, self.client_code, self.mpin, self.totp_secret):
+        for field in self.credential_fields:
             field.clear()
-        QMessageBox.information(self, "Credentials removed", "Saved Angel One credentials have been removed from this computer.")
+        QMessageBox.information(self, "Credentials removed", f"Saved {broker_definition(broker_id).name} credentials have been removed.")
 
-    def connect_angel_one(self):
+    def connect_broker(self):
+        broker_id = self.broker_provider.currentData()
+        definition = broker_definition(broker_id)
         try:
-            client = AngelOneClient(self.api_key.text(), self.client_code.text(), self.mpin.text(), self.totp_secret.text())
+            client = create_broker_client(broker_id, self.current_broker_credentials())
             result = client.connect()
         except (ValueError, RuntimeError) as error:
-            QMessageBox.warning(self, "Angel One connection", str(error))
+            QMessageBox.warning(self, f"{definition.name} connection", str(error))
             return
         LiveSession.client = client
+        LiveSession.broker_id = broker_id
         self.broker_status.setText("Connection status: connected (read-only)")
         self.live_connected.emit()
-        QMessageBox.information(self, "Angel One", result["message"])
+        QMessageBox.information(self, definition.name, result["message"])
 
     def auto_connect_saved_credentials(self):
         """Restore a read-only session on startup when the user opted to save credentials."""
         if LiveSession.connected() or self._auto_connection_started:
             return
         try:
-            credentials = self.credential_store.load()
+            broker_id = self.store.load().get("broker_provider", "angel_one")
+            credentials = self.credential_store.load(broker_id)
         except RuntimeError as error:
             self.broker_status.setText(f"Connection status: secure storage unavailable ({error})")
             return
-        if not all(credentials.get(field) for field in ("api_key", "client_code", "mpin", "totp_secret")):
+        definition = broker_definition(broker_id)
+        if not all(credentials.get(field) for field, _label, _secret in definition.fields):
             self.broker_status.setText("Connection status: save credentials once to enable auto-connect")
             return
         self.broker_status.setText("Connection status: connecting saved credentials…")
         self._auto_connection_started = True
-        Thread(target=self._connect_saved_credentials, args=(credentials,), daemon=True).start()
+        Thread(target=self._connect_saved_credentials, args=(broker_id, credentials), daemon=True).start()
 
-    def _connect_saved_credentials(self, credentials):
+    def _connect_saved_credentials(self, broker_id, credentials):
         try:
-            client = AngelOneClient(
-                credentials["api_key"], credentials["client_code"], credentials["mpin"], credentials["totp_secret"],
-            )
+            client = create_broker_client(broker_id, credentials)
             result = client.connect()
         except (ValueError, RuntimeError) as error:
             self.auto_connection_failed.emit(str(error))
             return
-        self.auto_connection_succeeded.emit(client, result["message"])
+        self.auto_connection_succeeded.emit(client, broker_id)
 
-    def complete_auto_connection(self, client, message):
+    def complete_auto_connection(self, client, broker_id):
         LiveSession.client = client
+        LiveSession.broker_id = broker_id
         self.broker_status.setText("Connection status: connected automatically (read-only)")
         self.live_connected.emit()
 
