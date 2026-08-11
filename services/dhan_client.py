@@ -27,6 +27,8 @@ class DhanClient:
         self.access_token = None
         self.auth_token = None
         self.token_expiry = None
+        self.token_generated_at = 0.0
+        self.profile = {}
         self._token_lock = Lock()
         self._quote_lock = Lock()
         self._last_quote_at = 0.0
@@ -35,9 +37,18 @@ class DhanClient:
     def connect(self):
         self._generate_token()
         profile = self._request("GET", "/profile")
+        self.profile = profile
         self.session = self.http
         name = profile.get("dhanClientName") or profile.get("clientName") or "Dhan account"
-        return {"connected": True, "message": f"{name} connected for read-only market data with automatic daily renewal."}
+        data_plan = str(profile.get("dataPlan") or "").strip().lower()
+        if data_plan in {"inactive", "deactive", "disabled", "false"}:
+            message = (
+                f"{name} login connected, but the Dhan Data API plan is inactive. "
+                "Activate Data APIs in DhanHQ Trading APIs before TPS can fetch live quotes and candles."
+            )
+        else:
+            message = f"{name} connected for read-only market data with automatic daily renewal."
+        return {"connected": True, "message": message, "data_plan": profile.get("dataPlan")}
 
     def _generate_token(self):
         if not all((self.client_id, self.pin, self.totp_secret)):
@@ -63,6 +74,7 @@ class DhanClient:
                 or "Dhan did not issue an access token. Check Client ID, PIN and TOTP setup."
             )
         self.access_token = self.auth_token = str(token)
+        self.token_generated_at = monotonic()
         expiry = str(data.get("expiryTime") or "").replace("Z", "+00:00")
         try:
             self.token_expiry = datetime.fromisoformat(expiry)
@@ -94,6 +106,12 @@ class DhanClient:
 
     def _request(self, method, path, *, json=None):
         self._ensure_token()
+        data_plan = str((self.profile or {}).get("dataPlan") or "").strip().lower()
+        if path != "/profile" and data_plan in {"inactive", "deactive", "disabled", "false"}:
+            raise RuntimeError(
+                "Dhan Data API plan is inactive. Open DhanHQ Trading APIs and activate Data APIs, "
+                "then reconnect TPS."
+            )
         headers = {
             "Accept": "application/json", "Content-Type": "application/json",
             "access-token": self.access_token, "client-id": self.client_id,
@@ -102,7 +120,13 @@ class DhanClient:
             response = self.http.request(method, self.API_ROOT + path, headers=headers, json=json, timeout=30)
         except requests.RequestException as error:
             raise RuntimeError("Dhan market-data service is temporarily unavailable.") from error
-        if response.status_code in {401, 403}:
+        # Dhan allows automatic TOTP token generation only once every two
+        # minutes.  A newly generated token that is rejected by a data
+        # endpoint usually indicates a data-plan/permission problem, not an
+        # expired token.  Preserve the original response instead of masking it
+        # with a second-token rate-limit error.
+        token_old_enough = monotonic() - self.token_generated_at >= 120
+        if response.status_code == 401 and token_old_enough:
             with self._token_lock:
                 self._generate_token()
             headers["access-token"] = self.access_token

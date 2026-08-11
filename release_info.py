@@ -9,9 +9,10 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.1.0"
-LAST_UPDATED_AT = "11-08-2026 08:12:43 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.1.0 • 11-08-2026 08:12 IST"
+LAST_UPDATED_AT = "11-08-2026 08:35:13 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.1.0 • 11-08-2026 08:35 IST"
 RELEASE_NOTES = (
+    "Made Dhan authentication rate-safe so market-data permission failures no longer trigger a second token within two minutes, and inactive Data API plans are explained clearly.",
     "Added a complete read-only Dhan adapter with automatic daily access-token renewal, instrument mapping, candles, quotes, OI and live price updates.",
     "Added CAS Analysis and Stock Options Watch workspaces.",
     "Added adaptive market-regime rules and limited-risk Option Strategies.",
