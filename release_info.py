@@ -1,17 +1,18 @@
 """Application release metadata kept in one place."""
 
 APP_NAME = "TPS AI Trading Assistant"
-VERSION = "1.2.0"
-DISPLAY_VERSION = "Release 1.2"
+VERSION = "1.2.1"
+DISPLAY_VERSION = "Release 1.2.1"
 RELEASE_DATE = "12-08-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
-SOFTWARE_UPDATE_VERSION = "v1.2.0"
-LAST_UPDATED_AT = "12-08-2026 16:36:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.2.0 - 12-08-2026 16:36 IST"
+SOFTWARE_UPDATE_VERSION = "v1.2.1"
+LAST_UPDATED_AT = "12-08-2026 16:40:21 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.2.1 - 12-08-2026 16:40 IST"
 RELEASE_NOTES = (
+    "Published maintenance Release 1.2.1 with aligned application, Windows executable, installer, portable ZIP and Help Center version metadata.",
     "Expanded Gap Probability Lab into separate 3:20 actionable and 3:40 post-close confirmation forecasts shown together with CONFIRMED/CHANGED comparison.",
     "Added automatic selected-index capture near 3:20 PM and retry-safe closing recalculation at/after 3:40 PM when TPS is open and broker data is connected.",
     "Protected closing confirmation from weekends, stale broker candles and rapid repeated API retries; both stages remain independently auditable against the next market open.",

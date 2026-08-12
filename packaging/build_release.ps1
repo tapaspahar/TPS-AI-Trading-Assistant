@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $ProjectRoot
-$Version = "1.2.0"
+$Version = "1.2.1"
 $AppFolder = "TPS AI Trading Assistant"
 $ReleaseDir = Join-Path $ProjectRoot "release"
 $SetupPath = Join-Path $ReleaseDir "TPS-AI-Trading-Assistant-Setup-$Version.exe"
