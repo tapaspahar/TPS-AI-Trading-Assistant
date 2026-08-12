@@ -35,3 +35,26 @@ class OptionChainEngineTests(unittest.TestCase):
         ]
         result = analyze_option_chain(contracts, quotes)
         self.assertEqual((result["call_oi_change"], result["put_oi_change"]), (12, 30))
+
+    def test_builds_expected_range_max_pain_and_quality_from_live_window(self):
+        contracts = [
+            {"token": "c99", "strike": 99, "option_type": "CE", "expiry": __import__("datetime").date.today() + __import__("datetime").timedelta(days=7)},
+            {"token": "p99", "strike": 99, "option_type": "PE", "expiry": __import__("datetime").date.today() + __import__("datetime").timedelta(days=7)},
+            {"token": "c100", "strike": 100, "option_type": "CE", "expiry": __import__("datetime").date.today() + __import__("datetime").timedelta(days=7)},
+            {"token": "p100", "strike": 100, "option_type": "PE", "expiry": __import__("datetime").date.today() + __import__("datetime").timedelta(days=7)},
+            {"token": "c101", "strike": 101, "option_type": "CE", "expiry": __import__("datetime").date.today() + __import__("datetime").timedelta(days=7)},
+            {"token": "p101", "strike": 101, "option_type": "PE", "expiry": __import__("datetime").date.today() + __import__("datetime").timedelta(days=7)},
+        ]
+        quotes = [
+            {"symbolToken": row["token"], "opnInterest": 100 if row["strike"] != 100 else 500,
+             "tradeVolume": 50, "ltp": 2 if row["strike"] == 100 else 1,
+             "bestBidPrice": 1.9 if row["strike"] == 100 else .9,
+             "bestAskPrice": 2.1 if row["strike"] == 100 else 1.1}
+            for row in contracts
+        ]
+        result = analyze_option_chain(contracts, quotes, 100)
+        self.assertEqual(result["atm_strike"], 100)
+        self.assertEqual(result["expected_move"], 4)
+        self.assertEqual((result["expected_low"], result["expected_high"]), (96, 104))
+        self.assertEqual(result["focused_max_pain"], 100)
+        self.assertEqual(result["data_quality_label"], "STRONG")

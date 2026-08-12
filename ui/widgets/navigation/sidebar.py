@@ -52,7 +52,7 @@ class Sidebar(QFrame):
         self.casAnalysisButton = nav("CAS Analysis")
         self.stockOptionsWatchButton = nav("Stock Options Watch")
         self.optionStrategiesButton = nav("Option Strategies")
-        self.putCallRatioButton = nav("Put-Call Ratio")
+        self.putCallRatioButton = nav("Options Intelligence")
         self.gapProbabilityButton = nav("3:20 Gap Probability")
         self.autoOpportunityButton = nav("Auto Opportunity Radar")
         # Keep the visual journey in the same order a trader uses the app:

@@ -56,7 +56,7 @@ class OptionStrategyService:
         expiry_contracts = [contract for contract in contracts if contract["expiry"] == expiry]
         focused = contracts_near_spot(expiry_contracts, spot, wings=10)
         quotes = self.client.get_option_chain_quotes(focused[0]["exchange"], [contract["token"] for contract in focused])
-        chain = analyze_option_chain(focused, quotes)
+        chain = analyze_option_chain(focused, quotes, spot)
         result = recommend_option_strategy(symbol, spot, candles, capture, chain, environment, settings)
         result.update({
             "expiry": expiry.strftime("%d-%m-%Y"), "future_symbol": future["symbol"],

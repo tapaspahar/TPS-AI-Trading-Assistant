@@ -64,7 +64,7 @@ class StockDerivativeService:
         if not focused:
             raise RuntimeError("No near-ATM stock-option contracts were found.")
         quotes = self.client.get_option_chain_quotes("NFO", [contract["token"] for contract in focused])
-        chain = analyze_option_chain(focused, quotes)
+        chain = analyze_option_chain(focused, quotes, spot)
         strategy = evaluate_tps_entry_v2(candles, capture, chain, settings, environment={})
         side = (strategy.get("side_evaluations") or {}).get(strategy["candidate"], {})
         result = {

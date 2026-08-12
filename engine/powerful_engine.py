@@ -71,7 +71,7 @@ def evaluate_powerful_engine(*, pre_candle, capture, multi_timeframe, smart_mone
     pcr = _number(chain.get("pcr_oi"))
     oi_side = "CE" if pcr is not None and pcr >= 1.10 else "PE" if pcr is not None and pcr <= 0.90 else "NEUTRAL"
     add("Option OI", oi_side, 8,
-        f"OI PCR {pcr if pcr is not None else 'unavailable'} | Put support {chain.get('put_support')} | Call resistance {chain.get('call_resistance')}",
+        f"OI PCR {pcr if pcr is not None else 'unavailable'} | Put support {chain.get('put_support')} | Call resistance {chain.get('call_resistance')} | Focused max pain {chain.get('focused_max_pain')} | ATM expected move {chain.get('expected_move')} | Chain quality {chain.get('data_quality', 0)}/100",
         pcr is not None)
 
     available_weight = sum(item["weight"] for item in votes if item["available"])
@@ -117,5 +117,8 @@ def evaluate_powerful_engine(*, pre_candle, capture, multi_timeframe, smart_mone
         "validated_pre_candle_signals": int(pre_candle.get("validation_signals", 0) or 0),
         "vix": environment.get("vix"), "vix_zone": environment.get("vix_zone"),
         "regime": environment.get("regime"), "spread_percent": spread_percent,
+        "expected_move": chain.get("expected_move"), "expected_low": chain.get("expected_low"),
+        "expected_high": chain.get("expected_high"), "focused_max_pain": chain.get("focused_max_pain"),
+        "chain_data_quality": chain.get("data_quality"), "atm_iv": chain.get("atm_iv"),
         "warning": "Confluence strength is not win probability. A published signal still requires paper validation and manual risk review.",
     }

@@ -93,9 +93,15 @@ class OptionStrategiesPage(QWidget):
         reasons = "\n- ".join(result.get("reasons") or [])
         blockers = "\n- ".join(result.get("blockers") or [])
         payoff = f"Net {result.get('net_type')} {result.get('net_premium')} | Breakeven(s): {result.get('breakevens')}" if result.get("net_type") else "No tradeable defined-risk payoff is ready."
+        greeks = result.get("portfolio_greeks_estimate")
+        greek_text = (
+            f"\nEstimated portfolio Greeks (whole position): Delta {greeks['delta']} | Gamma {greeks['gamma']} | "
+            f"Theta/day {greeks['theta_per_day']} | Vega/1% {greeks['vega_per_1pct']}"
+            if greeks else "\nPortfolio Greeks unavailable because expiry/premium inputs were incomplete."
+        )
         self.details.setText(
             f"Completed candle: {result['candle_time']} | Expiry: {result['expiry']} | {result['quoted_contracts']} live contracts quoted\n"
-            f"{payoff}\nEvidence:\n- {reasons}"
+            f"{payoff}{greek_text}\nEvidence:\n- {reasons}"
             + (f"\nBlockers:\n- {blockers}" if blockers else "")
             + f"\n\n{result['warning']}"
         )

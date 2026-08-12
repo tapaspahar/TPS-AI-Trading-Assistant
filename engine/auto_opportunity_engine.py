@@ -86,12 +86,21 @@ def _base(market_type, symbol, candle_time, score):
 
 
 def _evidence(result):
-    return [f"{item.get('layer')}: {item.get('detail')}" for item in result.get("evidence") or [] if item.get("available")]
+    evidence = [f"{item.get('layer')}: {item.get('detail')}" for item in result.get("evidence") or [] if item.get("available")]
+    if result.get("expected_move") is not None:
+        evidence.append(
+            f"ATM expected range {result.get('expected_low')} - {result.get('expected_high')} (±{result.get('expected_move')}); focused max pain {result.get('focused_max_pain')}"
+        )
+    if result.get("chain_data_quality") is not None:
+        evidence.append(f"Option-chain data quality {result.get('chain_data_quality')}/100 | ATM IV estimate {result.get('atm_iv') or 'unavailable'}")
+    return evidence
 
 
 def _stock_evidence(result):
     strategy = result.get("strategy") or {}
+    chain = result.get("chain") or {}
     return [item for item in (
         result.get("selection_reason"), f"Candidate {result.get('candidate')}",
         f"Score {strategy.get('score', 0)}/100", f"State {result.get('state')}",
+        f"ATM expected move ±{chain.get('expected_move')} | focused max pain {chain.get('focused_max_pain')} | chain quality {chain.get('data_quality', 0)}/100",
     ) if item]

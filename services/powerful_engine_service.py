@@ -62,7 +62,7 @@ class PowerfulEngineService:
         expiry = min(contract["expiry"] for contract in contracts)
         contracts = [contract for contract in contracts if contract["expiry"] == expiry]
         quotes = self.client.get_option_chain_quotes(contracts[0]["exchange"], [item["token"] for item in contracts])
-        chain = analyze_option_chain(contracts, quotes)
+        chain = analyze_option_chain(contracts, quotes, spot)
         try:
             vix_instrument = self.contract_service.get_india_vix_instrument()
             vix = float(self.client.get_option_quote(vix_instrument["exchange"], vix_instrument["token"]).get("ltp", 0) or 0)

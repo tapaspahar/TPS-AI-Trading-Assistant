@@ -5,6 +5,7 @@ avoids uncovered option selling.
 """
 from __future__ import annotations
 
+from engine.greeks_engine import calculate_greeks
 from engine.market_structure import analyze_candles
 
 
@@ -39,6 +40,30 @@ def _leg(action, row, lots=1):
         "symbol": row["symbol"], "price": round(_price(row, action), 2),
         "lots": lots, "lot_size": int(row["lot_size"]), "quantity": int(row["lot_size"]) * lots,
     }
+
+
+def _portfolio_greeks(plan, rows, spot):
+    """Aggregate estimated Greeks for a defined-risk plan when inputs permit."""
+    totals = {"delta": 0.0, "gamma": 0.0, "theta_per_day": 0.0, "vega_per_1pct": 0.0}
+    calculated = 0
+    by_symbol = {row.get("symbol"): row for row in rows}
+    for leg in plan.get("legs") or []:
+        row = by_symbol.get(leg.get("symbol")) or {}
+        estimate = calculate_greeks(
+            spot, leg.get("strike"), row.get("ltp") or leg.get("price"),
+            row.get("expiry"), leg.get("option_type"),
+        )
+        if not estimate:
+            continue
+        sign = 1 if leg.get("action") == "BUY" else -1
+        quantity = int(leg.get("quantity") or 0)
+        leg["greeks_estimate"] = estimate
+        for key in totals:
+            totals[key] += sign * float(estimate[key]) * quantity
+        calculated += 1
+    if calculated != len(plan.get("legs") or []):
+        return None
+    return {key: round(value, 4 if key == "gamma" else 2) for key, value in totals.items()}
 
 
 def _debit_spread(rows, strikes, spot, direction):
@@ -120,6 +145,7 @@ def recommend_option_strategy(symbol, spot, candles, capture, chain, environment
         f"Direction {direction}: {votes}/4 chart votes; structure {structure}",
         f"Regime {regime}; India VIX {environment.get('vix') or 'unavailable'} ({vix_zone})",
         f"OI support {chain.get('put_support') or '-'}; resistance {chain.get('call_resistance') or '-'}; OI PCR {chain.get('pcr_oi') or '-'}",
+        f"ATM expected move {chain.get('expected_move') or '-'}; focused max pain {chain.get('focused_max_pain') or '-'}; chain quality {chain.get('data_quality', 0)}/100",
     ]
     base = {
         "symbol": symbol, "spot": float(spot), "bias": direction, "regime": regime,
@@ -152,4 +178,6 @@ def recommend_option_strategy(symbol, spot, candles, capture, chain, environment
     if not payoff_ok:
         blockers.append(f"Maximum profit/loss ratio {plan['payoff_ratio']:.2f} is below 0.30")
     confidence = min(85, 45 + votes * 8 + (8 if environment.get("regular_move_available", True) else 0))
-    return {**base, **plan, "state": state, "confidence": confidence, "risk_cap": round(risk_cap, 2), "risk_within_cap": within_cap, "blockers": blockers}
+    portfolio_greeks = _portfolio_greeks(plan, rows, float(spot))
+    return {**base, **plan, "state": state, "confidence": confidence, "risk_cap": round(risk_cap, 2),
+            "risk_within_cap": within_cap, "portfolio_greeks_estimate": portfolio_greeks, "blockers": blockers}

@@ -9,9 +9,12 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.2.0"
-LAST_UPDATED_AT = "12-08-2026 15:39:27 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.2.0 - 12-08-2026 15:39 IST"
+LAST_UPDATED_AT = "12-08-2026 15:45:52 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.2.0 - 12-08-2026 15:45 IST"
 RELEASE_NOTES = (
+    "Upgraded Put-Call Ratio into Options Market Intelligence with ATM straddle expected move/range, focused-window Max Pain, bid/ask spread coverage, chain data-quality score and transparent context labels.",
+    "Added live-premium Black-Scholes ATM IV/Greeks estimates when expiry inputs are safe, while clearly withholding estimates when data is incomplete.",
+    "Added estimated whole-position Delta, Gamma, Theta and Vega to valid limited-risk option strategies, plus expected-move, Max-Pain and chain-quality evidence in strategy and automatic opportunity reports.",
     "Auto Opportunity Radar now discovers its own liquid, active candidates from the complete NSE F&O stock universe; a manual watchlist is no longer required.",
     "Added a rate-conscious two-stage scan: lightweight universe ranking by turnover, movement and intraday participation, followed by deep TPS candle, futures and option-chain validation only for the strongest shortlist.",
     "Added TPS Auto Opportunity Radar: an unattended completed-5-minute-candle scanner for NIFTY, BANKNIFTY, SENSEX, configured stock-option watches and Equity Research watchlists.",

@@ -1,4 +1,5 @@
 import unittest
+from datetime import date, timedelta
 from unittest.mock import patch
 
 from engine.option_strategy_engine import recommend_option_strategy
@@ -15,6 +16,7 @@ class OptionStrategyEngineTests(unittest.TestCase):
                 self.rows.append({
                     "strike": strike, "option_type": option_type, "symbol": f"X{strike}{option_type}",
                     "ltp": ltp, "bid": ltp - .25, "ask": ltp + .25, "lot_size": 65, "volume": 1000,
+                    "expiry": date.today() + timedelta(days=7),
                 })
         self.chain = {"quote_rows": self.rows, "put_support": 9950, "call_resistance": 10050, "pcr_oi": 1.0}
         self.environment = {
@@ -33,6 +35,8 @@ class OptionStrategyEngineTests(unittest.TestCase):
         self.assertEqual([leg["action"] for leg in result["legs"]], ["BUY", "SELL"])
         self.assertGreater(result["max_profit"], 0)
         self.assertGreater(result["max_loss"], 0)
+        self.assertIsNotNone(result["portfolio_greeks_estimate"])
+        self.assertIn("delta", result["portfolio_greeks_estimate"])
 
     @patch("engine.option_strategy_engine.analyze_candles", return_value={"state": "Bullish structure"})
     def test_one_lot_plan_is_blocked_above_risk_cap(self, _structure):
