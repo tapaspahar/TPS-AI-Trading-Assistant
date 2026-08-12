@@ -67,6 +67,7 @@ DEFAULT_SETTINGS = {
         "smart_money_lab": True,
         "pre_candle_lab": False,
         "powerful_engine": True,
+        "auto_opportunity": True,
         "broker_connection": True,
     },
 }

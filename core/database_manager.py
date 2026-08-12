@@ -242,7 +242,70 @@ class Database:
         self.cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_gap_forecast_symbol_date ON gap_probability_forecasts(symbol, forecast_date DESC)"
         )
+        self.cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS auto_opportunities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                scanned_at TEXT NOT NULL,
+                candle_time TEXT NOT NULL,
+                market_type TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                instrument TEXT,
+                action TEXT NOT NULL,
+                state TEXT NOT NULL,
+                score REAL NOT NULL,
+                entry REAL,
+                stop REAL,
+                target_1 REAL,
+                target_2 REAL,
+                quantity INTEGER,
+                rr_ratio REAL,
+                exit_rule TEXT NOT NULL,
+                details_json TEXT NOT NULL,
+                UNIQUE(candle_time, market_type, symbol)
+            )
+            """
+        )
+        self.cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_auto_opportunity_time ON auto_opportunities(scanned_at DESC, id DESC)"
+        )
         self.connection.commit()
+
+    def save_auto_opportunities(self, opportunities: list[dict]) -> int:
+        saved = 0
+        for item in opportunities:
+            candle_time = str(item.get("candle_time") or item.get("scanned_at") or "")
+            details = {"evidence": item.get("evidence") or [], "blockers": item.get("blockers") or []}
+            result = self.cursor.execute(
+                """
+                INSERT INTO auto_opportunities (
+                    scanned_at, candle_time, market_type, symbol, instrument, action, state, score,
+                    entry, stop, target_1, target_2, quantity, rr_ratio, exit_rule, details_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(candle_time, market_type, symbol) DO UPDATE SET
+                    scanned_at=excluded.scanned_at, instrument=excluded.instrument,
+                    action=excluded.action, state=excluded.state, score=excluded.score,
+                    entry=excluded.entry, stop=excluded.stop, target_1=excluded.target_1,
+                    target_2=excluded.target_2, quantity=excluded.quantity,
+                    rr_ratio=excluded.rr_ratio, exit_rule=excluded.exit_rule,
+                    details_json=excluded.details_json
+                """,
+                (
+                    item["scanned_at"], candle_time, item["market_type"], item["symbol"], item.get("instrument"),
+                    item["action"], item["state"], float(item.get("score") or 0), item.get("entry"), item.get("stop"),
+                    item.get("target_1"), item.get("target_2"), item.get("quantity"), item.get("rr_ratio"),
+                    item.get("exit_rule", ""), json.dumps(details, ensure_ascii=False, default=str),
+                ),
+            )
+            saved += int(result.rowcount > 0)
+        self.connection.commit()
+        return saved
+
+    def get_auto_opportunities(self, limit: int = 300):
+        return self.cursor.execute(
+            "SELECT * FROM auto_opportunities ORDER BY scanned_at DESC, id DESC LIMIT ?",
+            (max(1, min(int(limit), 3000)),),
+        ).fetchall()
 
     def save_gap_probability_forecast(self, forecast: dict) -> int:
         values = (

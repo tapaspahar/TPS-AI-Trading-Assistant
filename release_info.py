@@ -9,9 +9,12 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.2.0"
-LAST_UPDATED_AT = "12-08-2026 14:56:49 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.2.0 - 12-08-2026 14:56 IST"
+LAST_UPDATED_AT = "12-08-2026 15:29:35 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.2.0 - 12-08-2026 15:29 IST"
 RELEASE_NOTES = (
+    "Added TPS Auto Opportunity Radar: an unattended completed-5-minute-candle scanner for NIFTY, BANKNIFTY, SENSEX, configured stock-option watches and Equity Research watchlists.",
+    "Added a permanent opportunity audit with BUY/WAIT/ERROR state, instrument, entry, protective exit, two targets, quantity, R:R, score, evidence and rejection reasons.",
+    "The radar reuses Powerful Engine and existing TPS/OI/liquidity gates, runs automatically after broker connection and every eligible five-minute cycle, and remains research/paper-only without broker order placement.",
     "Added a separate 3:20 Gap Probability Lab for NIFTY, BANKNIFTY and SENSEX with Gap Up, Flat and Gap Down probabilities.",
     "Combined completed Spot/Future trend, futures basis, OI-PCR and optional latest-published official FII/FPI and DII cash flow without inventing unavailable values.",
     "Added permanent forecast history and automatic next-session open verification so TPS can show measured sample accuracy instead of claiming guaranteed prediction.",

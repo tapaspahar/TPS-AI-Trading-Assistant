@@ -38,6 +38,7 @@ NOTIFICATION_LABELS = {
     "smart_money_lab": "Smart Money Lab",
     "pre_candle_lab": "Pre-Candle Lab",
     "powerful_engine": "Powerful Engine",
+    "auto_opportunity": "Auto Opportunity Radar",
     "broker_connection": "Broker connection status",
 }
 

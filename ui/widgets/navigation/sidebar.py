@@ -54,11 +54,12 @@ class Sidebar(QFrame):
         self.optionStrategiesButton = nav("Option Strategies")
         self.putCallRatioButton = nav("Put-Call Ratio")
         self.gapProbabilityButton = nav("3:20 Gap Probability")
+        self.autoOpportunityButton = nav("Auto Opportunity Radar")
         # Keep the visual journey in the same order a trader uses the app:
         # market context -> chart confirmation -> AI evaluation -> option plan -> journal.
         self.buttons = (
             self.dashboardButton, self.liveMarketButton, self.equityButton, self.chartCaptureButton,
-            self.aiButton, self.optionsButton, self.autoAttemptReportButton, self.journalButton,
+            self.aiButton, self.optionsButton, self.autoOpportunityButton, self.autoAttemptReportButton, self.journalButton,
             self.checklistButton, self.riskButton, self.reportButton, self.backtestButton, self.replayButton,
             self.postMarketButton, self.postMarketTpsAnalysisButton, self.nextDayBiasButton, self.casAnalysisButton, self.stockOptionsWatchButton,
             self.optionStrategiesButton, self.putCallRatioButton, self.gapProbabilityButton,
@@ -95,6 +96,7 @@ class Sidebar(QFrame):
             24: self.powerfulEngineButton,
             25: self.putCallRatioButton,
             26: self.gapProbabilityButton,
+            27: self.autoOpportunityButton,
         }
         self.menu_group = QButtonGroup(self)
         self.menu_group.setExclusive(True)
