@@ -9,9 +9,11 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.2.0"
-LAST_UPDATED_AT = "12-08-2026 16:02:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.2.0 - 12-08-2026 16:02 IST"
+LAST_UPDATED_AT = "12-08-2026 16:25:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.2.0 - 12-08-2026 16:25 IST"
 RELEASE_NOTES = (
+    "Made Help Center text, headings, links, safety notes and separators automatically follow every colour theme and UI design style with high-contrast reader colours.",
+    "Help pages now refresh immediately during theme preview without requiring an application restart, while preserving the current reading position.",
     "Rebuilt Help Center as a complete 28-page offline manual in English, Roman Hindi and Hindi, with purpose, main controls, outputs and cautions for every workspace.",
     "Added route-aware Help links: clicking Open this page now jumps directly to the referenced TPS workspace and updates the active sidebar item.",
     "Upgraded Put-Call Ratio into Options Market Intelligence with ATM straddle expected move/range, focused-window Max Pain, bid/ask spread coverage, chain data-quality score and transparent context labels.",

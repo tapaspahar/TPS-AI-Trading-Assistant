@@ -233,6 +233,6 @@ def help_html(language: str) -> str:
     return (
         f'<a name="top"></a><h1>{escape(title)}</h1>'
         f'<p><b>{escape(index_label)}:</b> {toc}</p>'
-        f'<p style="color:#f0b429"><b>Safety:</b> {escape(safety)}</p><hr>'
+        f'<p class="safety"><b>Safety:</b> {escape(safety)}</p><hr>'
         + "".join(sections)
     )

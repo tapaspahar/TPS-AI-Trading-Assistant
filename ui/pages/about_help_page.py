@@ -1,8 +1,78 @@
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QLabel, QScrollArea, QTabWidget, QTextBrowser, QVBoxLayout, QWidget
+from PySide6.QtCore import QEvent, QTimer, Qt, Signal
+from PySide6.QtWidgets import QApplication, QLabel, QScrollArea, QTabWidget, QTextBrowser, QVBoxLayout, QWidget
 
 from release_info import DISPLAY_VERSION, LAST_UPDATED_AT, RELEASE_NOTES, SOFTWARE_UPDATE_VERSION
 from ui.pages.help_content import help_html
+
+
+_DARK_HELP_STYLES = {
+    "skeuomorphism", "neomorphism", "claymorphism", "minimalism", "maximalism",
+    "liquid_glass", "bento_grid", "spatial_ui",
+}
+
+
+def help_document_colors(theme_name: str, ui_style: str) -> dict[str, str]:
+    """Return a high-contrast reader palette for every supported theme/style pair."""
+    if ui_style == "brutalism":
+        return {
+            "text": "#050505", "strong": "#050505", "heading": "#003b66",
+            "link": "#003f9e", "safety": "#7a2600", "line": "#050505",
+        }
+    dark_surface = ui_style in _DARK_HELP_STYLES or theme_name in {"dark", "emerald"}
+    if dark_surface:
+        return {
+            "text": "#eef2ff", "strong": "#ffffff", "heading": "#67e8f9",
+            "link": "#7dd3fc", "safety": "#fcd34d", "line": "#7186aa",
+        }
+    return {
+        "text": "#172033", "strong": "#0b1528", "heading": "#075985",
+        "link": "#1d4ed8", "safety": "#8a3b00", "line": "#94a3b8",
+    }
+
+
+class ThemeAwareHelpBrowser(QTextBrowser):
+    """QTextBrowser whose HTML colours follow TPS theme previews immediately."""
+
+    def __init__(self, language: str):
+        super().__init__()
+        self.language = language
+        self._theme_signature = None
+        self.setObjectName("helpBrowser")
+        self.setOpenExternalLinks(False)
+        self.setOpenLinks(False)
+        self.refresh_theme(force=True)
+
+    def refresh_theme(self, force=False):
+        app = QApplication.instance()
+        theme_name = str(app.property("tpsThemeName") or "dark") if app else "dark"
+        ui_style = str(app.property("tpsUiStyle") or "glassmorphism") if app else "glassmorphism"
+        signature = (theme_name, ui_style)
+        if not force and signature == self._theme_signature:
+            return
+        self._theme_signature = signature
+        colors = help_document_colors(theme_name, ui_style)
+        old_scroll = self.verticalScrollBar().value()
+        self.setStyleSheet(
+            "QTextBrowser#helpBrowser { background: transparent; border: 1px solid palette(mid); "
+            f"border-radius: 12px; padding: 10px; color: {colors['text']}; }}"
+        )
+        self.document().setDefaultStyleSheet(
+            "body { font-family: 'Segoe UI', 'Nirmala UI', sans-serif; font-size: 10.5pt; "
+            f"color: {colors['text']}; }} "
+            f"p, li, td {{ color: {colors['text']}; }} "
+            f"b, strong {{ color: {colors['strong']}; }} "
+            f"h1, h2 {{ color: {colors['heading']}; }} "
+            f"a {{ color: {colors['link']}; font-weight: 600; }} "
+            f"p.safety, p.safety b {{ color: {colors['safety']}; }} "
+            f"hr {{ color: {colors['line']}; background-color: {colors['line']}; height: 1px; border: 0; }}"
+        )
+        self.setHtml(help_html(self.language))
+        QTimer.singleShot(0, lambda: self.verticalScrollBar().setValue(old_scroll))
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        if event.type() in {QEvent.StyleChange, QEvent.PaletteChange, QEvent.ApplicationPaletteChange}:
+            QTimer.singleShot(0, self.refresh_theme)
 
 
 def _scrolling_text(html: str) -> QScrollArea:
@@ -226,20 +296,7 @@ class HelpPage(QWidget):
         layout.addWidget(tabs, 1)
 
     def _manual(self, language):
-        browser = QTextBrowser()
-        browser.setObjectName("helpBrowser")
-        browser.setStyleSheet(
-            "QTextBrowser#helpBrowser { background: transparent; border: 1px solid palette(mid); "
-            "border-radius: 12px; padding: 10px; color: palette(text); }"
-        )
-        browser.document().setDefaultStyleSheet(
-            "body { font-family: 'Segoe UI', 'Nirmala UI', sans-serif; font-size: 10.5pt; } "
-            "h1, h2 { color: #62d6ff; } a { color: #55a7ff; font-weight: 600; } "
-            "hr { color: #54739c; }"
-        )
-        browser.setOpenExternalLinks(False)
-        browser.setOpenLinks(False)
-        browser.setHtml(help_html(language))
+        browser = ThemeAwareHelpBrowser(language)
         browser.anchorClicked.connect(lambda url, view=browser: self._open_link(view, url))
         return browser
 

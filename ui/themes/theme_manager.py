@@ -15,5 +15,7 @@ THEMES = {
 
 def apply_theme(application, theme_name, ui_style="glassmorphism"):
     """Apply a saved visual preference without changing any trading settings."""
+    application.setProperty("tpsThemeName", theme_name)
+    application.setProperty("tpsUiStyle", ui_style)
     base = THEMES.get(theme_name, get_dark_theme)()
     application.setStyleSheet(base + "\n" + get_ui_style_overlay(ui_style))
