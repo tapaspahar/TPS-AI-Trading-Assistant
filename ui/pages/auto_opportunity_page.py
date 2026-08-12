@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.database_manager import Database
+from core.auto_universe_store import AutoUniverseStore
 from services.auto_opportunity_service import AutoOpportunityService
 from services.live_session import LiveSession
 from services.notification_service import NotificationService
@@ -33,7 +34,7 @@ class AutoOpportunityPage(QWidget):
         scroll.setWidget(content); outer.addWidget(scroll)
         title = QLabel("TPS Auto Opportunity Radar"); title.setObjectName("pageTitle"); layout.addWidget(title)
         note = QLabel(
-            "Fully automatic read-only research: after each completed 5-minute candle TPS scans all three index options, Stock Options Watch and Equity Research watchlists. It publishes entry, protective exit, two targets, R:R and exact evidence only when the underlying TPS engine qualifies the setup. No broker order is placed."
+            "Fully automatic read-only research: TPS first discovers the most active and liquid stocks from the complete NSE F&O universe, then after each completed 5-minute candle deeply scans those stocks, their options and all three index options. Manual watchlists remain optional. It publishes entry, protective exit, two targets, R:R and exact evidence only when the underlying TPS engine qualifies the setup. No broker order is placed."
         )
         note.setWordWrap(True); layout.addWidget(note)
         self.status = QLabel("AUTO MODE ON — waiting for broker connection and the next completed 5-minute candle.")
@@ -43,13 +44,15 @@ class AutoOpportunityPage(QWidget):
 
         grid = QGridLayout(); self.cards = {
             "last": DashboardCard("Last automatic scan", "Waiting"),
-            "scope": DashboardCard("Automatic scope", "3 indices\nConfigured watchlists"),
+            "scope": DashboardCard("Automatic scope", "3 indices\nFull F&O discovery"),
             "actionable": DashboardCard("Current candidates", "0"),
             "mode": DashboardCard("Execution mode", "RESEARCH / PAPER\nNo broker order"),
         }
         for column, card in enumerate(self.cards.values()):
             card.set_compact(True); card.setMinimumHeight(92); grid.addWidget(card, 0, column)
         layout.addLayout(grid)
+        self.auto_selection = QLabel("Auto-selected F&O stocks: waiting for the first live universe scan.")
+        self.auto_selection.setWordWrap(True); layout.addWidget(self.auto_selection)
         table_box = QGroupBox("Latest automatic market opportunities")
         table_layout = QVBoxLayout(table_box)
         self.table = QTableWidget(0, 14)
@@ -109,6 +112,10 @@ class AutoOpportunityPage(QWidget):
         actionable = [row for row in results if row.get("action") not in ("WAIT", "ERROR")]
         self.cards["last"].set_value(datetime.now().strftime("%d-%m-%Y\n%H:%M:%S"))
         self.cards["actionable"].set_value(str(len(actionable)))
+        selected = AutoUniverseStore().load()
+        if selected:
+            labels = [f"{row['underlying']} ({float(row.get('selection_score') or 0):.0f})" for row in selected]
+            self.auto_selection.setText("Auto-selected F&O stocks for deep scan: " + " | ".join(labels))
         self.status.setText(
             f"AUTO MODE ON — {len(results)} instruments evaluated | {len(actionable)} research candidate(s). Next scan after next completed 5-minute candle."
         )

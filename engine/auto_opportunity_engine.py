@@ -62,7 +62,10 @@ def equity_opportunity(equity: dict, result: dict, candle_time=None) -> dict:
         "quantity": None,
         "rr_ratio": round((float(result["target_1"]) - float(result["entry"])) / max(float(result["entry"]) - float(result["stop_loss"]), .01), 2) if ready else None,
         "blockers": [] if ready else [result.get("plan_note", "Long setup not ready")],
-        "evidence": [f"Structure {result.get('state')}", f"Score {score:.0f}/100", result.get("volume_signal", "Volume unavailable")],
+        "evidence": [item for item in (
+            equity.get("selection_reason"), f"Structure {result.get('state')}",
+            f"Score {score:.0f}/100", result.get("volume_signal", "Volume unavailable"),
+        ) if item],
         "exit_rule": "Enter only after a completed close above trigger with volume; exit at stop, targets, or bearish structure reversal.",
     }
 
@@ -88,4 +91,7 @@ def _evidence(result):
 
 def _stock_evidence(result):
     strategy = result.get("strategy") or {}
-    return [f"Candidate {result.get('candidate')}", f"Score {strategy.get('score', 0)}/100", f"State {result.get('state')}"]
+    return [item for item in (
+        result.get("selection_reason"), f"Candidate {result.get('candidate')}",
+        f"Score {strategy.get('score', 0)}/100", f"State {result.get('state')}",
+    ) if item]

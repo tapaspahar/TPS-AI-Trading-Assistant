@@ -11,6 +11,7 @@ from core.settings_store import SettingsStore
 from core.stock_option_watchlist_store import StockOptionWatchlistStore
 from services.powerful_engine_service import PowerfulEngineService
 from services.stock_derivative_service import StockDerivativeService, _completed
+from services.auto_universe_service import AutoUniverseService
 
 
 class AutoOpportunityService:
@@ -22,7 +23,17 @@ class AutoOpportunityService:
 
     def scan(self, progress=None):
         results = []
-        tasks = 3 + len(StockOptionWatchlistStore().load()) + len(EquityWatchlistStore().load())
+        auto_selected = []
+        try:
+            if progress:
+                progress(0, 1, "Auto-selecting liquid F&O stocks")
+            auto_selected = AutoUniverseService(self.client).discover()
+        except Exception as error:
+            results.append(error_opportunity("AUTO DISCOVERY", "F&O UNIVERSE", error))
+
+        stock_rows = _merge_candidates(auto_selected, StockOptionWatchlistStore().load(), 8, "underlying")
+        equity_rows = _merge_candidates(auto_selected, EquityWatchlistStore().load(), 8, "symbol")
+        tasks = 3 + len(stock_rows) + len(equity_rows)
         done = 0
 
         def update(label):
@@ -40,15 +51,18 @@ class AutoOpportunityService:
             update(symbol)
 
         stocks = StockDerivativeService(self.client)
-        for equity in StockOptionWatchlistStore().load():
+        for equity in stock_rows:
             symbol = equity.get("underlying", "STOCK")
             try:
-                results.append(stock_option_opportunity(stocks.analyze_option_setup(equity, self.settings)))
+                analyzed = stocks.analyze_option_setup(equity, self.settings)
+                analyzed["selection_reason"] = equity.get("selection_reason")
+                analyzed["selection_source"] = equity.get("selection_source", "MANUAL WATCHLIST")
+                results.append(stock_option_opportunity(analyzed))
             except Exception as error:  # One unavailable contract must not suppress other opportunities.
                 results.append(error_opportunity("STOCK OPTION", symbol, error))
             update(symbol)
 
-        for equity in EquityWatchlistStore().load():
+        for equity in equity_rows:
             symbol = equity.get("symbol", "EQUITY")
             try:
                 candles = _completed(self.client.get_recent_candles(equity["exchange"], equity["token"], "FIVE_MINUTE", 5))
@@ -58,3 +72,16 @@ class AutoOpportunityService:
                 results.append(error_opportunity("CASH EQUITY", symbol, error))
             update(symbol)
         return results
+
+
+def _merge_candidates(automatic, manual, limit, identity):
+    """Keep automatic discovery first and fill remaining API-safe slots manually."""
+    rows, seen = [], set()
+    for item in list(automatic) + list(manual):
+        key = str(item.get(identity, "")).upper().strip()
+        if not key or key in seen:
+            continue
+        seen.add(key); rows.append(dict(item))
+        if len(rows) >= limit:
+            break
+    return rows

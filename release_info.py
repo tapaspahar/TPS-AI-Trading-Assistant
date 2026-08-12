@@ -9,9 +9,11 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.2.0"
-LAST_UPDATED_AT = "12-08-2026 15:29:35 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.2.0 - 12-08-2026 15:29 IST"
+LAST_UPDATED_AT = "12-08-2026 15:39:27 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.2.0 - 12-08-2026 15:39 IST"
 RELEASE_NOTES = (
+    "Auto Opportunity Radar now discovers its own liquid, active candidates from the complete NSE F&O stock universe; a manual watchlist is no longer required.",
+    "Added a rate-conscious two-stage scan: lightweight universe ranking by turnover, movement and intraday participation, followed by deep TPS candle, futures and option-chain validation only for the strongest shortlist.",
     "Added TPS Auto Opportunity Radar: an unattended completed-5-minute-candle scanner for NIFTY, BANKNIFTY, SENSEX, configured stock-option watches and Equity Research watchlists.",
     "Added a permanent opportunity audit with BUY/WAIT/ERROR state, instrument, entry, protective exit, two targets, quantity, R:R, score, evidence and rejection reasons.",
     "The radar reuses Powerful Engine and existing TPS/OI/liquidity gates, runs automatically after broker connection and every eligible five-minute cycle, and remains research/paper-only without broker order placement.",
