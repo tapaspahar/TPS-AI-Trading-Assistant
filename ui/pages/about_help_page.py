@@ -182,7 +182,7 @@ class AboutPage(QWidget):
         return f"""
         <h2>Software Update — {SOFTWARE_UPDATE_VERSION}</h2>
         <p><b>Updated:</b> {LAST_UPDATED_AT}<br>
-        <b>Release status:</b> Release 1.1 development build; published Release 1.0 remains unchanged.</p>
+        <b>Release status:</b> Published Release 1.2.</p>
         <h3>What was built today</h3>
         <ul>{notes}</ul>
         <h3>Roman Hindi summary</h3>

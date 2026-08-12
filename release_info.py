@@ -1,16 +1,16 @@
 """Application release metadata kept in one place."""
 
 APP_NAME = "TPS AI Trading Assistant"
-VERSION = "1.1.0"
-DISPLAY_VERSION = "Release 1.1"
-RELEASE_DATE = "10-08-2026"
+VERSION = "1.2.0"
+DISPLAY_VERSION = "Release 1.2"
+RELEASE_DATE = "12-08-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
-SOFTWARE_UPDATE_VERSION = "v1.1.0"
-LAST_UPDATED_AT = "12-08-2026 12:30:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.1.0 • 12-08-2026 12:30 IST"
+SOFTWARE_UPDATE_VERSION = "v1.2.0"
+LAST_UPDATED_AT = "12-08-2026 13:00:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.2.0 • 12-08-2026 13:00 IST"
 RELEASE_NOTES = (
     "Protected saved settings across source updates, new builds and installer upgrades with AppData migration, atomic writes and automatic backup recovery.",
     "Added support/resistance proximity alerts when live price enters or crosses the chart levels marked by TPS.",
