@@ -7,7 +7,7 @@ import csv
 import json
 import os
 import shutil
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from engine.tps_engine import TPSEngine
 from models.trade import Trade
@@ -213,7 +213,123 @@ class Database:
         self.cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_pcr_symbol_expiry_time ON pcr_observations(symbol, expiry, captured_at DESC)"
         )
+        self.cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS gap_probability_forecasts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                forecast_date TEXT NOT NULL,
+                target_date TEXT NOT NULL,
+                generated_at TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                stage TEXT NOT NULL,
+                predicted_class TEXT NOT NULL,
+                gap_up_probability REAL NOT NULL,
+                flat_probability REAL NOT NULL,
+                gap_down_probability REAL NOT NULL,
+                confidence INTEGER NOT NULL,
+                data_quality INTEGER NOT NULL,
+                prior_close REAL NOT NULL,
+                inputs_json TEXT NOT NULL,
+                evidence_json TEXT NOT NULL,
+                actual_open REAL,
+                actual_gap_percent REAL,
+                actual_class TEXT,
+                correct INTEGER,
+                UNIQUE(forecast_date, symbol, stage)
+            )
+            """
+        )
+        self.cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_gap_forecast_symbol_date ON gap_probability_forecasts(symbol, forecast_date DESC)"
+        )
         self.connection.commit()
+
+    def save_gap_probability_forecast(self, forecast: dict) -> int:
+        values = (
+            forecast["forecast_date"], forecast["target_date"], forecast["generated_at"],
+            str(forecast["symbol"]).upper(), forecast["stage"], forecast["predicted_class"],
+            float(forecast["gap_up_probability"]), float(forecast["flat_probability"]),
+            float(forecast["gap_down_probability"]), int(forecast["confidence"]),
+            int(forecast["data_quality"]), float(forecast["prior_close"]),
+            json.dumps(forecast.get("inputs") or {}, ensure_ascii=False, default=str),
+            json.dumps(forecast.get("evidence") or [], ensure_ascii=False, default=str),
+        )
+        self.cursor.execute(
+            """
+            INSERT INTO gap_probability_forecasts (
+                forecast_date, target_date, generated_at, symbol, stage, predicted_class,
+                gap_up_probability, flat_probability, gap_down_probability, confidence,
+                data_quality, prior_close, inputs_json, evidence_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(forecast_date, symbol, stage) DO UPDATE SET
+                target_date=excluded.target_date, generated_at=excluded.generated_at,
+                predicted_class=excluded.predicted_class,
+                gap_up_probability=excluded.gap_up_probability,
+                flat_probability=excluded.flat_probability,
+                gap_down_probability=excluded.gap_down_probability,
+                confidence=excluded.confidence, data_quality=excluded.data_quality,
+                prior_close=excluded.prior_close, inputs_json=excluded.inputs_json,
+                evidence_json=excluded.evidence_json
+            """,
+            values,
+        )
+        self.connection.commit()
+        row = self.cursor.execute(
+            "SELECT id FROM gap_probability_forecasts WHERE forecast_date=? AND symbol=? AND stage=?",
+            (values[0], values[3], values[4]),
+        ).fetchone()
+        return int(row["id"])
+
+    def get_gap_probability_forecasts(self, symbol: str | None = None, limit: int = 100):
+        query, values = "SELECT * FROM gap_probability_forecasts", []
+        if symbol:
+            query += " WHERE symbol = ?"
+            values.append(str(symbol).upper())
+        query += " ORDER BY forecast_date DESC, generated_at DESC LIMIT ?"
+        values.append(max(1, min(int(limit), 1000)))
+        return self.cursor.execute(query, values).fetchall()
+
+    def resolve_gap_probability_outcomes(self, threshold_percent: float = 0.15) -> int:
+        """Attach the first saved target-session open to unresolved forecasts."""
+        unresolved = self.cursor.execute(
+            "SELECT * FROM gap_probability_forecasts WHERE actual_class IS NULL"
+        ).fetchall()
+        updated = 0
+        for row in unresolved:
+            try:
+                forecast_day = datetime.strptime(row["forecast_date"], "%Y-%m-%d").date()
+            except ValueError:
+                continue
+            candidates = self.cursor.execute(
+                """SELECT trade_date, captured_at, open FROM market_snapshots
+                   WHERE symbol=? AND timeframe='5m'
+                   AND substr(captured_at, 12, 5) BETWEEN '09:15' AND '09:25'
+                   ORDER BY captured_at ASC, id ASC""",
+                (row["symbol"],),
+            ).fetchall()
+            opening = None
+            for candidate in candidates:
+                try:
+                    session_day = datetime.strptime(candidate["trade_date"], "%d-%m-%Y").date()
+                except ValueError:
+                    continue
+                if forecast_day < session_day <= forecast_day + timedelta(days=7):
+                    opening = candidate
+                    break
+            if not opening or float(row["prior_close"] or 0) <= 0:
+                continue
+            actual_open = float(opening["open"])
+            gap_percent = (actual_open - float(row["prior_close"])) / float(row["prior_close"]) * 100
+            actual_class = "GAP UP" if gap_percent >= threshold_percent else "GAP DOWN" if gap_percent <= -threshold_percent else "FLAT / INSIDE"
+            correct = int(actual_class == row["predicted_class"])
+            self.cursor.execute(
+                """UPDATE gap_probability_forecasts
+                   SET target_date=?, actual_open=?, actual_gap_percent=?, actual_class=?, correct=? WHERE id=?""",
+                (session_day.isoformat(), actual_open, gap_percent, actual_class, correct, row["id"]),
+            )
+            updated += 1
+        self.connection.commit()
+        return updated
 
     def save_pcr_observation(self, observation: dict) -> int:
         result = self.cursor.execute(

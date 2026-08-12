@@ -89,6 +89,10 @@ class AboutPage(QWidget):
           <li>Use <b>Option Strategies</b> to review a VIX/regime-aware limited-risk structure. TPS may suggest a
           Bull Call Debit Spread, Bear Put Debit Spread or Defined-Risk Iron Condor, and shows every leg plus
           one-lot maximum profit/loss. WAIT means the live payoff is not clean enough.</li>
+          <li>At or after 3:20 PM, use <b>3:20 Gap Probability</b> to save a separate Gap Up, Flat or Gap Down
+          probability for the next session. Latest published official FII/DII cash flow is optional because
+          same-day final institutional totals may not be complete at 3:20 PM. The next saved market open is
+          matched automatically so forecast accuracy can be measured over time.</li>
           <li>Use <b>Trade Journal</b> for planned entry, stop loss, target, actual exit and review notes.</li>
         </ol>
         <h3>Workspace guide</h3>
@@ -145,6 +149,9 @@ class AboutPage(QWidget):
           <li><b>Option Strategies</b> me VIX aur market regime ke hisaab se limited-risk structure review kijiye.
           TPS Bull Call Debit Spread, Bear Put Debit Spread ya Defined-Risk Iron Condor suggest kar sakta hai aur
           har leg ke saath one-lot maximum profit/loss dikhayega. WAIT ka matlab clean payoff abhi nahi bana.</li>
+          <li>3:20 PM ke baad <b>3:20 Gap Probability</b> me agle session ka Gap Up, Flat ya Gap Down probability
+          save kijiye. Latest published official FII/DII cash flow optional hai, kyunki same-day final total
+          3:20 PM par complete na bhi ho sakta hai. Agle din ka saved open TPS khud match karke accuracy dikhayega.</li>
           <li><b>Trade Journal</b> me entry, stop loss, target, actual exit aur review notes record kijiye.</li>
         </ol>
         <h3>Har page ka kaam</h3>

@@ -29,6 +29,7 @@ from ui.pages.post_market_tps_analysis_page import PostMarketTpsAnalysisPage
 from ui.pages.pre_candle_page import PreCandlePage
 from ui.pages.powerful_engine_page import PowerfulEnginePage
 from ui.pages.put_call_ratio_page import PutCallRatioPage
+from ui.pages.gap_probability_page import GapProbabilityPage
 from ui.widgets.glass_effects import add_glass_shadow
 from ui.widgets.accessible_scroll import configure_scroll_area
 from services.post_market_tps_analysis import ensure_completed_post_market_reports
@@ -81,12 +82,14 @@ class DashboardScreen(QWidget):
         self.preCandlePage = PreCandlePage()
         self.powerfulEnginePage = PowerfulEnginePage()
         self.putCallRatioPage = PutCallRatioPage()
+        self.gapProbabilityPage = GapProbabilityPage()
         for page in (self.dashboardPage, self.liveMarketPage, self.optionsPage, self.chartCapturePage, self.journalPage,
                      self.checklistPage, self.aiPage, self.riskPage, self.reportsPage, self.settingsPage,
                      self.backtestPage, self.postMarketPage, self.replayPage, self.equityPage,
                      self.autoAttemptReportPage, self.aboutPage, self.helpPage, self.nextDayBiasPage,
                      self.smartMoneyPage, self.casAnalysisPage, self.stockOptionsWatchPage, self.optionStrategiesPage,
-                     self.postMarketTpsAnalysisPage, self.preCandlePage, self.powerfulEnginePage, self.putCallRatioPage):
+                     self.postMarketTpsAnalysisPage, self.preCandlePage, self.powerfulEnginePage, self.putCallRatioPage,
+                     self.gapProbabilityPage):
             self.stack.addWidget(page)
         self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
         self.journalPage.trade_saved.connect(self.reportsPage.refresh)
@@ -130,6 +133,7 @@ class DashboardScreen(QWidget):
         self.sidebar.preCandleButton.clicked.connect(lambda _checked=False: self.show_page(23))
         self.sidebar.powerfulEngineButton.clicked.connect(lambda _checked=False: self.show_page(24))
         self.sidebar.putCallRatioButton.clicked.connect(lambda _checked=False: self.show_page(25))
+        self.sidebar.gapProbabilityButton.clicked.connect(lambda _checked=False: self.show_page(26))
         body_layout.addWidget(self.stack)
         main_layout.addLayout(body_layout, 1)
         self.informationPanel = InformationPanel()
@@ -243,6 +247,8 @@ class DashboardScreen(QWidget):
             self.postMarketTpsAnalysisPage.refresh(auto_generate=True)
         elif index == 25:
             self.putCallRatioPage.refresh()
+        elif index == 26:
+            self.gapProbabilityPage.refresh_history()
         self.stack.setCurrentIndex(index)
 
     def handle_ai_decision(self, context):

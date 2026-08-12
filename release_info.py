@@ -9,9 +9,12 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.2.0"
-LAST_UPDATED_AT = "12-08-2026 13:00:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.2.0 • 12-08-2026 13:00 IST"
+LAST_UPDATED_AT = "12-08-2026 14:56:49 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.2.0 - 12-08-2026 14:56 IST"
 RELEASE_NOTES = (
+    "Added a separate 3:20 Gap Probability Lab for NIFTY, BANKNIFTY and SENSEX with Gap Up, Flat and Gap Down probabilities.",
+    "Combined completed Spot/Future trend, futures basis, OI-PCR and optional latest-published official FII/FPI and DII cash flow without inventing unavailable values.",
+    "Added permanent forecast history and automatic next-session open verification so TPS can show measured sample accuracy instead of claiming guaranteed prediction.",
     "Protected saved settings across source updates, new builds and installer upgrades with AppData migration, atomic writes and automatic backup recovery.",
     "Added support/resistance proximity alerts when live price enters or crosses the chart levels marked by TPS.",
     "Added a Put-Call Ratio & OI Observer for Call OI, Put OI, change in OI, OI-PCR, Volume-PCR, OI walls and explainable sentiment context.",

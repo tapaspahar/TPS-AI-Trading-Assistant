@@ -80,6 +80,26 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual((saved["sentiment"], saved["pcr_oi"]), ("BULLISH OI BIAS", 1.2))
         self.assertEqual(len(self.db.get_pcr_observations("NIFTY")), 1)
 
+    def test_gap_probability_forecast_is_saved_and_resolved_from_next_open(self):
+        forecast = {
+            "forecast_date": "2026-08-12", "target_date": "2026-08-13",
+            "generated_at": "2026-08-12T15:21:00+05:30", "symbol": "NIFTY", "stage": "3:20 FINAL",
+            "predicted_class": "GAP UP", "gap_up_probability": 48.0, "flat_probability": 30.0,
+            "gap_down_probability": 22.0, "confidence": 61, "data_quality": 90,
+            "prior_close": 25000, "inputs": {"fii_net": 1000}, "evidence": ["test"],
+        }
+        self.db.save_gap_probability_forecast(forecast)
+        self.db.save_market_snapshot({
+            "captured_at": "2026-08-13T09:15:00+05:30", "trade_date": "13-08-2026", "symbol": "NIFTY", "timeframe": "5m",
+            "open": 25050, "high": 25060, "low": 25040, "close": 25055, "volume": 100, "volume_ema": 90,
+            "ema_5": 25050, "ema_20": 25020, "ema_50": 25000, "vwap": 25048, "supertrend": 25010,
+            "rsi_14": 60, "atr_14": 20, "oi_pcr": 1.0, "volume_pcr": 1.0,
+            "put_support": 25000, "call_resistance": 25100, "option_contracts": 10,
+        })
+        self.assertEqual(self.db.resolve_gap_probability_outcomes(), 1)
+        saved = self.db.get_gap_probability_forecasts("NIFTY")[0]
+        self.assertEqual((saved["actual_class"], saved["correct"]), ("GAP UP", 1))
+
     def test_auto_trade_attempt_history_deduplicates_candles_and_exports(self):
         result = {
             "status": "No paper trade: TPS v2 confirmations 4/6.",
