@@ -9,9 +9,11 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.2.0"
-LAST_UPDATED_AT = "12-08-2026 15:45:52 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.2.0 - 12-08-2026 15:45 IST"
+LAST_UPDATED_AT = "12-08-2026 16:02:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.2.0 - 12-08-2026 16:02 IST"
 RELEASE_NOTES = (
+    "Rebuilt Help Center as a complete 28-page offline manual in English, Roman Hindi and Hindi, with purpose, main controls, outputs and cautions for every workspace.",
+    "Added route-aware Help links: clicking Open this page now jumps directly to the referenced TPS workspace and updates the active sidebar item.",
     "Upgraded Put-Call Ratio into Options Market Intelligence with ATM straddle expected move/range, focused-window Max Pain, bid/ask spread coverage, chain data-quality score and transparent context labels.",
     "Added live-premium Black-Scholes ATM IV/Greeks estimates when expiry inputs are safe, while clearly withholding estimates when data is incomplete.",
     "Added estimated whole-position Delta, Gamma, Theta and Vega to valid limited-risk option strategies, plus expected-move, Max-Pain and chain-quality evidence in strategy and automatic opportunity reports.",

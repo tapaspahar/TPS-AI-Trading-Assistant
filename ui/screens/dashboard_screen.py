@@ -115,6 +115,7 @@ class DashboardScreen(QWidget):
         self.liveMarketPage.structure_received.connect(self.notify_market_structure)
         self.liveMarketPage.level_alert.connect(self.notify_support_resistance)
         self.putCallRatioPage.sentiment_changed.connect(self.notify_pcr_sentiment)
+        self.helpPage.page_requested.connect(self.show_page)
         self.optionsPage.auto_attempt_saved.connect(self.autoAttemptReportPage.refresh)
         self.optionsPage.open_chart_capture.connect(lambda: self.show_page(3))
         self.settingsPage.live_connected.connect(self.start_default_nifty)

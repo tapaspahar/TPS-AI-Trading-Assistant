@@ -1,7 +1,8 @@
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QScrollArea, QTabWidget, QVBoxLayout, QWidget
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import QLabel, QScrollArea, QTabWidget, QTextBrowser, QVBoxLayout, QWidget
 
 from release_info import DISPLAY_VERSION, LAST_UPDATED_AT, RELEASE_NOTES, SOFTWARE_UPDATE_VERSION
+from ui.pages.help_content import help_html
 
 
 def _scrolling_text(html: str) -> QScrollArea:
@@ -202,7 +203,9 @@ class AboutPage(QWidget):
 
 
 class HelpPage(QWidget):
-    """Offline operating guide in English and Roman Hindi."""
+    """Offline trilingual operating guide with direct workspace routing."""
+
+    page_requested = Signal(int)
 
     def __init__(self):
         super().__init__()
@@ -212,11 +215,39 @@ class HelpPage(QWidget):
         title = QLabel("Help Center")
         title.setObjectName("pageTitle")
         layout.addWidget(title)
-        subtitle = QLabel("Step-by-step application guide available offline in two languages.")
+        subtitle = QLabel("Complete offline guide in English, Roman Hindi and Hindi. Click any 'Open this page' link to jump directly to that TPS workspace.")
         subtitle.setWordWrap(True)
         layout.addWidget(subtitle)
         tabs = QTabWidget()
-        tabs.addTab(_scrolling_text(AboutPage._english_help()), "English")
-        tabs.addTab(_scrolling_text(AboutPage._hindi_help()), "Roman Hindi")
+        tabs.addTab(self._manual("en"), "English")
+        tabs.addTab(self._manual("roman"), "Roman Hindi")
+        tabs.addTab(self._manual("hi"), "हिंदी")
         tabs.addTab(_scrolling_text(AboutPage._release_notes_html()), "Release Notes")
         layout.addWidget(tabs, 1)
+
+    def _manual(self, language):
+        browser = QTextBrowser()
+        browser.setObjectName("helpBrowser")
+        browser.setStyleSheet(
+            "QTextBrowser#helpBrowser { background: transparent; border: 1px solid palette(mid); "
+            "border-radius: 12px; padding: 10px; color: palette(text); }"
+        )
+        browser.document().setDefaultStyleSheet(
+            "body { font-family: 'Segoe UI', 'Nirmala UI', sans-serif; font-size: 10.5pt; } "
+            "h1, h2 { color: #62d6ff; } a { color: #55a7ff; font-weight: 600; } "
+            "hr { color: #54739c; }"
+        )
+        browser.setOpenExternalLinks(False)
+        browser.setOpenLinks(False)
+        browser.setHtml(help_html(language))
+        browser.anchorClicked.connect(lambda url, view=browser: self._open_link(view, url))
+        return browser
+
+    def _open_link(self, browser, url):
+        if url.scheme() == "tps" and url.host() == "page":
+            try:
+                self.page_requested.emit(int(url.path().strip("/")))
+            except ValueError:
+                return
+        elif url.fragment():
+            browser.scrollToAnchor(url.fragment())
