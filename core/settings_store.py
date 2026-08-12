@@ -37,6 +37,35 @@ DEFAULT_SETTINGS = {
     "theme": "dark",
     "ui_style": "glassmorphism",
     "broker_provider": "angel_one",
+    "notifications_enabled": True,
+    "notification_sound": True,
+    "notification_preferences": {
+        "trade_capture": True,
+        "trade_exit": True,
+        "target_achieved": True,
+        "stop_loss": True,
+        "market_snapshot": True,
+        "market_structure": True,
+        "auto_attempt_report": False,
+        "equity_research": False,
+        "chart_capture": False,
+        "ai_analysis": True,
+        "trade_journal": True,
+        "risk_manager": True,
+        "reports": False,
+        "backtesting": False,
+        "candle_replay": False,
+        "post_market_report": True,
+        "post_market_analysis": True,
+        "next_day_bias": True,
+        "cas_analysis": False,
+        "stock_options_watch": True,
+        "option_strategies": True,
+        "smart_money_lab": True,
+        "pre_candle_lab": False,
+        "powerful_engine": True,
+        "broker_connection": True,
+    },
 }
 
 
@@ -50,7 +79,12 @@ class SettingsStore:
             saved = json.loads(self.path.read_text(encoding="utf-8"))
         except (FileNotFoundError, json.JSONDecodeError):
             saved = {}
-        return {**DEFAULT_SETTINGS, **saved}
+        values = {**DEFAULT_SETTINGS, **saved}
+        values["notification_preferences"] = {
+            **DEFAULT_SETTINGS["notification_preferences"],
+            **(saved.get("notification_preferences") or {}),
+        }
+        return values
 
     def save(self, settings: dict) -> dict:
         values = {
@@ -79,6 +113,12 @@ class SettingsStore:
             "theme": str(settings.get("theme", self.load()["theme"])).lower(),
             "ui_style": str(settings.get("ui_style", self.load()["ui_style"])).lower(),
             "broker_provider": str(settings.get("broker_provider", self.load()["broker_provider"])).lower(),
+            "notifications_enabled": bool(settings.get("notifications_enabled", self.load()["notifications_enabled"])),
+            "notification_sound": bool(settings.get("notification_sound", self.load()["notification_sound"])),
+            "notification_preferences": {
+                **self.load()["notification_preferences"],
+                **dict(settings.get("notification_preferences", {})),
+            },
         }
         if values["capital"] <= 0 or not 0 < values["risk_percent"] <= 100:
             raise ValueError("Capital must be positive and risk percentage must be between 0 and 100.")

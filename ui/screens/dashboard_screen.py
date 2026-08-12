@@ -31,6 +31,7 @@ from ui.pages.powerful_engine_page import PowerfulEnginePage
 from ui.widgets.glass_effects import add_glass_shadow
 from ui.widgets.accessible_scroll import configure_scroll_area
 from services.post_market_tps_analysis import ensure_completed_post_market_reports
+from services.notification_service import NotificationService
 
 
 class DashboardScreen(QWidget):
@@ -41,6 +42,8 @@ class DashboardScreen(QWidget):
         main_layout.setContentsMargins(14, 12, 14, 10)
         main_layout.setSpacing(10)
         self.header = Header()
+        self.notifier = NotificationService.instance(self)
+        self._market_states = {}
         add_glass_shadow(self.header)
         main_layout.addWidget(self.header)
         body_layout = QHBoxLayout()
@@ -98,6 +101,11 @@ class DashboardScreen(QWidget):
         self.optionsPage.paper_trade_closed.connect(lambda _closed: self.journalPage.load_trades())
         self.optionsPage.paper_trade_closed.connect(lambda _closed: self.dashboardPage.refresh())
         self.optionsPage.paper_trade_closed.connect(lambda _closed: self.reportsPage.refresh())
+        self.optionsPage.paper_trade_captured.connect(self.notify_trade_capture)
+        self.optionsPage.paper_trade_closed.connect(self.notify_trade_closed)
+        self.optionsPage.auto_paper_status.connect(self.notify_auto_attempt)
+        self.liveMarketPage.guard_alert.connect(self.notify_market_guard)
+        self.liveMarketPage.structure_received.connect(self.notify_market_structure)
         self.optionsPage.auto_attempt_saved.connect(self.autoAttemptReportPage.refresh)
         self.optionsPage.open_chart_capture.connect(lambda: self.show_page(3))
         self.settingsPage.live_connected.connect(self.start_default_nifty)
@@ -143,6 +151,56 @@ class DashboardScreen(QWidget):
             return
         if updated and self.stack.currentIndex() == 22:
             self.postMarketTpsAnalysisPage.refresh(auto_generate=False)
+        if updated:
+            count = len(updated) if hasattr(updated, "__len__") else updated
+            self.notifier.notify(
+                "post_market_analysis", "TPS post-market report ready",
+                f"{count} completed market-day report(s) were generated.",
+            )
+
+    def notify_trade_capture(self, plan):
+        contract = plan.get("contract") or {}
+        symbol = contract.get("symbol") or plan.get("symbol") or "Option trade"
+        self.notifier.notify(
+            "trade_capture", "TPS paper trade captured",
+            f"{symbol} | Entry {float(plan.get('entry', 0)):.2f} | Stop {float(plan.get('stoploss', 0)):.2f} | Target {float(plan.get('target', 0)):.2f}",
+        )
+
+    def notify_trade_closed(self, closed):
+        for item in closed or []:
+            outcome = str(item.get("outcome", "TRADE EXIT")).upper()
+            category = "target_achieved" if outcome == "TARGET HIT" else "stop_loss" if "STOP" in outcome else "trade_exit"
+            self.notifier.notify(
+                category, f"TPS paper trade: {outcome}",
+                f"{item.get('symbol', 'Option trade')} exited at {float(item.get('ltp', 0)):.2f}.",
+            )
+
+    def notify_auto_attempt(self, result):
+        if not isinstance(result, dict) or result.get("plan"):
+            return
+        attempt = result.get("attempt") or {}
+        self.notifier.notify(
+            "auto_attempt_report", "TPS auto-trade evaluation completed",
+            f"{attempt.get('candle_time') or 'Latest candle'} | {result.get('status', 'No trade captured')}",
+        )
+
+    def notify_market_guard(self, alert):
+        self.notifier.notify(
+            "risk_manager", alert.get("title", "TPS Open Trade Guard"),
+            alert.get("message", "An open-trade risk condition needs review."),
+        )
+
+    def notify_market_structure(self, result):
+        key = (result.get("symbol"), result.get("timeframe", "5m"))
+        state = result.get("state")
+        previous = self._market_states.get(key)
+        self._market_states[key] = state
+        if previous is None or previous == state:
+            return
+        self.notifier.notify(
+            "market_structure", "TPS market structure changed",
+            f"{key[0]} {key[1]} changed from {previous} to {state}. Support {result.get('support', 0):,.2f}; resistance {result.get('resistance', 0):,.2f}.",
+        )
 
     def show_page(self, index: int):
         self.sidebar.set_active(index)

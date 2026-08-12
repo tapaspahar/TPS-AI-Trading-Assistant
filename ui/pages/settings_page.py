@@ -4,7 +4,7 @@ from PySide6.QtCore import QUrl, Qt, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QFormLayout, QFrame, QGroupBox, QHBoxLayout, QLabel, QLayout,
-    QLineEdit, QMessageBox, QPushButton, QScrollArea, QVBoxLayout, QWidget,
+    QLineEdit, QMessageBox, QPushButton, QScrollArea, QVBoxLayout, QWidget, QGridLayout,
 )
 
 from core.settings_store import SettingsStore
@@ -15,6 +15,7 @@ from services.credential_store import BrokerCredentialStore
 from services.live_session import LiveSession
 from ui.themes.theme_manager import apply_theme
 from ui.themes.ui_styles import UI_STYLE_NAMES
+from services.notification_service import NOTIFICATION_LABELS, NotificationService
 
 
 class SettingsPage(QWidget):
@@ -98,6 +99,34 @@ class SettingsPage(QWidget):
         save.clicked.connect(self.save)
         layout.addWidget(save)
         layout.addWidget(QLabel("Settings are stored only on this computer. They do not connect to a broker or place trades."))
+        notification_box = QGroupBox("Notification Center - desktop alerts")
+        notification_layout = QVBoxLayout(notification_box)
+        self.notifications_enabled = QCheckBox("Enable TPS desktop notifications")
+        self.notifications_enabled.setChecked(values["notifications_enabled"])
+        self.notification_sound = QCheckBox("Play notification sound")
+        self.notification_sound.setChecked(values["notification_sound"])
+        notification_layout.addWidget(self.notifications_enabled)
+        notification_layout.addWidget(self.notification_sound)
+        notification_note = QLabel(
+            "Choose which page or trading event may show a Windows desktop alert. Routine 5-minute rejections are OFF by default to avoid popup noise."
+        )
+        notification_note.setWordWrap(True)
+        notification_layout.addWidget(notification_note)
+        notification_grid = QGridLayout()
+        notification_grid.setHorizontalSpacing(18)
+        notification_grid.setVerticalSpacing(6)
+        self.notification_checks = {}
+        preferences = values["notification_preferences"]
+        for index, (key, label) in enumerate(NOTIFICATION_LABELS.items()):
+            check = QCheckBox(label)
+            check.setChecked(bool(preferences.get(key, False)))
+            self.notification_checks[key] = check
+            notification_grid.addWidget(check, index // 3, index % 3)
+        notification_layout.addLayout(notification_grid)
+        test_notification = QPushButton("Send Test Desktop Notification")
+        test_notification.clicked.connect(lambda: NotificationService.instance().test())
+        notification_layout.addWidget(test_notification)
+        layout.addWidget(notification_box)
         safety_box = QGroupBox("Economic calendar and lifecycle safety")
         safety_form = QFormLayout(safety_box)
         self.calendar_enabled = QCheckBox("Use automatic economic calendar")
@@ -187,12 +216,17 @@ class SettingsPage(QWidget):
                 "theme": self.theme.currentData(),
                 "ui_style": self.ui_style.currentData(),
                 "broker_provider": self.broker_provider.currentData(),
+                "notifications_enabled": self.notifications_enabled.isChecked(),
+                "notification_sound": self.notification_sound.isChecked(),
+                "notification_preferences": {
+                    key: check.isChecked() for key, check in self.notification_checks.items()
+                },
             })
         except ValueError as error:
             QMessageBox.warning(self, "Invalid settings", str(error))
             return
         apply_theme(QApplication.instance(), self.theme.currentData(), self.ui_style.currentData())
-        QMessageBox.information(self, "Settings saved", "Settings, colour theme, and UI design style have been saved locally.")
+        QMessageBox.information(self, "Settings saved", "Settings, theme, and desktop notification choices have been saved locally.")
 
     def preview_theme(self):
         """Preview the selected visual style; persistence remains an explicit Save action."""
