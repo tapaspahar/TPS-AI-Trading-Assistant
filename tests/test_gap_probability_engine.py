@@ -1,6 +1,8 @@
 import unittest
+from datetime import date, time
 
 from engine.gap_probability_engine import GapProbabilityEngine
+from ui.pages.gap_probability_page import ACTIONABLE_STAGE, CLOSE_STAGE, GapProbabilityPage
 
 
 class GapProbabilityEngineTests(unittest.TestCase):
@@ -35,6 +37,19 @@ class GapProbabilityEngineTests(unittest.TestCase):
     def test_missing_institutional_data_is_not_invented(self):
         result = GapProbabilityEngine().analyze(self.values(fii_net="", dii_net=""))
         self.assertTrue(any("no institutional vote" in item for item in result["evidence"]))
+
+    def test_320_and_340_are_separate_forecast_stages(self):
+        self.assertEqual(GapProbabilityPage._stage(time(15, 20)), ACTIONABLE_STAGE)
+        self.assertEqual(GapProbabilityPage._stage(time(15, 39, 59)), ACTIONABLE_STAGE)
+        self.assertEqual(GapProbabilityPage._stage(time(15, 40)), CLOSE_STAGE)
+        self.assertEqual(GapProbabilityPage._automatic_stage_due(time(15, 25)), ACTIONABLE_STAGE)
+        self.assertIsNone(GapProbabilityPage._automatic_stage_due(time(15, 35)))
+        self.assertEqual(GapProbabilityPage._automatic_stage_due(time(15, 40)), CLOSE_STAGE)
+
+    def test_automatic_capture_rejects_old_session_candle(self):
+        today = date(2026, 8, 12)
+        self.assertTrue(GapProbabilityPage._is_current_session_candle("2026-08-12T15:25:00+05:30", today))
+        self.assertFalse(GapProbabilityPage._is_current_session_candle("2026-08-11T15:25:00+05:30", today))
 
 
 if __name__ == "__main__":

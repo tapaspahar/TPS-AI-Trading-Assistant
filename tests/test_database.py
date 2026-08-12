@@ -100,6 +100,27 @@ class DatabaseTests(unittest.TestCase):
         saved = self.db.get_gap_probability_forecasts("NIFTY")[0]
         self.assertEqual((saved["actual_class"], saved["correct"]), ("GAP UP", 1))
 
+    def test_gap_probability_keeps_320_and_340_results_separate(self):
+        base = {
+            "forecast_date": "2026-08-12", "target_date": "2026-08-13",
+            "generated_at": "2026-08-12T15:20:10+05:30", "symbol": "NIFTY",
+            "stage": "3:20 ACTIONABLE", "predicted_class": "GAP UP",
+            "gap_up_probability": 46.0, "flat_probability": 32.0, "gap_down_probability": 22.0,
+            "confidence": 60, "data_quality": 90, "prior_close": 25000,
+            "inputs": {"spot_close": 25000}, "evidence": ["3:20 evidence"],
+        }
+        self.db.save_gap_probability_forecast(base)
+        closing = {
+            **base, "generated_at": "2026-08-12T15:40:10+05:30",
+            "stage": "3:40 CLOSE CONFIRMATION", "predicted_class": "FLAT / INSIDE",
+            "gap_up_probability": 30.0, "flat_probability": 44.0, "gap_down_probability": 26.0,
+            "prior_close": 24980, "evidence": ["closing evidence"],
+        }
+        self.db.save_gap_probability_forecast(closing)
+        rows = self.db.get_gap_probability_forecasts("NIFTY")
+        self.assertEqual(len(rows), 2)
+        self.assertEqual({row["stage"] for row in rows}, {"3:20 ACTIONABLE", "3:40 CLOSE CONFIRMATION"})
+
     def test_auto_trade_attempt_history_deduplicates_candles_and_exports(self):
         result = {
             "status": "No paper trade: TPS v2 confirmations 4/6.",
