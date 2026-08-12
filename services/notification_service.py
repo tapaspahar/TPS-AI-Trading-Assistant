@@ -18,6 +18,8 @@ NOTIFICATION_LABELS = {
     "stop_loss": "Stop loss / trailing stop",
     "market_snapshot": "Market Snapshot alerts",
     "market_structure": "Market structure change",
+    "support_resistance": "Support / resistance zone",
+    "put_call_ratio": "Put-Call Ratio sentiment",
     "auto_attempt_report": "Auto Attempt Report results",
     "equity_research": "Equity Research",
     "chart_capture": "Chart Capture",

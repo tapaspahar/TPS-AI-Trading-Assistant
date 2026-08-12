@@ -28,6 +28,7 @@ from ui.pages.option_strategies_page import OptionStrategiesPage
 from ui.pages.post_market_tps_analysis_page import PostMarketTpsAnalysisPage
 from ui.pages.pre_candle_page import PreCandlePage
 from ui.pages.powerful_engine_page import PowerfulEnginePage
+from ui.pages.put_call_ratio_page import PutCallRatioPage
 from ui.widgets.glass_effects import add_glass_shadow
 from ui.widgets.accessible_scroll import configure_scroll_area
 from services.post_market_tps_analysis import ensure_completed_post_market_reports
@@ -79,12 +80,13 @@ class DashboardScreen(QWidget):
         self.postMarketTpsAnalysisPage = PostMarketTpsAnalysisPage()
         self.preCandlePage = PreCandlePage()
         self.powerfulEnginePage = PowerfulEnginePage()
+        self.putCallRatioPage = PutCallRatioPage()
         for page in (self.dashboardPage, self.liveMarketPage, self.optionsPage, self.chartCapturePage, self.journalPage,
                      self.checklistPage, self.aiPage, self.riskPage, self.reportsPage, self.settingsPage,
                      self.backtestPage, self.postMarketPage, self.replayPage, self.equityPage,
                      self.autoAttemptReportPage, self.aboutPage, self.helpPage, self.nextDayBiasPage,
                      self.smartMoneyPage, self.casAnalysisPage, self.stockOptionsWatchPage, self.optionStrategiesPage,
-                     self.postMarketTpsAnalysisPage, self.preCandlePage, self.powerfulEnginePage):
+                     self.postMarketTpsAnalysisPage, self.preCandlePage, self.powerfulEnginePage, self.putCallRatioPage):
             self.stack.addWidget(page)
         self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
         self.journalPage.trade_saved.connect(self.reportsPage.refresh)
@@ -106,6 +108,8 @@ class DashboardScreen(QWidget):
         self.optionsPage.auto_paper_status.connect(self.notify_auto_attempt)
         self.liveMarketPage.guard_alert.connect(self.notify_market_guard)
         self.liveMarketPage.structure_received.connect(self.notify_market_structure)
+        self.liveMarketPage.level_alert.connect(self.notify_support_resistance)
+        self.putCallRatioPage.sentiment_changed.connect(self.notify_pcr_sentiment)
         self.optionsPage.auto_attempt_saved.connect(self.autoAttemptReportPage.refresh)
         self.optionsPage.open_chart_capture.connect(lambda: self.show_page(3))
         self.settingsPage.live_connected.connect(self.start_default_nifty)
@@ -125,6 +129,7 @@ class DashboardScreen(QWidget):
         self.sidebar.postMarketTpsAnalysisButton.clicked.connect(lambda _checked=False: self.show_page(22))
         self.sidebar.preCandleButton.clicked.connect(lambda _checked=False: self.show_page(23))
         self.sidebar.powerfulEngineButton.clicked.connect(lambda _checked=False: self.show_page(24))
+        self.sidebar.putCallRatioButton.clicked.connect(lambda _checked=False: self.show_page(25))
         body_layout.addWidget(self.stack)
         main_layout.addLayout(body_layout, 1)
         self.informationPanel = InformationPanel()
@@ -202,6 +207,21 @@ class DashboardScreen(QWidget):
             f"{key[0]} {key[1]} changed from {previous} to {state}. Support {result.get('support', 0):,.2f}; resistance {result.get('resistance', 0):,.2f}.",
         )
 
+    def notify_support_resistance(self, alert):
+        self.notifier.notify(
+            "support_resistance", alert.get("title", "TPS support/resistance alert"),
+            alert.get("message", "Price is near a marked chart level."),
+        )
+
+    def notify_pcr_sentiment(self, result):
+        sentiment = result.get("sentiment") or {}
+        pcr = result.get("chain", {}).get("pcr_oi")
+        pcr_text = f"{pcr:.2f}" if pcr is not None else "unavailable"
+        self.notifier.notify(
+            "put_call_ratio", f"TPS OI sentiment changed — {result.get('symbol', 'Index')}",
+            f"{sentiment.get('sentiment', 'OI context updated')} | OI-PCR {pcr_text}. Chart confirmation remains mandatory.",
+        )
+
     def show_page(self, index: int):
         self.sidebar.set_active(index)
         if index == 0:
@@ -221,6 +241,8 @@ class DashboardScreen(QWidget):
             self.riskPage.refresh()
         elif index == 22:
             self.postMarketTpsAnalysisPage.refresh(auto_generate=True)
+        elif index == 25:
+            self.putCallRatioPage.refresh()
         self.stack.setCurrentIndex(index)
 
     def handle_ai_decision(self, context):

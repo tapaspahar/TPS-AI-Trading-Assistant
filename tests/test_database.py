@@ -68,6 +68,18 @@ class DatabaseTests(unittest.TestCase):
         saved = self.db.get_market_snapshots("03-08-2026")
         self.assertEqual((len(saved), saved[0]["symbol"], saved[0]["oi_pcr"]), (1, "NIFTY", 1.1))
 
+    def test_pcr_observations_keep_latest_sentiment_context(self):
+        first = {
+            "captured_at": "2026-08-12T10:00:00+05:30", "symbol": "NIFTY", "expiry": "2026-08-27",
+            "call_oi": 100, "put_oi": 120, "call_oi_change": 5, "put_oi_change": 20,
+            "pcr_oi": 1.2, "call_volume": 50, "put_volume": 70, "pcr_volume": 1.4,
+            "sentiment": "BULLISH OI BIAS", "confidence": 70,
+        }
+        self.db.save_pcr_observation(first)
+        saved = self.db.get_latest_pcr_observation("NIFTY", "2026-08-27")
+        self.assertEqual((saved["sentiment"], saved["pcr_oi"]), ("BULLISH OI BIAS", 1.2))
+        self.assertEqual(len(self.db.get_pcr_observations("NIFTY")), 1)
+
     def test_auto_trade_attempt_history_deduplicates_candles_and_exports(self):
         result = {
             "status": "No paper trade: TPS v2 confirmations 4/6.",

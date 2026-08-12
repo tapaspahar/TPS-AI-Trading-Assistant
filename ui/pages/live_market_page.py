@@ -16,6 +16,7 @@ from core.database_manager import Database
 from engine.market_structure import analyze_candles
 from engine.market_environment import classify_india_vix
 from engine.multi_timeframe_engine import analyze_multi_timeframe
+from engine.level_proximity import classify_level_proximity
 from ui.widgets.cards.dashboard_card import DashboardCard
 
 
@@ -32,6 +33,7 @@ class LiveMarketPage(QWidget):
     snapshot_saved = Signal(str)
     snapshot_error = Signal(str)
     guard_alert = Signal(object)
+    level_alert = Signal(object)
     # SmartAPI index mappings: (WebSocket exchange type, current index token).
     # Angel One uses exchange type 1 for NSE cash-market indices and 3 for BSE.
     INSTRUMENTS = {
@@ -127,6 +129,8 @@ class LiveMarketPage(QWidget):
         self.snapshot_error.connect(self.show_snapshot_error)
         self.guard_alert.connect(self.show_guard_alert)
         self.selected_symbol = None
+        self.current_levels = None
+        self.last_level_state = None
         self.overview_loading = False
         self.future_contracts = {}
         self.vix_instrument = None
@@ -173,6 +177,8 @@ class LiveMarketPage(QWidget):
             LiveSession.stream.stop()
         exchange_type, token = self.INSTRUMENTS[symbol]
         self.selected_symbol = (symbol, exchange_type, token)
+        self.current_levels = None
+        self.last_level_state = None
         if not self.snapshot_timer.isActive():
             self.snapshot_timer.start(30_000)
         self.start_market_overview()
@@ -296,6 +302,12 @@ class LiveMarketPage(QWidget):
                 f"{result['symbol']} {result['timeframe']} analysis: {result['state']}. "
                 f"Support {result['support']:,.2f} | Resistance {result['resistance']:,.2f}."
             )
+        if timeframe == "5m":
+            self.current_levels = {
+                "symbol": result["symbol"], "support": result["support"],
+                "resistance": result["resistance"],
+            }
+            self._check_level_proximity(result.get("price"))
 
     def show_structure_error(self, message):
         self.cards["trend"].set_value("Structure unavailable")
@@ -439,3 +451,32 @@ class LiveMarketPage(QWidget):
             return
         price = float(value) / 100 if float(value) > 100000 else float(value)
         self.cards["ltp"].set_value(f"{price:,.2f}")
+        self._check_level_proximity(price)
+
+    def _check_level_proximity(self, price):
+        if price is None or not self.current_levels:
+            return
+        result = classify_level_proximity(
+            price, self.current_levels["support"], self.current_levels["resistance"]
+        )
+        state = result["state"]
+        if state == self.last_level_state:
+            return
+        self.last_level_state = state
+        if state not in {"SUPPORT_ZONE", "RESISTANCE_ZONE", "BELOW_SUPPORT", "ABOVE_RESISTANCE"}:
+            return
+        symbol = self.current_levels["symbol"]
+        level_name = "support" if state in {"SUPPORT_ZONE", "BELOW_SUPPORT"} else "resistance"
+        action = {
+            "SUPPORT_ZONE": "has entered the marked support zone",
+            "RESISTANCE_ZONE": "has entered the marked resistance zone",
+            "BELOW_SUPPORT": "is below the marked support zone",
+            "ABOVE_RESISTANCE": "is above the marked resistance zone",
+        }[state]
+        self.level_alert.emit({
+            "title": f"TPS {level_name} alert — {symbol}",
+            "message": (
+                f"{symbol} {action}. Price {float(price):,.2f}; {level_name} "
+                f"{result['level']:,.2f}. Review candle close, volume and market structure before acting."
+            ),
+        })

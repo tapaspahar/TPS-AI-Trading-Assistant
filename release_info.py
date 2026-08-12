@@ -9,9 +9,11 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.1.0"
-LAST_UPDATED_AT = "12-08-2026 10:00:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.1.0 • 12-08-2026 10:00 IST"
+LAST_UPDATED_AT = "12-08-2026 12:00:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.1.0 • 12-08-2026 12:00 IST"
 RELEASE_NOTES = (
+    "Added support/resistance proximity alerts when live price enters or crosses the chart levels marked by TPS.",
+    "Added a Put-Call Ratio & OI Observer for Call OI, Put OI, change in OI, OI-PCR, Volume-PCR, OI walls and explainable sentiment context.",
     "Added a central Windows desktop Notification Center with a global switch, sound control and page/event-wise alert controls.",
     "Added desktop alerts for paper-trade capture, exit, target, stop loss, Open Trade Guard, market-structure changes and completed post-market reports.",
     "Added TPS Powerful Engine, a selective CE/PE signal controller combining Candle DNA purity, 5m/15m/1h structure, EMA/VWAP/SuperTrend, price action, volume, VIX, OI and ATM liquidity.",

@@ -46,6 +46,8 @@ DEFAULT_SETTINGS = {
         "stop_loss": True,
         "market_snapshot": True,
         "market_structure": True,
+        "support_resistance": True,
+        "put_call_ratio": True,
         "auto_attempt_report": False,
         "equity_research": False,
         "chart_capture": False,

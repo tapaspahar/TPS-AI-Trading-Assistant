@@ -190,7 +190,62 @@ class Database:
             )
             """
         )
+        self.cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS pcr_observations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                captured_at TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                expiry TEXT NOT NULL,
+                call_oi REAL NOT NULL,
+                put_oi REAL NOT NULL,
+                pcr_oi REAL,
+                call_volume REAL NOT NULL,
+                put_volume REAL NOT NULL,
+                pcr_volume REAL,
+                call_oi_change REAL,
+                put_oi_change REAL,
+                sentiment TEXT NOT NULL,
+                confidence INTEGER NOT NULL
+            )
+            """
+        )
+        self.cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_pcr_symbol_expiry_time ON pcr_observations(symbol, expiry, captured_at DESC)"
+        )
         self.connection.commit()
+
+    def save_pcr_observation(self, observation: dict) -> int:
+        result = self.cursor.execute(
+            """INSERT INTO pcr_observations (
+                   captured_at, symbol, expiry, call_oi, put_oi, pcr_oi,
+                   call_volume, put_volume, pcr_volume, call_oi_change,
+                   put_oi_change, sentiment, confidence
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                observation["captured_at"], str(observation["symbol"]).upper(), str(observation["expiry"]),
+                float(observation.get("call_oi", 0)), float(observation.get("put_oi", 0)), observation.get("pcr_oi"),
+                float(observation.get("call_volume", 0)), float(observation.get("put_volume", 0)), observation.get("pcr_volume"),
+                observation.get("call_oi_change"), observation.get("put_oi_change"),
+                str(observation.get("sentiment", "UNAVAILABLE")), int(observation.get("confidence", 0)),
+            ),
+        )
+        self.connection.commit()
+        return int(result.lastrowid)
+
+    def get_latest_pcr_observation(self, symbol: str, expiry: str | None = None):
+        query = "SELECT * FROM pcr_observations WHERE symbol = ?"
+        values = [str(symbol).upper()]
+        if expiry is not None:
+            query += " AND expiry = ?"
+            values.append(str(expiry))
+        return self.cursor.execute(query + " ORDER BY captured_at DESC, id DESC LIMIT 1", values).fetchone()
+
+    def get_pcr_observations(self, symbol: str, limit: int = 50):
+        return self.cursor.execute(
+            "SELECT * FROM pcr_observations WHERE symbol = ? ORDER BY captured_at DESC, id DESC LIMIT ?",
+            (str(symbol).upper(), max(1, min(int(limit), 500))),
+        ).fetchall()
 
     @staticmethod
     def _calculate_trade_values(trade: Trade) -> tuple[float, float]:

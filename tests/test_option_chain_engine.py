@@ -21,3 +21,17 @@ class OptionChainEngineTests(unittest.TestCase):
         self.assertEqual(result["call_resistance"], 25100)
         self.assertEqual(result["put_support"], 25000)
         self.assertEqual(result["pcr_oi"], 400 / 300)
+        self.assertEqual((result["call_oi"], result["put_oi"]), (300, 400))
+        self.assertEqual((result["call_volume"], result["put_volume"]), (20, 40))
+
+    def test_aggregates_exchange_reported_change_in_oi(self):
+        contracts = [
+            {"token": "ce", "strike": 25000, "option_type": "CE"},
+            {"token": "pe", "strike": 25000, "option_type": "PE"},
+        ]
+        quotes = [
+            {"symbolToken": "ce", "opnInterest": 100, "changeinOpenInterest": 12},
+            {"symbolToken": "pe", "opnInterest": 150, "changeInOI": 30},
+        ]
+        result = analyze_option_chain(contracts, quotes)
+        self.assertEqual((result["call_oi_change"], result["put_oi_change"]), (12, 30))

@@ -18,10 +18,15 @@ def analyze_option_chain(contracts, quotes):
             "volume": float(quote.get("tradeVolume", 0) or 0),
             "ltp": float(quote.get("ltp", 0) or 0),
             "bid": float(bid or 0), "ask": float(ask or 0),
+            "oi_change": float(
+                quote.get("changeinOpenInterest", quote.get("changeInOI", quote.get("oiChange", 0))) or 0
+            ),
         })
     calls = [row for row in rows if row["option_type"] == "CE"]
     puts = [row for row in rows if row["option_type"] == "PE"]
     call_oi, put_oi = sum(row["oi"] for row in calls), sum(row["oi"] for row in puts)
+    call_oi_change = sum(row["oi_change"] for row in calls)
+    put_oi_change = sum(row["oi_change"] for row in puts)
     call_volume, put_volume = sum(row["volume"] for row in calls), sum(row["volume"] for row in puts)
     pcr_oi = put_oi / call_oi if call_oi else None
     pcr_volume = put_volume / call_volume if call_volume else None
@@ -38,6 +43,12 @@ def analyze_option_chain(contracts, quotes):
     return {
         "pcr_oi": pcr_oi,
         "pcr_volume": pcr_volume,
+        "call_oi": call_oi,
+        "put_oi": put_oi,
+        "call_oi_change": call_oi_change,
+        "put_oi_change": put_oi_change,
+        "call_volume": call_volume,
+        "put_volume": put_volume,
         "put_support": put_wall["strike"] if put_wall else None,
         "call_resistance": call_wall["strike"] if call_wall else None,
         "quoted_contracts": sum(1 for row in rows if row["ltp"] > 0),
