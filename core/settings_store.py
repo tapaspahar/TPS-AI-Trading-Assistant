@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from pathlib import Path
 
 
@@ -73,14 +74,35 @@ DEFAULT_SETTINGS = {
 
 class SettingsStore:
     def __init__(self, path: str | Path | None = None):
-        base = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "TPS AI Trading Assistant"
-        self.path = Path(path) if path else base / "settings.json"
+        if path is not None:
+            self.path = Path(path)
+        else:
+            # Roaming AppData is independent of the source folder, build/dist
+            # folder and installer directory.  A code update must therefore
+            # never replace a trader's chosen setup.
+            roaming = Path(os.environ.get("APPDATA") or os.environ.get("LOCALAPPDATA") or Path.home())
+            self.path = roaming / "TPS AI Trading Assistant" / "settings.json"
+            legacy = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "TPS AI Trading Assistant" / "settings.json"
+            if not self.path.exists() and legacy.exists() and legacy != self.path:
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(legacy, self.path)
+        self.backup_path = self.path.with_name("settings.backup.json")
+        if self.path.exists() and not self.backup_path.exists() and self._read_file(self.path):
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(self.path, self.backup_path)
+
+    @staticmethod
+    def _read_file(path: Path) -> dict:
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+            return value if isinstance(value, dict) else {}
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return {}
 
     def load(self) -> dict:
-        try:
-            saved = json.loads(self.path.read_text(encoding="utf-8"))
-        except (FileNotFoundError, json.JSONDecodeError):
-            saved = {}
+        saved = self._read_file(self.path)
+        if not saved:
+            saved = self._read_file(self.backup_path)
         values = {**DEFAULT_SETTINGS, **saved}
         values["notification_preferences"] = {
             **DEFAULT_SETTINGS["notification_preferences"],
@@ -89,36 +111,39 @@ class SettingsStore:
         return values
 
     def save(self, settings: dict) -> dict:
-        values = {
+        current = self.load()
+        # Start with the current file so fields introduced by another module
+        # or a future release survive a partial Settings-page save.
+        values = {**current,
             "capital": float(settings["capital"]),
             "risk_percent": float(settings["risk_percent"]),
             "daily_loss_percent": float(settings["daily_loss_percent"]),
             "max_trades_per_day": int(settings["max_trades_per_day"]),
-            "trade_plan_min_score": int(settings.get("trade_plan_min_score", self.load()["trade_plan_min_score"])),
-            "tps_required_matches": int(settings.get("tps_required_matches", self.load()["tps_required_matches"])),
-            "tps_match_mode": str(settings.get("tps_match_mode", self.load()["tps_match_mode"])),
-            "tps_enabled_conditions": list(settings.get("tps_enabled_conditions", self.load()["tps_enabled_conditions"])),
-            "news_risk_pause": bool(settings.get("news_risk_pause", self.load()["news_risk_pause"])),
-            "event_no_trade_minutes": int(settings.get("event_no_trade_minutes", self.load()["event_no_trade_minutes"])),
-            "economic_calendar_api_key": str(settings.get("economic_calendar_api_key", self.load()["economic_calendar_api_key"])).strip(),
-            "economic_calendar_enabled": bool(settings.get("economic_calendar_enabled", self.load()["economic_calendar_enabled"])),
-            "event_feed_fail_closed": bool(settings.get("event_feed_fail_closed", self.load()["event_feed_fail_closed"])),
-            "event_risk_override": bool(settings.get("event_risk_override", self.load()["event_risk_override"])),
-            "paper_trade_cooldown_minutes": int(settings.get("paper_trade_cooldown_minutes", self.load()["paper_trade_cooldown_minutes"])),
-            "minimum_rr_ratio": float(settings.get("minimum_rr_ratio", self.load()["minimum_rr_ratio"])),
-            "maximum_option_spread_percent": float(settings.get("maximum_option_spread_percent", self.load()["maximum_option_spread_percent"])),
-            "minimum_option_volume": float(settings.get("minimum_option_volume", self.load()["minimum_option_volume"])),
-            "trailing_stop_enabled": bool(settings.get("trailing_stop_enabled", self.load()["trailing_stop_enabled"])),
-            "trailing_stop_trigger_r": float(settings.get("trailing_stop_trigger_r", self.load()["trailing_stop_trigger_r"])),
-            "trailing_stop_lock_r": float(settings.get("trailing_stop_lock_r", self.load()["trailing_stop_lock_r"])),
-            "time_exit_minutes_before_close": int(settings.get("time_exit_minutes_before_close", self.load()["time_exit_minutes_before_close"])),
-            "theme": str(settings.get("theme", self.load()["theme"])).lower(),
-            "ui_style": str(settings.get("ui_style", self.load()["ui_style"])).lower(),
-            "broker_provider": str(settings.get("broker_provider", self.load()["broker_provider"])).lower(),
-            "notifications_enabled": bool(settings.get("notifications_enabled", self.load()["notifications_enabled"])),
-            "notification_sound": bool(settings.get("notification_sound", self.load()["notification_sound"])),
+            "trade_plan_min_score": int(settings.get("trade_plan_min_score", current["trade_plan_min_score"])),
+            "tps_required_matches": int(settings.get("tps_required_matches", current["tps_required_matches"])),
+            "tps_match_mode": str(settings.get("tps_match_mode", current["tps_match_mode"])),
+            "tps_enabled_conditions": list(settings.get("tps_enabled_conditions", current["tps_enabled_conditions"])),
+            "news_risk_pause": bool(settings.get("news_risk_pause", current["news_risk_pause"])),
+            "event_no_trade_minutes": int(settings.get("event_no_trade_minutes", current["event_no_trade_minutes"])),
+            "economic_calendar_api_key": str(settings.get("economic_calendar_api_key", current["economic_calendar_api_key"])).strip(),
+            "economic_calendar_enabled": bool(settings.get("economic_calendar_enabled", current["economic_calendar_enabled"])),
+            "event_feed_fail_closed": bool(settings.get("event_feed_fail_closed", current["event_feed_fail_closed"])),
+            "event_risk_override": bool(settings.get("event_risk_override", current["event_risk_override"])),
+            "paper_trade_cooldown_minutes": int(settings.get("paper_trade_cooldown_minutes", current["paper_trade_cooldown_minutes"])),
+            "minimum_rr_ratio": float(settings.get("minimum_rr_ratio", current["minimum_rr_ratio"])),
+            "maximum_option_spread_percent": float(settings.get("maximum_option_spread_percent", current["maximum_option_spread_percent"])),
+            "minimum_option_volume": float(settings.get("minimum_option_volume", current["minimum_option_volume"])),
+            "trailing_stop_enabled": bool(settings.get("trailing_stop_enabled", current["trailing_stop_enabled"])),
+            "trailing_stop_trigger_r": float(settings.get("trailing_stop_trigger_r", current["trailing_stop_trigger_r"])),
+            "trailing_stop_lock_r": float(settings.get("trailing_stop_lock_r", current["trailing_stop_lock_r"])),
+            "time_exit_minutes_before_close": int(settings.get("time_exit_minutes_before_close", current["time_exit_minutes_before_close"])),
+            "theme": str(settings.get("theme", current["theme"])).lower(),
+            "ui_style": str(settings.get("ui_style", current["ui_style"])).lower(),
+            "broker_provider": str(settings.get("broker_provider", current["broker_provider"])).lower(),
+            "notifications_enabled": bool(settings.get("notifications_enabled", current["notifications_enabled"])),
+            "notification_sound": bool(settings.get("notification_sound", current["notification_sound"])),
             "notification_preferences": {
-                **self.load()["notification_preferences"],
+                **current["notification_preferences"],
                 **dict(settings.get("notification_preferences", {})),
             },
         }
@@ -159,5 +184,10 @@ class SettingsStore:
         if values["broker_provider"] not in BROKERS:
             raise ValueError("Choose a valid broker provider.")
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(values, indent=2), encoding="utf-8")
+        if self.path.exists() and self._read_file(self.path):
+            shutil.copy2(self.path, self.backup_path)
+        temporary = self.path.with_name("settings.pending.json")
+        temporary.write_text(json.dumps(values, indent=2), encoding="utf-8")
+        os.replace(temporary, self.path)
+        shutil.copy2(self.path, self.backup_path)
         return values

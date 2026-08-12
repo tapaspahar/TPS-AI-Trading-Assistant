@@ -1,11 +1,42 @@
 import tempfile
 import unittest
+import json
+import os
 from pathlib import Path
+from unittest.mock import patch
 
 from core.settings_store import SettingsStore
 
 
 class SettingsStoreTests(unittest.TestCase):
+    def test_legacy_local_settings_migrate_to_update_safe_roaming_folder(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            local, roaming = root / "Local", root / "Roaming"
+            legacy = local / "TPS AI Trading Assistant" / "settings.json"
+            legacy.parent.mkdir(parents=True)
+            legacy.write_text(json.dumps({"risk_percent": 4.5, "ui_style": "maximalism"}), encoding="utf-8")
+            with patch.dict(os.environ, {"LOCALAPPDATA": str(local), "APPDATA": str(roaming)}):
+                store = SettingsStore()
+                self.assertEqual(store.path, roaming / "TPS AI Trading Assistant" / "settings.json")
+                self.assertEqual((store.load()["risk_percent"], store.load()["ui_style"]), (4.5, "maximalism"))
+                self.assertTrue(store.path.exists())
+                self.assertTrue(store.backup_path.exists())
+
+    def test_atomic_save_keeps_unknown_values_and_latest_backup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "settings.json"
+            path.write_text(json.dumps({"future_custom_setting": "KEEP", "capital": 120000}), encoding="utf-8")
+            store = SettingsStore(path)
+            saved = store.save({
+                "capital": 120000, "risk_percent": 2, "daily_loss_percent": 4,
+                "max_trades_per_day": 4,
+            })
+            self.assertEqual(saved["future_custom_setting"], "KEEP")
+            path.write_text("broken update file", encoding="utf-8")
+            recovered = store.load()
+            self.assertEqual((recovered["capital"], recovered["risk_percent"]), (120000.0, 2.0))
+
     def test_defaults_are_available_and_validated_values_persist(self):
         with tempfile.TemporaryDirectory() as directory:
             store = SettingsStore(Path(directory) / "settings.json")
