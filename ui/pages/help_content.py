@@ -201,6 +201,13 @@ PAGES = (
      "Run Diagnostic Scan or let automatic cycles work; inspect action, instrument, score, entry, stop, targets, quantity, R:R, evidence and blockers. It never sends an order and may return zero candidates.",
      "Diagnostic Scan ya auto cycle use karein; action, instrument, score, entry, stop, targets, qty, R:R, evidence/blocker dekhein. Order kabhi nahi bhejta.",
      "Diagnostic Scan या ऑटो चक्र उपयोग करें; एक्शन, इंस्ट्रूमेंट, स्कोर, एंट्री, स्टॉप, लक्ष्य, मात्रा, R:R, प्रमाण/अवरोध देखें। यह ऑर्डर नहीं भेजता।"),
+    (28, "Trend Memory Monitor",
+     "Builds a permanent daily market-fingerprint database and compares the developing session with historically similar trend, chart-shape, Candle-DNA, indicator and OI contexts.",
+     "Har din ka permanent market fingerprint save karke current session ko purane similar trend, chart shape, Candle DNA, indicator aur OI context se compare karta hai.",
+     "Har din ka sthayi market fingerprint save karke vartaman session ki tulna purane saman trend, chart shape, Candle DNA, indicator aur OI sandarbh se karta hai.",
+     "Choose an index and refresh. Saved days include actual outcomes; after six current 5-minute observations, an 80%+ analog can produce one desktop alert. Similarity is evidence, not a guaranteed forecast.",
+     "Index choose karke refresh karein. Saved dates ke actual outcome dikhte hain; 6 current observations ke baad 80%+ analog par desktop alert aa sakta hai. Similarity forecast guarantee nahi hai.",
+     "Index chun kar refresh karein. Chhah current observations ke baad 80% se adhik samanata par desktop alert aa sakta hai. Samanata bhavishyavani ki guarantee nahi hai."),
 )
 
 

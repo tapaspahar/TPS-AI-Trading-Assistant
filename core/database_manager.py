@@ -158,6 +158,29 @@ class Database:
             self.cursor.execute("ALTER TABLE market_snapshots ADD COLUMN volume_pcr_change REAL")
         self.cursor.execute(
             """
+            CREATE TABLE IF NOT EXISTS daily_trend_memory (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                trade_date TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                generated_at TEXT NOT NULL,
+                trend TEXT NOT NULL,
+                chart_pattern TEXT NOT NULL,
+                candle_signature TEXT NOT NULL,
+                session_open REAL NOT NULL,
+                session_high REAL NOT NULL,
+                session_low REAL NOT NULL,
+                session_close REAL NOT NULL,
+                return_pct REAL NOT NULL,
+                range_pct REAL NOT NULL,
+                snapshot_count INTEGER NOT NULL,
+                outcome_text TEXT NOT NULL,
+                features_json TEXT NOT NULL,
+                UNIQUE(trade_date, symbol)
+            )
+            """
+        )
+        self.cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS auto_trade_attempts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 checked_at TEXT NOT NULL,
@@ -934,6 +957,61 @@ class Database:
             (values[0],),
         ).fetchone()
         return int(row["id"])
+
+    def get_market_snapshot_dates(self) -> list[sqlite3.Row]:
+        return self.cursor.execute(
+            """SELECT trade_date, symbol, COUNT(*) AS snapshot_count
+               FROM market_snapshots WHERE LOWER(timeframe) = '5m'
+               GROUP BY trade_date, symbol ORDER BY MAX(captured_at) DESC"""
+        ).fetchall()
+
+    def get_market_snapshots_for_symbol(self, trade_date: str, symbol: str) -> list[sqlite3.Row]:
+        return self.cursor.execute(
+            """SELECT * FROM market_snapshots WHERE trade_date = ? AND symbol = ?
+               ORDER BY captured_at ASC, timeframe ASC""",
+            (trade_date, str(symbol).upper()),
+        ).fetchall()
+
+    def save_daily_trend_memory(self, memory: dict) -> int:
+        values = (
+            memory["trade_date"], str(memory["symbol"]).upper(),
+            memory.get("generated_at") or datetime.now().isoformat(timespec="seconds"),
+            memory["trend"], memory["chart_pattern"], memory["candle_signature"],
+            memory["session_open"], memory["session_high"], memory["session_low"], memory["session_close"],
+            memory["return_pct"], memory["range_pct"], memory["snapshot_count"], memory["outcome_text"],
+            json.dumps(memory.get("features") or {}, ensure_ascii=False),
+        )
+        self.cursor.execute(
+            """INSERT INTO daily_trend_memory
+               (trade_date, symbol, generated_at, trend, chart_pattern, candle_signature,
+                session_open, session_high, session_low, session_close, return_pct, range_pct,
+                snapshot_count, outcome_text, features_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(trade_date, symbol) DO UPDATE SET
+                generated_at=excluded.generated_at, trend=excluded.trend, chart_pattern=excluded.chart_pattern,
+                candle_signature=excluded.candle_signature, session_open=excluded.session_open,
+                session_high=excluded.session_high, session_low=excluded.session_low,
+                session_close=excluded.session_close, return_pct=excluded.return_pct, range_pct=excluded.range_pct,
+                snapshot_count=excluded.snapshot_count, outcome_text=excluded.outcome_text,
+                features_json=excluded.features_json""",
+            values,
+        )
+        self.connection.commit()
+        row = self.cursor.execute(
+            "SELECT id FROM daily_trend_memory WHERE trade_date = ? AND symbol = ?",
+            (values[0], values[1]),
+        ).fetchone()
+        return int(row["id"])
+
+    def get_daily_trend_memories(self, symbol: str | None = None, limit: int = 500) -> list[sqlite3.Row]:
+        if symbol:
+            return self.cursor.execute(
+                "SELECT * FROM daily_trend_memory WHERE symbol = ? ORDER BY generated_at DESC LIMIT ?",
+                (str(symbol).upper(), int(limit)),
+            ).fetchall()
+        return self.cursor.execute(
+            "SELECT * FROM daily_trend_memory ORDER BY generated_at DESC LIMIT ?", (int(limit),)
+        ).fetchall()
 
     def get_post_market_tps_analysis(self, trade_date: str) -> sqlite3.Row | None:
         return self.cursor.execute(

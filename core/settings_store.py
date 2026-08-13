@@ -69,6 +69,7 @@ DEFAULT_SETTINGS = {
         "powerful_engine": True,
         "auto_opportunity": True,
         "broker_connection": True,
+        "trend_memory": True,
     },
 }
 

@@ -16,8 +16,8 @@ class HelpCenterTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
-    def test_all_28_routes_exist_in_each_language(self):
-        self.assertEqual(len(PAGES), 28)
+    def test_all_routes_exist_in_each_language(self):
+        self.assertEqual(len(PAGES), 29)
         for language in ("en", "roman", "hi"):
             rendered = help_html(language)
             for page_index, title, *_rest in PAGES:

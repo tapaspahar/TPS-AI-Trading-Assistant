@@ -31,10 +31,12 @@ from ui.pages.powerful_engine_page import PowerfulEnginePage
 from ui.pages.put_call_ratio_page import PutCallRatioPage
 from ui.pages.gap_probability_page import GapProbabilityPage
 from ui.pages.auto_opportunity_page import AutoOpportunityPage
+from ui.pages.trend_memory_page import TrendMemoryPage
 from ui.widgets.glass_effects import add_glass_shadow
 from ui.widgets.accessible_scroll import configure_scroll_area
 from services.post_market_tps_analysis import ensure_completed_post_market_reports
 from services.notification_service import NotificationService
+from services.trend_memory_service import ensure_completed_trend_memories, get_live_trend_analogs
 
 
 class DashboardScreen(QWidget):
@@ -47,6 +49,7 @@ class DashboardScreen(QWidget):
         self.header = Header()
         self.notifier = NotificationService.instance(self)
         self._market_states = {}
+        self._trend_memory_alerts = set()
         add_glass_shadow(self.header)
         main_layout.addWidget(self.header)
         body_layout = QHBoxLayout()
@@ -85,13 +88,14 @@ class DashboardScreen(QWidget):
         self.putCallRatioPage = PutCallRatioPage()
         self.gapProbabilityPage = GapProbabilityPage()
         self.autoOpportunityPage = AutoOpportunityPage()
+        self.trendMemoryPage = TrendMemoryPage()
         for page in (self.dashboardPage, self.liveMarketPage, self.optionsPage, self.chartCapturePage, self.journalPage,
                      self.checklistPage, self.aiPage, self.riskPage, self.reportsPage, self.settingsPage,
                      self.backtestPage, self.postMarketPage, self.replayPage, self.equityPage,
                      self.autoAttemptReportPage, self.aboutPage, self.helpPage, self.nextDayBiasPage,
                      self.smartMoneyPage, self.casAnalysisPage, self.stockOptionsWatchPage, self.optionStrategiesPage,
                      self.postMarketTpsAnalysisPage, self.preCandlePage, self.powerfulEnginePage, self.putCallRatioPage,
-                     self.gapProbabilityPage, self.autoOpportunityPage):
+                     self.gapProbabilityPage, self.autoOpportunityPage, self.trendMemoryPage):
             self.stack.addWidget(page)
         self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
         self.journalPage.trade_saved.connect(self.reportsPage.refresh)
@@ -139,6 +143,7 @@ class DashboardScreen(QWidget):
         self.sidebar.putCallRatioButton.clicked.connect(lambda _checked=False: self.show_page(25))
         self.sidebar.gapProbabilityButton.clicked.connect(lambda _checked=False: self.show_page(26))
         self.sidebar.autoOpportunityButton.clicked.connect(lambda _checked=False: self.show_page(27))
+        self.sidebar.trendMemoryButton.clicked.connect(lambda _checked=False: self.show_page(28))
         body_layout.addWidget(self.stack)
         main_layout.addLayout(body_layout, 1)
         self.informationPanel = InformationPanel()
@@ -152,7 +157,12 @@ class DashboardScreen(QWidget):
         self.post_market_report_timer.setInterval(60_000)
         self.post_market_report_timer.timeout.connect(self.update_completed_post_market_reports)
         self.post_market_report_timer.start()
+        self.trend_memory_timer = QTimer(self)
+        self.trend_memory_timer.setInterval(60_000)
+        self.trend_memory_timer.timeout.connect(self.update_trend_memory_monitor)
+        self.trend_memory_timer.start()
         QTimer.singleShot(0, self.update_completed_post_market_reports)
+        QTimer.singleShot(0, self.update_trend_memory_monitor)
         QTimer.singleShot(0, self.settingsPage.auto_connect_saved_credentials)
 
     def update_completed_post_market_reports(self):
@@ -170,6 +180,29 @@ class DashboardScreen(QWidget):
             self.notifier.notify(
                 "post_market_analysis", "TPS post-market report ready",
                 f"{count} completed market-day report(s) were generated.",
+            )
+    def update_trend_memory_monitor(self):
+        """Finalize completed days and alert once when a strong analog appears."""
+        try:
+            updated = ensure_completed_trend_memories(self.trendMemoryPage.db)
+            live = get_live_trend_analogs(self.trendMemoryPage.db)
+        except Exception:
+            return
+        if updated and self.stack.currentIndex() == 28:
+            self.trendMemoryPage.refresh()
+        for item in live:
+            if not item.get("matches"):
+                continue
+            current, best = item["current"], item["matches"][0]
+            if float(best.get("similarity", 0)) < 80.0:
+                continue
+            key = (current["trade_date"], current["symbol"], best["trade_date"])
+            if key in self._trend_memory_alerts:
+                continue
+            self._trend_memory_alerts.add(key)
+            self.notifier.notify(
+                "trend_memory", f"TPS similar market pattern — {current['symbol']}",
+                f"{best['similarity']:.1f}% match with {best['trade_date']}. Us din: {best['outcome_text']}",
             )
 
     def notify_trade_capture(self, plan):
@@ -256,6 +289,8 @@ class DashboardScreen(QWidget):
             self.gapProbabilityPage.refresh_history()
         elif index == 27:
             self.autoOpportunityPage.refresh_history()
+        elif index == 28:
+            self.trendMemoryPage.refresh()
         self.stack.setCurrentIndex(index)
 
     def handle_ai_decision(self, context):
