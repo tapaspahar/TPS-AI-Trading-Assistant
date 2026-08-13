@@ -1,17 +1,19 @@
 """Application release metadata kept in one place."""
 
 APP_NAME = "TPS AI Trading Assistant"
-VERSION = "1.2.1"
-DISPLAY_VERSION = "Release 1.2.1"
-RELEASE_DATE = "12-08-2026"
+VERSION = "1.2.2"
+DISPLAY_VERSION = "Release 1.2.2"
+RELEASE_DATE = "13-08-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
-SOFTWARE_UPDATE_VERSION = "v1.2.1"
-LAST_UPDATED_AT = "13-08-2026 13:20:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.2.1 - 13-08-2026 13:20 IST"
+SOFTWARE_UPDATE_VERSION = "v1.2.2"
+LAST_UPDATED_AT = "13-08-2026 13:25:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.2.2 - 13-08-2026 13:25 IST"
 RELEASE_NOTES = (
+    "Published maintenance Release 1.2.2 with aligned application, Windows executable, installer, portable ZIP and checksum metadata.",
+    "Made Trend Memory similarity alerts restart-safe and limited each logical current-day/historical-day match to one delivered notification per day.",
     "Stopped repeated Support/Resistance and Auto Opportunity popup floods with restart-safe daily event identities instead of changing live-price message text.",
     "Added Notification Center cleanup for historic repeated alerts while retaining the first daily event record.",
     "Added AI Self-Development Decision Center with permanent date-wise system health, evidence-led rectification suggestions, priority and Open/Reviewed workflow.",
