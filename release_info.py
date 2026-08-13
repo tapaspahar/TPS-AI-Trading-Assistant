@@ -9,9 +9,12 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.3.0"
-LAST_UPDATED_AT = "13-08-2026 14:45:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.3.0 - 13-08-2026 14:45 IST"
+LAST_UPDATED_AT = "13-08-2026 15:30:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.3.0 - 13-08-2026 15:30 IST"
 RELEASE_NOTES = (
+    "Added no-look-ahead signal timing telemetry with separate discovery, first-valid trigger and final paper-capture timestamps plus measured delay.",
+    "Added an opt-in Early Watch paper-observation notification for near-qualified completed candles; it is disabled by default and never bypasses final strategy or safety approval.",
+    "Expanded Auto Attempt Report and CSV export with timing stage, timing milestones and delay evidence for replay validation against false entries.",
     "Started Release 1.3 with a dedicated Overtrading Protection Center and a persistent daily emotional-safety check-in.",
     "Enabled Recovery Mode by default: one new paper capture per day, a 48-hour cooling lock after two consecutive paper losses, and a 30-session paper-validation target.",
     "Applied the central recovery guard to both automatic and manual paper captures so strategy scores and signals cannot override behavioural safety locks.",

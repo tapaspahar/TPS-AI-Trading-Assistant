@@ -143,6 +143,27 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(self.db.export_auto_trade_attempts(path, "04-08-2026"), 1)
         self.assertIn("candle_time", path.read_text(encoding="utf-8-sig"))
 
+    def test_signal_timing_context_uses_only_prior_saved_evaluations(self):
+        early = self.db.signal_timing_context(
+            "NIFTY", "CE", "2026-08-04T10:20:00", "2026-08-04T10:15:00+05:30", "EARLY WATCH",
+        )
+        result = {
+            "status": "Near-qualified paper observation only",
+            "attempt": {
+                "checked_at": "2026-08-04T10:20:00", "candle_time": "2026-08-04T10:15:00+05:30",
+                "candidate": "CE", "timing": early, "capture": {}, "chain": {}, "blockers": [],
+                "chart": {"decision": "NO TRADE", "score": 70, "strategy": {"passed": 4, "total": 5}},
+            },
+        }
+        self.assertTrue(self.db.save_auto_trade_attempt("NIFTY", result))
+        first_valid = self.db.signal_timing_context(
+            "NIFTY", "CE", "2026-08-04T10:25:00", "2026-08-04T10:20:00+05:30", "FIRST VALID",
+        )
+        self.assertEqual(first_valid["signal_discovery_at"], "2026-08-04T10:20:00")
+        self.assertEqual(first_valid["first_valid_trigger_at"], "2026-08-04T10:25:00")
+        self.assertEqual(first_valid["delay_seconds"], 300)
+        self.assertTrue(first_valid["no_look_ahead"])
+
     def test_notification_history_tracks_unread_state_and_exports(self):
         first_id = self.db.save_notification(
             "trade_capture", "TPS paper trade captured", "NIFTY CE entry 100",

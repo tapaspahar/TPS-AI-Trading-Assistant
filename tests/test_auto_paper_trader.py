@@ -2,10 +2,24 @@ import unittest
 from datetime import datetime
 from unittest.mock import patch
 
-from services.auto_paper_trader import _completed_candles, run_auto_paper_cycle
+from services.auto_paper_trader import _completed_candles, run_auto_paper_cycle, signal_timing_stage
 
 
 class AutoPaperTraderTests(unittest.TestCase):
+    def test_signal_timing_stage_separates_watch_from_final_approval(self):
+        settings = {"tps_required_matches": 5, "trade_plan_min_score": 80}
+        early = {
+            "trade_ready": False, "candidate": "CE", "required": 5, "minimum_score": 80,
+            "side_evaluations": {"CE": {"passed": 4, "score": 70}},
+        }
+        weak = {
+            "trade_ready": False, "candidate": "PE", "required": 5, "minimum_score": 80,
+            "side_evaluations": {"PE": {"passed": 3, "score": 70}},
+        }
+        self.assertEqual(signal_timing_stage({"trade_ready": True}, settings), "FIRST VALID")
+        self.assertEqual(signal_timing_stage(early, settings), "EARLY WATCH")
+        self.assertEqual(signal_timing_stage(weak, settings), "NONE")
+
     def test_current_forming_candle_is_excluded(self):
         candles = [{"time": "2026-08-04T13:10:00+05:30"}, {"time": "2026-08-04T13:15:00+05:30"}]
         completed = _completed_candles(candles, datetime(2026, 8, 4, 13, 15, 8))

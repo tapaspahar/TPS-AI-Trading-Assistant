@@ -17,7 +17,7 @@ from services.option_contract_service import UNDERLYING_QUOTES, OptionContractSe
 from services.economic_calendar_service import EconomicCalendarService
 
 
-def _attempt(status, checked_at, *, capture=None, chart=None, candidate=None, future=None, blockers=None, chain=None):
+def _attempt(status, checked_at, *, capture=None, chart=None, candidate=None, future=None, blockers=None, chain=None, timing=None):
     """Return a transparent audit record for every automatic decision."""
     return {
         "status": status,
@@ -29,12 +29,14 @@ def _attempt(status, checked_at, *, capture=None, chart=None, candidate=None, fu
             "capture": capture or {},
             "chart": chart or {},
             "chain": chain or {},
+            "timing": timing or {},
             "blockers": list(blockers or []),
         },
     }
 
 
 def _record(database, symbol, result):
+    result.setdefault("attempt", {})["symbol"] = str(symbol).upper()
     database.save_auto_trade_attempt(symbol, result)
     return result
 
@@ -49,6 +51,34 @@ def _completed_candles(candles, checked_at):
     except (KeyError, TypeError, ValueError):
         return candles
     return candles[:-1] if latest_start >= bucket.replace(tzinfo=None) else candles
+
+
+def signal_timing_stage(strategy: dict, settings: dict) -> str:
+    """Classify timing without converting an early watch into an entry signal."""
+    if strategy.get("trade_ready"):
+        return "FIRST VALID"
+    candidate = strategy.get("candidate")
+    side = (strategy.get("side_evaluations") or {}).get(candidate) or {}
+    required = int(strategy.get("required", settings.get("tps_required_matches", 5)) or 5)
+    minimum_score = int(strategy.get("minimum_score", settings.get("trade_plan_min_score", 95)) or 95)
+    passed = int(side.get("passed", strategy.get("passed", 0)) or 0)
+    score = int(side.get("score", strategy.get("score", 0)) or 0)
+    if candidate in {"CE", "PE"} and passed >= max(1, required - 1) and score >= max(0, minimum_score - 15):
+        return "EARLY WATCH"
+    return "NONE"
+
+
+def _fallback_timing(stage: str, checked_at: datetime, candle_time: str | None) -> dict:
+    timestamp = checked_at.isoformat(timespec="seconds")
+    return {
+        "stage": stage,
+        "signal_discovery_at": timestamp if stage != "NONE" else None,
+        "discovery_candle_time": candle_time if stage != "NONE" else None,
+        "first_valid_trigger_at": timestamp if stage == "FIRST VALID" else None,
+        "final_capture_at": None,
+        "delay_seconds": 0 if stage == "FIRST VALID" else None,
+        "no_look_ahead": True,
+    }
 
 
 def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
@@ -131,6 +161,13 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             "event_risk": event_risk,
             "final_confidence": max(0, round(strategy["score"] * float(environment.get("risk_multiplier", 1)))),
         }
+        timing_stage = signal_timing_stage(strategy, settings)
+        timing = database.signal_timing_context(
+            symbol, candidate or "-", checked_at.isoformat(timespec="seconds"), capture.get("candle_time"), timing_stage,
+        )
+        if not isinstance(timing, dict):
+            timing = _fallback_timing(timing_stage, checked_at, capture.get("candle_time"))
+        chart["signal_timing"] = timing
         daily_limit = float(settings.get("capital", 100000)) * float(settings.get("daily_loss_percent", 3)) / 100
         progress["daily_remaining"] = max(0, daily_limit - max(0, -float(progress.get("realized_pnl", 0))))
         operational_blockers = []
@@ -149,7 +186,7 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             result = _attempt(
                 "No new paper trade: TPS v2 candle evaluation completed but an operational safety limit blocked capture.",
                 checked_at, capture=capture, chart=chart, candidate=candidate, future=future,
-                blockers=chart["warnings"], chain=chain,
+                blockers=chart["warnings"], chain=chain, timing=timing,
             )
             return _record(database, symbol, result)
         if not strategy["trade_ready"]:
@@ -158,7 +195,7 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
                 f"(required {strategy.get('required', settings.get('tps_required_matches', 5))}) and score {strategy['score']}/100 "
                 f"(required {strategy.get('minimum_score', settings.get('trade_plan_min_score', 95))}).",
                 checked_at, capture=capture, chart=chart, candidate=candidate, future=future,
-                blockers=chart["warnings"], chain=chain,
+                blockers=chart["warnings"], chain=chain, timing=timing,
             )
             return _record(database, symbol, result)
         plan = create_review_plan(
@@ -189,7 +226,7 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             result = _attempt(
                 "No new paper trade: evidence passed, but operational hard-risk validation blocked execution.",
                 checked_at, capture=capture, chart=chart, candidate=candidate, future=future,
-                blockers=safety["blockers"] + safety["warnings"], chain=chain,
+                blockers=safety["blockers"] + safety["warnings"], chain=chain, timing=timing,
             )
             result["proposed_plan"] = plan
             return _record(database, symbol, result)
@@ -211,12 +248,21 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             result = _attempt(
                 "No new paper trade: candle/scenario changed before final capture; checklist will be recalculated.",
                 datetime.now(), capture=capture, chart=chart, candidate=candidate, future=future,
-                blockers=[reason], chain=chain,
+                blockers=[reason], chain=chain, timing=timing,
             )
             result["proposed_plan"] = plan
             return _record(database, symbol, result)
         trade_id = database.save_paper_trade(plan)
-        result = _attempt("Paper trade captured", checked_at, capture=capture, chart=chart, candidate=candidate, future=future, chain=chain)
+        final_capture_at = datetime.now().isoformat(timespec="seconds")
+        if not isinstance(timing, dict):
+            timing = _fallback_timing("FIRST VALID", checked_at, capture.get("candle_time"))
+        timing.update({"stage": "CAPTURED", "final_capture_at": final_capture_at})
+        if timing.get("signal_discovery_at"):
+            timing["delay_seconds"] = max(0, int((
+                datetime.fromisoformat(final_capture_at) - datetime.fromisoformat(timing["signal_discovery_at"])
+            ).total_seconds()))
+        chart["signal_timing"] = timing
+        result = _attempt("Paper trade captured", checked_at, capture=capture, chart=chart, candidate=candidate, future=future, chain=chain, timing=timing)
         result.update({"trade_id": trade_id, "plan": plan, "capture": capture})
         return _record(database, symbol, result)
     finally:

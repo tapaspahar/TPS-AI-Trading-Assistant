@@ -683,6 +683,14 @@ class OptionsPage(QWidget):
         chart = attempt.get("chart") or {}
         lines = [result.get("status", "Auto paper cycle completed.")]
         lines.append(f"Checked at: {attempt.get('checked_at') or 'Unavailable'} | Candle time: {attempt.get('candle_time') or 'Not evaluated'} | Future: {attempt.get('future_symbol') or 'Not loaded'}")
+        timing = attempt.get("timing") or {}
+        if timing:
+            lines.append(
+                f"Signal timing: {timing.get('stage', 'NONE')} | Discovered {timing.get('signal_discovery_at') or '-'} | "
+                f"First valid {timing.get('first_valid_trigger_at') or '-'} | Final capture {timing.get('final_capture_at') or '-'} | "
+                f"Delay {timing.get('delay_seconds') if timing.get('delay_seconds') is not None else '-'} sec | "
+                f"No-look-ahead {'YES' if timing.get('no_look_ahead') else 'NO'}"
+            )
         if capture:
             lines.extend((
                 f"OHLC: O {capture.get('open', '-')} | H {capture.get('high', '-')} | L {capture.get('low', '-')} | C {capture.get('close', '-')}",

@@ -201,6 +201,18 @@ class Database:
             )
             """
         )
+        attempt_columns = {
+            row["name"] for row in self.cursor.execute("PRAGMA table_info(auto_trade_attempts)")
+        }
+        for column, definition in {
+            "signal_discovered_at": "TEXT",
+            "first_valid_trigger_at": "TEXT",
+            "final_capture_at": "TEXT",
+            "timing_delay_seconds": "INTEGER",
+            "timing_stage": "TEXT",
+        }.items():
+            if column not in attempt_columns:
+                self.cursor.execute(f"ALTER TABLE auto_trade_attempts ADD COLUMN {column} {definition}")
         self.cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS post_market_tps_analysis (
@@ -1103,6 +1115,7 @@ class Database:
         attempt = result.get("attempt") or {}
         chart = attempt.get("chart") or {}
         strategy = chart.get("strategy") or {}
+        timing = attempt.get("timing") or {}
         checked_at = str(attempt.get("checked_at") or datetime.now().isoformat(timespec="seconds"))
         candle_time = attempt.get("candle_time")
         outcome = "TRADE CAPTURED" if result.get("plan") else "NO TRADE" if chart else "RETRY PENDING" if result.get("retry_pending") else "SKIPPED"
@@ -1111,6 +1124,8 @@ class Database:
             attempt.get("future_symbol"), outcome, chart.get("decision"), attempt.get("candidate"),
             strategy.get("passed"), strategy.get("total", 6) if strategy else None, chart.get("score"),
             result.get("trade_id"), result.get("status", "Auto paper cycle completed"),
+            timing.get("signal_discovery_at"), timing.get("first_valid_trigger_at"),
+            timing.get("final_capture_at"), timing.get("delay_seconds"), timing.get("stage"),
             json.dumps(result, ensure_ascii=False, default=str),
         )
         serialized = values[-1]
@@ -1126,20 +1141,65 @@ class Database:
             self.cursor.execute(
                 """UPDATE auto_trade_attempts SET checked_at = ?, trade_date = ?, future_symbol = ?, outcome = ?,
                           decision = ?, candidate = ?, confirmations_passed = ?, confirmations_total = ?, score = ?,
-                          trade_id = ?, status_text = ?, details_json = ? WHERE id = ?""",
-                (values[0], values[2], values[4], values[5], values[6], values[7], values[8], values[9], values[10], values[11], values[12], values[13], existing["id"]),
+                          trade_id = ?, status_text = ?, signal_discovered_at = ?, first_valid_trigger_at = ?,
+                          final_capture_at = ?, timing_delay_seconds = ?, timing_stage = ?, details_json = ? WHERE id = ?""",
+                (values[0], values[2], values[4], values[5], values[6], values[7], values[8], values[9], values[10],
+                 values[11], values[12], values[13], values[14], values[15], values[16], values[17], values[18], existing["id"]),
             )
             self.connection.commit()
             return True
         result_row = self.cursor.execute(
             """INSERT INTO auto_trade_attempts (
                    checked_at, candle_time, trade_date, symbol, future_symbol, outcome, decision, candidate,
-                   confirmations_passed, confirmations_total, score, trade_id, status_text, details_json
-               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   confirmations_passed, confirmations_total, score, trade_id, status_text,
+                   signal_discovered_at, first_valid_trigger_at, final_capture_at, timing_delay_seconds,
+                   timing_stage, details_json
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             values,
         )
         self.connection.commit()
         return result_row.rowcount == 1
+
+    def signal_timing_context(
+        self, symbol: str, candidate: str, checked_at: str, candle_time: str | None, stage: str,
+    ) -> dict:
+        """Build a no-look-ahead timing chain from already saved evaluations."""
+        current = datetime.fromisoformat(str(checked_at)).replace(tzinfo=None)
+        trade_date = current.strftime("%d-%m-%Y")
+        stage = str(stage or "NONE").upper()
+        latest = self.cursor.execute(
+            """SELECT checked_at, candle_time, signal_discovered_at, first_valid_trigger_at, timing_stage
+               FROM auto_trade_attempts
+               WHERE trade_date = ? AND symbol = ? AND candidate = ? AND signal_discovered_at IS NOT NULL
+               ORDER BY checked_at DESC, id DESC LIMIT 1""",
+            (trade_date, str(symbol).upper(), str(candidate).upper()),
+        ).fetchone()
+        discovery_at = first_valid_at = discovery_candle = None
+        if latest and str(latest["timing_stage"] or "") != "CAPTURED":
+            previous = datetime.fromisoformat(str(latest["checked_at"])).replace(tzinfo=None)
+            if timedelta(0) <= current - previous <= timedelta(minutes=15):
+                discovery_at = latest["signal_discovered_at"]
+                first_valid_at = latest["first_valid_trigger_at"]
+                discovery_candle = latest["candle_time"]
+        if stage != "NONE" and not discovery_at:
+            discovery_at = current.isoformat(timespec="seconds")
+            discovery_candle = candle_time
+        if stage in {"FIRST VALID", "CAPTURED"} and not first_valid_at:
+            first_valid_at = current.isoformat(timespec="seconds")
+        final_capture_at = current.isoformat(timespec="seconds") if stage == "CAPTURED" else None
+        endpoint = final_capture_at or first_valid_at
+        delay_seconds = None
+        if discovery_at and endpoint:
+            delay_seconds = max(0, int((datetime.fromisoformat(endpoint) - datetime.fromisoformat(discovery_at)).total_seconds()))
+        return {
+            "stage": stage,
+            "signal_discovery_at": discovery_at,
+            "discovery_candle_time": discovery_candle,
+            "first_valid_trigger_at": first_valid_at,
+            "final_capture_at": final_capture_at,
+            "delay_seconds": delay_seconds,
+            "no_look_ahead": True,
+        }
 
     def get_auto_trade_attempts(self, trade_date: str | None = None, limit: int = 500) -> list[sqlite3.Row]:
         query, values = "SELECT * FROM auto_trade_attempts", []
@@ -1278,7 +1338,7 @@ class Database:
 
     def export_auto_trade_attempts(self, destination: str | Path, trade_date: str | None = None) -> int:
         rows = self.get_auto_trade_attempts(trade_date, limit=5000)
-        headers = ("checked_at", "candle_time", "trade_date", "symbol", "future_symbol", "outcome", "decision", "candidate", "confirmations_passed", "confirmations_total", "score", "trade_id", "status_text", "details_json")
+        headers = ("checked_at", "candle_time", "trade_date", "symbol", "future_symbol", "outcome", "decision", "candidate", "confirmations_passed", "confirmations_total", "score", "trade_id", "status_text", "signal_discovered_at", "first_valid_trigger_at", "final_capture_at", "timing_delay_seconds", "timing_stage", "details_json")
         with Path(destination).open("w", newline="", encoding="utf-8-sig") as file:
             writer = csv.writer(file)
             writer.writerow(headers)

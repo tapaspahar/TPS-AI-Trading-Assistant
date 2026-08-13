@@ -271,6 +271,18 @@ class DashboardScreen(QWidget):
         if not isinstance(result, dict) or result.get("plan"):
             return
         attempt = result.get("attempt") or {}
+        timing = attempt.get("timing") or {}
+        if timing.get("stage") == "EARLY WATCH":
+            candidate = attempt.get("candidate") or "SETUP"
+            symbol = attempt.get("symbol") or "INDEX"
+            self.notifier.notify(
+                "early_watch", f"TPS Early Watch - {symbol} {candidate}",
+                f"{attempt.get('candle_time') or 'Completed candle'} is near-qualified for study only; "
+                "this is NOT an entry approval. Wait for FIRST VALID and every safety guard.",
+                dedupe_key=f"{symbol}:{candidate}:{attempt.get('candle_time') or attempt.get('checked_at')}",
+                once_per_day=True,
+            )
+            return
         self.notifier.notify(
             "auto_attempt_report", "TPS auto-trade evaluation completed",
             f"{attempt.get('candle_time') or 'Latest candle'} | {result.get('status', 'No trade captured')}",

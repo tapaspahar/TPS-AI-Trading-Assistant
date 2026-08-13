@@ -34,8 +34,11 @@ class AutoAttemptReportPage(QWidget):
 
         self.summary = QLabel()
         layout.addWidget(self.summary)
-        self.table = QTableWidget(0, 7)
-        self.table.setHorizontalHeaderLabels(("Candle time", "Checked at", "Symbol", "Outcome", "Decision", "Confirmations", "Score"))
+        self.table = QTableWidget(0, 9)
+        self.table.setHorizontalHeaderLabels((
+            "Candle time", "Checked at", "Symbol", "Outcome", "Timing stage", "Delay", "Decision",
+            "Confirmations", "Score",
+        ))
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
@@ -58,17 +61,28 @@ class AutoAttemptReportPage(QWidget):
         self.rows = self.db.get_auto_trade_attempts(trade_date)
         self.table.setRowCount(len(self.rows))
         captured = sum(row["outcome"] == "TRADE CAPTURED" for row in self.rows)
+        early_watches = sum((row["timing_stage"] or "") == "EARLY WATCH" for row in self.rows)
+        first_valid = sum((row["timing_stage"] or "") == "FIRST VALID" for row in self.rows)
+        measured_delays = [row["timing_delay_seconds"] for row in self.rows if row["timing_delay_seconds"] is not None]
         for index, row in enumerate(self.rows):
             confirmations = "-" if row["confirmations_passed"] is None else f"{row['confirmations_passed']}/{row['confirmations_total']}"
             values = (
                 row["candle_time"] or "Not evaluated", row["checked_at"], row["symbol"], row["outcome"],
-                row["decision"] or row["status_text"], confirmations, "-" if row["score"] is None else f"{row['score']}/100",
+                row["timing_stage"] or "NONE",
+                "-" if row["timing_delay_seconds"] is None else f"{row['timing_delay_seconds']} sec",
+                row["decision"] or row["status_text"], confirmations,
+                "-" if row["score"] is None else f"{row['score']}/100",
             )
             for column, value in enumerate(values):
                 self.table.setItem(index, column, QTableWidgetItem(str(value)))
         self.table.resizeColumnsToContents()
         scope = "today" if self.today_only else "all saved dates"
-        self.summary.setText(f"Showing {len(self.rows)} attempts for {scope} | Paper trades captured: {captured} | Not captured/skipped: {len(self.rows) - captured}")
+        average_delay = "-" if not measured_delays else f"{sum(measured_delays) / len(measured_delays):.0f} sec"
+        self.summary.setText(
+            f"Showing {len(self.rows)} attempts for {scope} | Early Watch: {early_watches} | "
+            f"First Valid: {first_valid} | Captured: {captured} | Average discovery-to-valid/capture delay: {average_delay} | "
+            f"Not captured/skipped: {len(self.rows) - captured}"
+        )
         if self.rows:
             self.table.selectRow(0)
         else:

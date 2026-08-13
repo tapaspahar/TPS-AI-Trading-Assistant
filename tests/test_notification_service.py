@@ -16,6 +16,7 @@ class NotificationSettingsTests(unittest.TestCase):
         self.assertTrue(category_enabled(values, "trade_capture"))
         self.assertTrue(category_enabled(values, "target_achieved"))
         self.assertFalse(category_enabled(values, "auto_attempt_report"))
+        self.assertFalse(category_enabled(values, "early_watch"))
 
     def test_saved_partial_preferences_are_merged_with_defaults(self):
         with tempfile.TemporaryDirectory() as folder:

@@ -57,6 +57,9 @@ DEFAULT_SETTINGS = {
         "support_resistance": True,
         "put_call_ratio": True,
         "auto_attempt_report": False,
+        # Near-qualified setup observation only. Disabled by default so it can
+        # never be mistaken for a trade-entry approval.
+        "early_watch": False,
         "equity_research": False,
         "chart_capture": False,
         "ai_analysis": True,
