@@ -4,6 +4,7 @@ Release date: 13-08-2026
 
 ## Highlights
 
+- Corrected installed-app startup placement so the native title bar, TPS header and footer remain visible on the current monitor after DPI, resolution or monitor changes.
 - Prevented repeated Support/Resistance and Auto Opportunity popup floods using permanent daily logical event identities.
 - Added restart-safe Trend Memory alert protection so the same current-day and historical-day match is delivered only once per day.
 - Added Notification Center cleanup for historic repeated alerts while retaining the first daily event record.

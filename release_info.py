@@ -9,9 +9,10 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.2.2"
-LAST_UPDATED_AT = "13-08-2026 13:25:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.2.2 - 13-08-2026 13:25 IST"
+LAST_UPDATED_AT = "13-08-2026 13:46:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.2.2 - 13-08-2026 13:46 IST"
 RELEASE_NOTES = (
+    "Corrected installed-app startup placement so Release 1.2.2 opens maximized inside the current monitor work area with the native title bar, TPS header and footer visible.",
     "Published maintenance Release 1.2.2 with aligned application, Windows executable, installer, portable ZIP and checksum metadata.",
     "Made Trend Memory similarity alerts restart-safe and limited each logical current-day/historical-day match to one delivered notification per day.",
     "Stopped repeated Support/Resistance and Auto Opportunity popup floods with restart-safe daily event identities instead of changing live-price message text.",
