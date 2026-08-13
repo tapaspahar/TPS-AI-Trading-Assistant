@@ -29,6 +29,7 @@ class Sidebar(QFrame):
         nav = lambda label: QPushButton(f"{self.NAV_BULLET}  {label}")
         self.dashboardButton = nav("Dashboard")
         self.liveMarketButton = nav("Market Snapshot")
+        self.volatilityIntelligenceButton = nav("Volatility Intelligence")
         self.chartCaptureButton = nav("Chart Capture")
         self.aiButton = nav("AI Analysis")
         self.optionsButton = nav("Options Workspace")
@@ -63,7 +64,8 @@ class Sidebar(QFrame):
         # Keep the visual journey in the same order a trader uses the app:
         # market context -> chart confirmation -> AI evaluation -> option plan -> journal.
         self.buttons = (
-            self.dashboardButton, self.liveMarketButton, self.equityButton, self.chartCaptureButton,
+            self.dashboardButton, self.liveMarketButton, self.volatilityIntelligenceButton,
+            self.equityButton, self.chartCaptureButton,
             self.aiButton, self.optionsButton, self.autoOpportunityButton, self.autoAttemptReportButton,
             self.notificationCenterButton, self.recoveryCenterButton, self.journalButton,
             self.checklistButton, self.riskButton, self.reportButton, self.backtestButton, self.replayButton,
@@ -108,6 +110,7 @@ class Sidebar(QFrame):
             30: self.notificationCenterButton,
             31: self.selfDevelopmentButton,
             32: self.recoveryCenterButton,
+            33: self.volatilityIntelligenceButton,
         }
         self.menu_group = QButtonGroup(self)
         self.menu_group.setExclusive(True)

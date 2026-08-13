@@ -14,7 +14,7 @@ from services.option_contract_service import OptionContractService
 from services.market_snapshot_recorder import MarketSnapshotRecorder
 from core.database_manager import Database
 from engine.market_structure import analyze_candles
-from engine.market_environment import classify_india_vix
+from engine.market_environment import classify_vix_percentile
 from engine.multi_timeframe_engine import analyze_multi_timeframe
 from engine.level_proximity import classify_level_proximity
 from ui.widgets.cards.dashboard_card import DashboardCard
@@ -134,6 +134,7 @@ class LiveMarketPage(QWidget):
         self.overview_loading = False
         self.future_contracts = {}
         self.vix_instrument = None
+        self.vix_history = []
         self.overview_timer = QTimer(self)
         self.overview_timer.timeout.connect(self.load_market_overview)
         self.snapshot_timer = QTimer(self)
@@ -381,9 +382,17 @@ class LiveMarketPage(QWidget):
             if vix_instrument:
                 request.setdefault(vix_instrument["exchange"], []).append(vix_instrument["token"])
             quotes = LiveSession.client.get_market_quotes(request)
+            vix_history = self.vix_history
+            if vix_instrument and not vix_history:
+                try:
+                    vix_history = LiveSession.client.get_recent_candles(
+                        vix_instrument["exchange"], vix_instrument["token"], "ONE_DAY", 365
+                    )
+                except (RuntimeError, ValueError, TypeError):
+                    vix_history = []
             self.overview_received.emit({
                 "quotes": {str(quote.get("symbolToken", quote.get("symboltoken", ""))): quote for quote in quotes},
-                "futures": futures, "vix_instrument": vix_instrument,
+                "futures": futures, "vix_instrument": vix_instrument, "vix_history": vix_history,
             })
         except RuntimeError as error:
             self.overview_error.emit(str(error))
@@ -391,6 +400,7 @@ class LiveMarketPage(QWidget):
     def show_overview(self, result):
         quotes, self.future_contracts = result["quotes"], result["futures"]
         self.vix_instrument = result.get("vix_instrument")
+        self.vix_history = result.get("vix_history") or self.vix_history
         token_map = {"99926000": "NIFTY", "99926009": "BANKNIFTY", "99919000": "SENSEX"}
         spot_summaries = {}
         for token, symbol in token_map.items():
@@ -428,9 +438,10 @@ class LiveMarketPage(QWidget):
         vix_quote = quotes.get(str((self.vix_instrument or {}).get("token", "")))
         if vix_quote:
             vix = float(vix_quote.get("ltp", 0) or 0)
-            zone, _risk_multiplier = classify_india_vix(vix)
+            context = classify_vix_percentile(vix, self.vix_history)
+            percentile = f"P{context['percentile']:.0f}" if context.get("percentile") is not None else "fallback"
             self.overview_cards["INDIA VIX"].set_value(
-                f"{vix:.2f}  |  {zone}\nUpdated {datetime.now().strftime('%H:%M:%S')}"
+                f"{vix:.2f}  |  {context['label']} ({percentile})\nUpdated {datetime.now().strftime('%H:%M:%S')}"
             )
         else:
             self.overview_cards["INDIA VIX"].set_value("Live VIX quote unavailable")

@@ -144,7 +144,7 @@ def recommend_option_strategy(symbol, spot, candles, capture, chain, environment
     strikes = sorted({row["strike"] for row in rows})
     direction, votes, structure = _direction(capture, candles)
     regime = environment.get("regime", "UNAVAILABLE")
-    vix_zone = environment.get("vix_zone", "UNAVAILABLE")
+    vix_zone = environment.get("vix_historical_regime") or environment.get("vix_zone", "UNAVAILABLE")
     reasons = [
         f"Direction {direction}: {votes}/4 chart votes; structure {structure}",
         f"Regime {regime}; India VIX {environment.get('vix') or 'unavailable'} ({vix_zone})",
@@ -161,7 +161,7 @@ def recommend_option_strategy(symbol, spot, candles, capture, chain, environment
         "regular_move_target_points": environment.get("regular_move_target_points"),
         "reasons": reasons, "warning": "Review-only defined-risk research. Verify live prices, liquidity, margin and payoff in the broker before any manual action.",
     }
-    if environment.get("time_state") == "LATE SESSION" or vix_zone == "EXTREME RISK":
+    if environment.get("time_state") == "LATE SESSION" or vix_zone in {"EXTREME RISK", "EXTREME VOLATILITY"}:
         return {**base, "state": "WAIT", "strategy": "No new strategy", "legs": [], "blockers": ["Late session or extreme-VIX risk blocks a new strategy"]}
     if len(strikes) < 4:
         return {**base, "state": "WAIT", "strategy": "No liquid structure", "legs": [], "blockers": ["Insufficient live option strikes/prices"]}
@@ -170,7 +170,7 @@ def recommend_option_strategy(symbol, spot, candles, capture, chain, environment
         return {**base, "state": "WAIT", "strategy": "Range budget consumed", "legs": [], "blockers": ["VIX-implied daily range is substantially consumed; the regular-move objective has insufficient room"]}
     if direction in {"BULLISH", "BEARISH"}:
         plan = _debit_spread(rows, strikes, float(spot), direction)
-    elif regime == "SIDEWAYS / TRANSITION" and vix_zone in {"HEALTHY TREND", "HIGH VOLATILITY"}:
+    elif regime == "SIDEWAYS / TRANSITION" and vix_zone in {"HEALTHY TREND", "NORMAL VOLATILITY", "HIGH VOLATILITY"}:
         vix_move = float(environment.get("expected_daily_range") or 0)
         # Place the short wings around the more conservative of the VIX estimate
         # and live ATM-straddle estimate; OI zones remain confirmation context.

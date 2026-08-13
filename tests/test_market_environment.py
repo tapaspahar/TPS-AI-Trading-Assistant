@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime
 
-from engine.market_environment import analyze_market_environment, classify_india_vix
+from engine.market_environment import analyze_market_environment, classify_india_vix, classify_vix_percentile
 
 
 class MarketEnvironmentTests(unittest.TestCase):
@@ -10,6 +10,18 @@ class MarketEnvironmentTests(unittest.TestCase):
         self.assertEqual(classify_india_vix(14.2)[0], "HEALTHY TREND")
         self.assertEqual(classify_india_vix(18.0)[0], "HIGH VOLATILITY")
         self.assertEqual(classify_india_vix(24.0)[0], "EXTREME RISK")
+
+    def test_historical_percentile_replaces_fixed_zone_when_history_is_sufficient(self):
+        history = [{"close": 10 + index / 10} for index in range(100)]
+        context = classify_vix_percentile(19.5, history)
+        self.assertEqual(context["source"], "historical percentile")
+        self.assertEqual(context["label"], "EXTREME VOLATILITY")
+        self.assertGreaterEqual(context["percentile"], 90)
+
+    def test_short_history_uses_explicit_absolute_fallback(self):
+        context = classify_vix_percentile(14, [{"close": 13}] * 10)
+        self.assertEqual(context["source"], "absolute fallback")
+        self.assertIsNone(context["percentile"])
     def capture(self):
         return {"close": "25000", "atr_14": "100", "ema_5": "25050", "ema_20": "25000",
                 "ema_50": "24800", "volume_ratio": "1.6"}
@@ -45,3 +57,21 @@ class MarketEnvironmentTests(unittest.TestCase):
         self.assertEqual(result["opening_range_high"], 25090)
         self.assertEqual(result["previous_day_low"], 24800)
         self.assertEqual(result["gap_state"], "GAP UP")
+
+    def test_implied_move_actual_move_and_utilization_are_published(self):
+        candles = [
+            {"time": "2026-08-05T09:15:00+05:30", "open": 25000, "high": 25060, "low": 24980, "close": 25040},
+            {"time": "2026-08-05T09:20:00+05:30", "open": 25040, "high": 25072, "low": 25010, "close": 25050},
+        ]
+        history = [{"close": 11 + index / 100} for index in range(100)]
+        result = analyze_market_environment(
+            candles, self.capture(), 25000, 15, datetime(2026, 8, 5, 10, 0), vix_history=history
+        )
+        self.assertGreater(result["expected_daily_range"], 0)
+        self.assertEqual(result["actual_movement_so_far"], 92)
+        self.assertAlmostEqual(
+            result["expected_range_utilized_percent"],
+            result["actual_movement_so_far"] / result["expected_daily_range"] * 100,
+            delta=.1,
+        )
+        self.assertIn(result["vix_trend"], {"RISING", "FALLING", "STABLE"})

@@ -145,11 +145,21 @@ class OptionStrategiesPage(QWidget):
         self.last_result = result
         self.cards["strategy"].set_value(f"{result['state']}\n{result['strategy']}")
         self.cards["bias"].set_value(f"{result['bias']}\nConfidence {result.get('confidence', 0)}%")
-        self.cards["environment"].set_value(f"VIX {result.get('vix') or 'Unavailable'}\n{result['regime']}")
+        environment = result.get("environment") or {}
+        percentile = environment.get("vix_percentile")
+        percentile_text = f"P{percentile:.1f}" if percentile is not None else "fallback"
+        self.cards["environment"].set_value(
+            f"VIX {result.get('vix') or 'Unavailable'} | {environment.get('vix_trend', 'UNAVAILABLE')}\n"
+            f"{environment.get('vix_historical_regime', result['regime'])} ({percentile_text})"
+        )
         expected, remaining = result.get("expected_daily_range"), result.get("remaining_expected_range")
         low, high = result.get("vix_expected_low"), result.get("vix_expected_high")
         range_text = f"{low:,.2f} to {high:,.2f}" if low is not None and high is not None else "VIX range unavailable"
-        self.cards["range"].set_value(f"{range_text}\nRemaining {remaining if remaining is not None else '-'} points")
+        utilized = environment.get("expected_range_utilized_percent")
+        utilization_text = f" | Used {utilized:.1f}%" if utilized is not None else ""
+        self.cards["range"].set_value(
+            f"{range_text}\nRemaining {remaining if remaining is not None else '-'} points{utilization_text}"
+        )
         if result.get("max_loss") is not None:
             self.cards["payoff"].set_value(f"Profit Rs {result['max_profit']:,.2f}\nLoss Rs {result['max_loss']:,.2f}")
         else:

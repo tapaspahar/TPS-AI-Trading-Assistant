@@ -46,9 +46,15 @@ class OptionStrategyService:
         try:
             vix_instrument = self.contract_service.get_india_vix_instrument()
             vix = float(self.client.get_option_quote(vix_instrument["exchange"], vix_instrument["token"]).get("ltp", 0) or 0) or None
+            try:
+                vix_history = self.client.get_recent_candles(
+                    vix_instrument["exchange"], vix_instrument["token"], "ONE_DAY", 365
+                )
+            except (RuntimeError, ValueError, TypeError):
+                vix_history = []
         except (RuntimeError, ValueError, TypeError):
-            vix = None
-        environment = analyze_market_environment(candles, capture, spot, vix)
+            vix, vix_history = None, []
+        environment = analyze_market_environment(candles, capture, spot, vix, vix_history=vix_history)
 
         contracts = self.contract_service.get_contracts(symbol)
         expiries = [contract["expiry"] for contract in contracts if contract["expiry"] >= date.today()]

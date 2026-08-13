@@ -9,9 +9,12 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.3.1"
-LAST_UPDATED_AT = "13-08-2026 17:20:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.3.1 - 13-08-2026 17:20 IST"
+LAST_UPDATED_AT = "13-08-2026 21:51:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.3.1 - 13-08-2026 21:51 IST"
 RELEASE_NOTES = (
+    "Added a dedicated Volatility Intelligence workspace comparing India VIX implied daily move with actual session movement, ATR and realised volatility.",
+    "Replaced fixed-only VIX labels with a one-year historical percentile regime when sufficient broker history is available, while clearly retaining the older absolute fallback when history is unavailable.",
+    "Added expected-range utilization, remaining movement budget, VIX rising/falling context and one shared volatility source for Market Snapshot and defined-risk Option Strategies.",
     "Corrected the AI Development Center at 1080p by adding a dedicated wheel-and-arrow page scroll area, protected working height and non-overlapping suggestion and evidence panels.",
     "Published Release 1.3.1 with simplified supported-broker onboarding and VIX/ATM-range-aware defined-risk strategy adjustment monitoring.",
     "Simplified supported-broker onboarding with an official setup/login button and clear one-time secure setup guidance; broker API authentication remains mandatory.",

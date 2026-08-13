@@ -236,6 +236,13 @@ PAGES = (
      "Choose your honest current state and confirm paper-only use. CALM/STABLE plus the commitment may unlock bounded paper observation; stress, anger, FOMO, revenge, missing check-in, the daily limit or the loss lock pauses new captures. Scores cannot bypass the guard.",
      "Apni current state honestly select karke paper-only commitment confirm karein. CALM/STABLE aur commitment par bounded paper observation mil sakta hai; stress, anger, FOMO, revenge, missing check-in, daily limit ya loss lock new capture rokta hai. Koi score guard bypass nahi kar sakta.",
      "Apni vartaman mansik sthiti sachchai se chunein aur paper-only commitment confirm karein. Stress, anger, FOMO, revenge, check-in ki kami, daily limit ya loss lock naye capture ko rokta hai. Koi score safety guard bypass nahi kar sakta."),
+    (33, "Volatility Intelligence",
+     "Compares the India VIX implied daily move with actual completed-candle movement, ATR and realised volatility. It classifies volatility by the current VIX historical percentile and keeps movement potential separate from market direction.",
+     "India VIX implied daily move ko completed-candle actual move, ATR aur realised volatility se compare karta hai. Current VIX ko historical percentile se Low/Normal/High/Extreme regime me rakhta hai; movement potential ko direction se alag rakhta hai.",
+     "इंडिया VIX के अनुमानित दैनिक मूव की तुलना पूर्ण कैंडल के वास्तविक मूव, ATR और वास्तविक अस्थिरता से करता है। वर्तमान VIX को ऐतिहासिक परसेंटाइल से Low/Normal/High/Extreme श्रेणी में रखता है।",
+     "Select NIFTY, BANKNIFTY or SENSEX and load live comparison. Review expected move, actual range, utilization, VIX trend/percentile, ATR, realised volatility, direction/volume strength, option-chain levels and defined-risk strategy context. Expected move is not a target or guaranteed boundary.",
+     "Index select karke live comparison load karein. Expected move, actual range, utilization, VIX trend/percentile, ATR, realised volatility, direction-volume strength, OI levels aur defined-risk strategy context dekhein. Expected move target ya guarantee nahi hai.",
+     "इंडेक्स चुनकर लाइव तुलना लोड करें। Expected move, actual range, utilization, VIX trend/percentile, ATR, realised volatility, दिशा-वॉल्यूम शक्ति, OI स्तर और defined-risk strategy context देखें। Expected move लक्ष्य या गारंटी नहीं है।"),
 )
 
 
