@@ -43,6 +43,7 @@ class Sidebar(QFrame):
         self.postMarketTpsAnalysisButton = nav("Post Market Analysis of TPS")
         self.equityButton = nav("Equity Research")
         self.autoAttemptReportButton = nav("Auto Attempt Report")
+        self.notificationCenterButton = nav("Notification Center")
         self.aboutButton = nav("About")
         self.helpButton = nav("Help")
         self.nextDayBiasButton = nav("Next-Day Bias")
@@ -61,7 +62,8 @@ class Sidebar(QFrame):
         # market context -> chart confirmation -> AI evaluation -> option plan -> journal.
         self.buttons = (
             self.dashboardButton, self.liveMarketButton, self.equityButton, self.chartCaptureButton,
-            self.aiButton, self.optionsButton, self.autoOpportunityButton, self.autoAttemptReportButton, self.journalButton,
+            self.aiButton, self.optionsButton, self.autoOpportunityButton, self.autoAttemptReportButton,
+            self.notificationCenterButton, self.journalButton,
             self.checklistButton, self.riskButton, self.reportButton, self.backtestButton, self.replayButton,
             self.postMarketButton, self.postMarketTpsAnalysisButton, self.nextDayBiasButton, self.casAnalysisButton, self.stockOptionsWatchButton,
             self.optionStrategiesButton, self.putCallRatioButton, self.gapProbabilityButton, self.scalperButton, self.trendMemoryButton,
@@ -101,6 +103,7 @@ class Sidebar(QFrame):
             27: self.autoOpportunityButton,
             28: self.trendMemoryButton,
             29: self.scalperButton,
+            30: self.notificationCenterButton,
         }
         self.menu_group = QButtonGroup(self)
         self.menu_group.setExclusive(True)
@@ -121,3 +124,7 @@ class Sidebar(QFrame):
         if button:
             button.setChecked(True)
             self.scroll.ensureWidgetVisible(button, 0, 16)
+
+    def set_notification_count(self, count: int):
+        suffix = f" ({int(count)})" if count else ""
+        self.notificationCenterButton.setText(f"{self.NAV_BULLET}  Notification Center{suffix}")

@@ -292,7 +292,87 @@ class Database:
         self.cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_auto_opportunity_time ON auto_opportunities(scanned_at DESC, id DESC)"
         )
+        self.cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                category TEXT NOT NULL,
+                title TEXT NOT NULL,
+                message TEXT NOT NULL,
+                is_read INTEGER NOT NULL DEFAULT 0
+            )
+            """
+        )
+        self.cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_notifications_time ON notifications(created_at DESC, id DESC)"
+        )
+        self.cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(is_read, created_at DESC)"
+        )
         self.connection.commit()
+
+    def save_notification(
+        self, category: str, title: str, message: str, created_at: str | None = None
+    ) -> int:
+        """Persist one desktop alert so its history survives application updates."""
+        timestamp = created_at or datetime.now().astimezone().isoformat(timespec="seconds")
+        result = self.cursor.execute(
+            "INSERT INTO notifications (created_at, category, title, message) VALUES (?, ?, ?, ?)",
+            (timestamp, str(category), str(title), str(message)),
+        )
+        self.connection.commit()
+        return int(result.lastrowid)
+
+    def get_notifications(
+        self, *, today_only: bool = False, unread_only: bool = False, limit: int = 1000
+    ) -> list[sqlite3.Row]:
+        clauses, values = [], []
+        if today_only:
+            clauses.append("substr(created_at, 1, 10) = ?")
+            values.append(datetime.now().astimezone().strftime("%Y-%m-%d"))
+        if unread_only:
+            clauses.append("is_read = 0")
+        query = "SELECT * FROM notifications"
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY created_at DESC, id DESC LIMIT ?"
+        values.append(max(1, min(int(limit), 10_000)))
+        return self.cursor.execute(query, values).fetchall()
+
+    def get_unread_notification_count(self) -> int:
+        row = self.cursor.execute(
+            "SELECT COUNT(*) AS unread FROM notifications WHERE is_read = 0"
+        ).fetchone()
+        return int(row["unread"])
+
+    def mark_notification_read(self, notification_id: int, is_read: bool = True) -> bool:
+        result = self.cursor.execute(
+            "UPDATE notifications SET is_read = ? WHERE id = ?",
+            (int(bool(is_read)), int(notification_id)),
+        )
+        self.connection.commit()
+        return bool(result.rowcount)
+
+    def mark_all_notifications_read(self) -> int:
+        result = self.cursor.execute("UPDATE notifications SET is_read = 1 WHERE is_read = 0")
+        self.connection.commit()
+        return int(result.rowcount)
+
+    def export_notifications(
+        self, destination: str | Path, *, today_only: bool = False, unread_only: bool = False
+    ) -> int:
+        rows = self.get_notifications(today_only=today_only, unread_only=unread_only, limit=10_000)
+        headers = ("created_at", "status", "category", "title", "message")
+        with Path(destination).open("w", newline="", encoding="utf-8-sig") as file:
+            writer = csv.writer(file)
+            writer.writerow(headers)
+            for row in rows:
+                writer.writerow((
+                    row["created_at"], "READ" if row["is_read"] else "UNREAD",
+                    row["category"], row["title"], row["message"],
+                ))
+        return len(rows)
 
     def save_auto_opportunities(self, opportunities: list[dict]) -> int:
         saved = 0

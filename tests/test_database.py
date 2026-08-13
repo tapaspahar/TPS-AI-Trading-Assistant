@@ -143,6 +143,28 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(self.db.export_auto_trade_attempts(path, "04-08-2026"), 1)
         self.assertIn("candle_time", path.read_text(encoding="utf-8-sig"))
 
+    def test_notification_history_tracks_unread_state_and_exports(self):
+        first_id = self.db.save_notification(
+            "trade_capture", "TPS paper trade captured", "NIFTY CE entry 100",
+            "2026-08-13T10:15:30+05:30",
+        )
+        self.db.save_notification(
+            "support_resistance", "TPS support alert", "NIFTY entered support zone",
+            "2026-08-13T10:20:00+05:30",
+        )
+        rows = self.db.get_notifications()
+        self.assertEqual((len(rows), rows[0]["title"], self.db.get_unread_notification_count()),
+                         (2, "TPS support alert", 2))
+        self.assertTrue(self.db.mark_notification_read(first_id))
+        self.assertEqual(self.db.get_unread_notification_count(), 1)
+        self.assertEqual(len(self.db.get_notifications(unread_only=True)), 1)
+        self.assertEqual(self.db.mark_all_notifications_read(), 1)
+        export_path = Path(self.temp_dir.name) / "notifications.csv"
+        self.assertEqual(self.db.export_notifications(export_path), 2)
+        exported = export_path.read_text(encoding="utf-8-sig")
+        self.assertIn("created_at,status,category,title,message", exported)
+        self.assertIn("TPS paper trade captured", exported)
+
     def test_open_ce_trade_gets_one_reversal_alert(self):
         trade_id = self.db.save_open_trade(sample_trade(exit=0.0))
         for timeframe in ("5m", "15m"):

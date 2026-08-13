@@ -33,6 +33,7 @@ from ui.pages.gap_probability_page import GapProbabilityPage
 from ui.pages.auto_opportunity_page import AutoOpportunityPage
 from ui.pages.trend_memory_page import TrendMemoryPage
 from ui.pages.scalper_page import ScalperPage
+from ui.pages.notification_center_page import NotificationCenterPage
 from ui.widgets.glass_effects import add_glass_shadow
 from ui.widgets.accessible_scroll import configure_scroll_area
 from services.post_market_tps_analysis import ensure_completed_post_market_reports
@@ -91,13 +92,15 @@ class DashboardScreen(QWidget):
         self.autoOpportunityPage = AutoOpportunityPage()
         self.trendMemoryPage = TrendMemoryPage()
         self.scalperPage = ScalperPage()
+        self.notificationCenterPage = NotificationCenterPage()
         for page in (self.dashboardPage, self.liveMarketPage, self.optionsPage, self.chartCapturePage, self.journalPage,
                      self.checklistPage, self.aiPage, self.riskPage, self.reportsPage, self.settingsPage,
                      self.backtestPage, self.postMarketPage, self.replayPage, self.equityPage,
                      self.autoAttemptReportPage, self.aboutPage, self.helpPage, self.nextDayBiasPage,
                      self.smartMoneyPage, self.casAnalysisPage, self.stockOptionsWatchPage, self.optionStrategiesPage,
                      self.postMarketTpsAnalysisPage, self.preCandlePage, self.powerfulEnginePage, self.putCallRatioPage,
-                     self.gapProbabilityPage, self.autoOpportunityPage, self.trendMemoryPage, self.scalperPage):
+                     self.gapProbabilityPage, self.autoOpportunityPage, self.trendMemoryPage, self.scalperPage,
+                     self.notificationCenterPage):
             self.stack.addWidget(page)
         self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
         self.journalPage.trade_saved.connect(self.reportsPage.refresh)
@@ -128,6 +131,8 @@ class DashboardScreen(QWidget):
         self.settingsPage.live_connected.connect(lambda: self.autoOpportunityPage.scan(force=True))
         self.settingsPage.live_connected.connect(self.scalperPage.start_monitoring)
         self.scalperPage.scalp_alert.connect(self.notify_scalp_watch)
+        self.notifier.notification_sent.connect(self.notificationCenterPage.refresh)
+        self.notificationCenterPage.unread_count_changed.connect(self.sidebar.set_notification_count)
         for button, index in ((self.sidebar.dashboardButton, 0), (self.sidebar.liveMarketButton, 1),
                               (self.sidebar.optionsButton, 2), (self.sidebar.chartCaptureButton, 3),
                               (self.sidebar.journalButton, 4), (self.sidebar.checklistButton, 5),
@@ -149,6 +154,7 @@ class DashboardScreen(QWidget):
         self.sidebar.autoOpportunityButton.clicked.connect(lambda _checked=False: self.show_page(27))
         self.sidebar.trendMemoryButton.clicked.connect(lambda _checked=False: self.show_page(28))
         self.sidebar.scalperButton.clicked.connect(lambda _checked=False: self.show_page(29))
+        self.sidebar.notificationCenterButton.clicked.connect(lambda _checked=False: self.show_page(30))
         body_layout.addWidget(self.stack)
         main_layout.addLayout(body_layout, 1)
         self.informationPanel = InformationPanel()
@@ -168,6 +174,7 @@ class DashboardScreen(QWidget):
         self.trend_memory_timer.start()
         QTimer.singleShot(0, self.update_completed_post_market_reports)
         QTimer.singleShot(0, self.update_trend_memory_monitor)
+        QTimer.singleShot(0, self.notificationCenterPage.refresh)
         QTimer.singleShot(0, self.settingsPage.auto_connect_saved_credentials)
 
     def update_completed_post_market_reports(self):
@@ -305,6 +312,8 @@ class DashboardScreen(QWidget):
             self.trendMemoryPage.refresh()
         elif index == 29:
             self.scalperPage.analyze(force=True)
+        elif index == 30:
+            self.notificationCenterPage.refresh()
         self.stack.setCurrentIndex(index)
 
     def handle_ai_decision(self, context):

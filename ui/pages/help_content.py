@@ -215,6 +215,13 @@ PAGES = (
      "Choose index, strike mode and a 60-95 gate. Auto monitor checks every 20 seconds but evaluates completed future and option candles only. A watch needs direction plus selected-option EMA/VWAP/momentum/volume and quote-spread confirmation. No futures or options order is placed.",
      "Index, strike mode aur 60-95 gate choose karein. Alert ke liye direction ke saath selected-option EMA/VWAP/momentum/volume aur spread confirmation chahiye. Future ya option order place nahi hota.",
      "इंडेक्स, स्ट्राइक मोड और 60-95 सीमा चुनें। अलर्ट के लिए दिशा के साथ चुने हुए ऑप्शन की EMA/VWAP/मोमेंटम/वॉल्यूम और स्प्रेड पुष्टि जरूरी है। कोई ऑर्डर नहीं लगता।"),
+    (30, "Notification Center",
+     "Permanent date-and-time history of every desktop alert actually delivered by TPS, including its source category, title, complete message and read/unread state.",
+     "TPS ke har delivered desktop alert ka permanent date-time record—source category, title, complete message aur read/unread status ke saath.",
+     "TPS द्वारा दिए गए हर डेस्कटॉप अलर्ट का स्थायी दिनांक-समय रिकॉर्ड, जिसमें स्रोत श्रेणी, शीर्षक, पूरा संदेश और पढ़ा/अपठित स्थिति शामिल है।",
+     "Use Today, All or Unread filters; select an alert for full detail, mark one/all as read, or export the current view to CSV. Disabled or duplicate-suppressed alerts are not recorded because they were not delivered.",
+     "Today, All ya Unread filter use karein; alert select karke full detail padhein, selected/all ko read mark karein ya current view CSV me export karein. Disabled ya duplicate-suppressed popup delivered nahi hua, isliye record nahi hota.",
+     "Today, All या Unread फ़िल्टर चुनें; पूरा विवरण पढ़ें, एक/सभी अलर्ट को पढ़ा हुआ चिह्नित करें या वर्तमान सूची CSV में निर्यात करें। बंद या डुप्लिकेट-दबा हुआ अलर्ट दिया नहीं गया, इसलिए दर्ज नहीं होता।"),
 )
 
 

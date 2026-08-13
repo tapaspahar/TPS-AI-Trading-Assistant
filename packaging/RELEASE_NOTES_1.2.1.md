@@ -4,6 +4,8 @@ Release date: 12-08-2026
 
 ## Highlights
 
+- Added a permanent Notification Center with date/time, source category, title, complete message and read/unread status for every delivered TPS desktop alert.
+- Added Today/All/Unread filters, sidebar unread count, full alert detail, mark-read actions and CSV export. Saved history remains in AppData across restarts and upgrades.
 - Corrected SENSEX auto-paper confirmation so sparse futures-volume samples are excluded as unavailable evidence instead of being counted as a failed directional-volume signal.
 - Kept EMA/SuperTrend checks active in calm sessions and added a bounded fresh-trigger grace band while retaining genuine execution and risk blockers.
 - Added separate 3:20 PM actionable and 3:40 PM closing-confirmation gap forecasts on the same page.

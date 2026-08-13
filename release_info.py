@@ -9,9 +9,11 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.2.1"
-LAST_UPDATED_AT = "13-08-2026 12:10:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.2.1 - 13-08-2026 12:10 IST"
+LAST_UPDATED_AT = "13-08-2026 12:22:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.2.1 - 13-08-2026 12:22 IST"
 RELEASE_NOTES = (
+    "Added a permanent Notification Center that records every delivered TPS desktop alert with local date/time, source category, title, full message and read/unread state.",
+    "Added Today, All and Unread notification views, unread sidebar count, selected-alert detail, mark-read controls and CSV export; notification history survives restarts and installer updates.",
     "Corrected SENSEX auto-paper confirmation so sparse current-month-future volume samples are shown as unavailable evidence instead of an automatic directional-volume failure.",
     "Kept EMA alignment and SuperTrend relevant in low-volatility sessions, reduced the accidental all-checks requirement, and added a bounded 25% fresh-trigger grace band before entry extension becomes a hard late-entry veto.",
     "Separated entry-quality warnings from genuine hard safety blockers; fake-breakout risk, extreme RSI, nearby unbroken support/resistance and materially chased entries remain protected.",

@@ -8,6 +8,7 @@ from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QStyle, QSystemTrayIcon
 
+from core.database_manager import Database
 from core.settings_store import SettingsStore
 
 
@@ -69,6 +70,7 @@ class NotificationService(QObject):
         self.tray.setToolTip("TPS AI Trading Assistant alerts")
         self.tray.show()
         self._recent = {}
+        self.db = Database()
 
     @classmethod
     def instance(cls, parent=None):
@@ -87,6 +89,14 @@ class NotificationService(QObject):
         self._recent[signature] = now
         if settings.get("notification_sound", True):
             QApplication.beep()
+        # The notification ledger is independent of the transient Windows
+        # popup.  This makes every delivered TPS alert permanently auditable.
+        try:
+            self.db.save_notification(category, title, message)
+        except Exception:
+            # A temporary database lock must not suppress a time-sensitive
+            # desktop alert; subsequent alerts continue to be recorded.
+            pass
         self.tray.showMessage(title, message, QSystemTrayIcon.Information, 10_000)
         self.notification_sent.emit(category, title, message)
         return True
