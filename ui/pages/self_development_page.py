@@ -9,7 +9,7 @@ from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView, QDateEdit, QGridLayout, QHBoxLayout, QLabel, QListWidget,
     QListWidgetItem, QMessageBox, QPlainTextEdit, QPushButton, QSplitter,
-    QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from core.database_manager import Database
@@ -17,6 +17,10 @@ from services.self_development_decision import (
     ensure_completed_self_development_reviews,
     generate_and_save_self_development_review,
 )
+from services.development_validation import (
+    build_counterfactual_review, build_evaluation_health, build_evidence_diagnostics,
+)
+from core.settings_store import SettingsStore
 from ui.widgets.excel_export_dialog import open_excel_export
 
 
@@ -62,7 +66,26 @@ class SelfDevelopmentPage(QWidget):
         self.evidence = self._card("Evidence Rule", "Repeated proof")
         for column, card in enumerate((self.health, self.verdict, self.open_count, self.evidence)):
             cards.addWidget(card[0], 0, column)
+        self.coverage = self._card("Evaluation Coverage", "-")
+        self.broker_health = self._card("Broker Reliability", "-")
+        self.validation_samples = self._card("Confirmed Outcomes", "-")
+        self.pipeline = self._card("Pipeline Evidence", "-")
+        for column, card in enumerate((self.coverage, self.broker_health, self.validation_samples, self.pipeline)):
+            cards.addWidget(card[0], 1, column)
         layout.addLayout(cards)
+        replay = QHBoxLayout()
+        replay.addWidget(QLabel("Counterfactual score"))
+        self.proposed_score = QSpinBox()
+        self.proposed_score.setRange(0, 100)
+        replay.addWidget(self.proposed_score)
+        replay.addWidget(QLabel("Required confirmations"))
+        self.proposed_matches = QSpinBox()
+        self.proposed_matches.setRange(1, 10)
+        replay.addWidget(self.proposed_matches)
+        run_replay = QPushButton("Run Safe Counterfactual Replay")
+        run_replay.clicked.connect(self.run_counterfactual)
+        replay.addWidget(run_replay)
+        layout.addLayout(replay)
         splitter = QSplitter()
         self.date_list = QListWidget()
         self.date_list.setMinimumWidth(270)
@@ -73,9 +96,9 @@ class SelfDevelopmentPage(QWidget):
         self.status = QLabel()
         self.status.setWordWrap(True)
         right_layout.addWidget(self.status)
-        self.table = QTableWidget(0, 6)
+        self.table = QTableWidget(0, 7)
         self.table.setHorizontalHeaderLabels(
-            ("Priority", "Area", "Observation", "Evidence", "Development suggestion", "Status")
+            ("Priority", "Area", "Observation", "Evidence", "Development suggestion", "Implementation", "Review status")
         )
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -97,10 +120,18 @@ class SelfDevelopmentPage(QWidget):
         self.details.setReadOnly(True)
         self.details.setMinimumHeight(150)
         right_layout.addWidget(self.details, 1)
+        right_layout.addWidget(QLabel("Release 1.3 validation evidence (read-only)"))
+        self.validation_details = QPlainTextEdit()
+        self.validation_details.setReadOnly(True)
+        self.validation_details.setMinimumHeight(150)
+        right_layout.addWidget(self.validation_details, 1)
         splitter.addWidget(right)
         splitter.setSizes([280, 1100])
         layout.addWidget(splitter, 1)
         self.refresh(auto_generate=False)
+        settings = SettingsStore().load()
+        self.proposed_score.setValue(int(settings.get("trade_plan_min_score", 95)))
+        self.proposed_matches.setValue(int(settings.get("tps_required_matches", 5)))
 
     @staticmethod
     def _card(title: str, value: str):
@@ -149,6 +180,9 @@ class SelfDevelopmentPage(QWidget):
         self.health[1].setText("-")
         self.verdict[1].setText("No review")
         self.open_count[1].setText("0")
+        for card in (self.coverage, self.broker_health, self.validation_samples, self.pipeline):
+            card[1].setText("-")
+        self.validation_details.setPlainText(message)
 
     def generate_selected(self):
         trade_date = self.date_input.date().toString("dd-MM-yyyy")
@@ -185,7 +219,8 @@ class SelfDevelopmentPage(QWidget):
             values = (
                 suggestion.get("priority", ""), suggestion.get("area", ""),
                 suggestion.get("observation", ""), suggestion.get("evidence", ""),
-                suggestion.get("suggestion", ""), suggestion.get("status", "OPEN"),
+                suggestion.get("suggestion", ""), suggestion.get("implementation_status", "LEGACY / UNKNOWN"),
+                suggestion.get("status", "OPEN"),
             )
             for column, value in enumerate(values):
                 item = QTableWidgetItem(str(value))
@@ -199,6 +234,7 @@ class SelfDevelopmentPage(QWidget):
         self.status.setText(
             f"Saved date: {trade_date} | Generated: {generated} | Suggestions: {len(self.suggestions)} | Open: {open_items}"
         )
+        self.refresh_validation_evidence(trade_date)
         if self.suggestions:
             self.table.selectRow(0)
         else:
@@ -210,11 +246,74 @@ class SelfDevelopmentPage(QWidget):
             return
         item = self.suggestions[index]
         self.details.setPlainText(
-            f"[{item.get('priority')}] {item.get('area')}\nStatus: {item.get('status', 'OPEN')}\n\n"
+            f"[{item.get('priority')}] {item.get('area')}\nReview status: {item.get('status', 'OPEN')}\n"
+            f"Implementation: {item.get('implementation_status', 'LEGACY / UNKNOWN')}\n\n"
             f"Observation:\n{item.get('observation')}\n\nSaved evidence:\n{item.get('evidence')}\n\n"
             f"Suggested development:\n{item.get('suggestion')}\n\n"
             f"Approval / validation test:\n{item.get('validation')}\n\n"
             "Safety: TPS will not modify source code or production trading rules automatically."
+        )
+
+    def refresh_validation_evidence(self, trade_date: str):
+        health = build_evaluation_health(self.db, trade_date, "ALL")
+        evidence = build_evidence_diagnostics(self.db, trade_date)
+        slots = health["evaluation"]
+        broker = health["broker"]
+        validation = health["validation"]
+        self.coverage[1].setText(
+            f"{slots['coverage_percent']:.1f}%\n{slots['evaluated_slots']}/{slots['expected_slots']} slots"
+        )
+        self.broker_health[1].setText(
+            f"{broker['success_rate']:.1f}%\n{broker['requests']} request samples"
+        )
+        self.validation_samples[1].setText(
+            f"{validation.get('samples', 0)} / 30\nAccuracy {validation.get('accuracy', 0):.1f}%"
+        )
+        pipeline_ready = slots["coverage_percent"] >= 95 and broker["requests"] > 0
+        self.pipeline[1].setText("LIVE PROOF READY" if pipeline_ready else "EVIDENCE PENDING")
+        volume = evidence["volume"]
+        levels = evidence["levels"]
+        outcomes = evidence["outcomes"]
+        self.validation_details.setPlainText(
+            "EVALUATION PIPELINE\n"
+            f"Coverage: {slots['coverage_percent']:.1f}% | Evaluated {slots['evaluated_slots']} | "
+            f"Gaps {slots['gap_slots']} | Reasons {slots['gap_reasons'] or 'none'}\n\n"
+            "BROKER RELIABILITY\n"
+            f"Requests {broker['requests']} | Success {broker['success_rate']:.1f}% | "
+            f"Last good {broker.get('last_good_at') or '-'} | Data age {broker.get('last_good_data_age_seconds') or '-'} sec\n\n"
+            "VOLUME / LEVEL EVIDENCE\n"
+            f"Volume reason codes: {volume.get('reason_codes') or 'no samples'}\n"
+            f"Regime split: {volume.get('regimes') or 'no samples'}\n"
+            f"Level confluence: {levels.get('confluence') or 'no samples'} | "
+            f"Average distance {levels.get('average_distance_atr') or '-'} ATR | "
+            f"Average age {levels.get('average_age_seconds') or '-'} sec\n\n"
+            "OUTCOME POST-MORTEM\n"
+            f"Closed samples {outcomes.get('samples', 0)} | Decisive {outcomes.get('decisive_samples', 0)} | "
+            f"Avg entry lateness {outcomes.get('average_entry_lateness_seconds') or '-'} sec | "
+            f"Avg spread {outcomes.get('average_premium_spread_percent') or '-'}% | "
+            f"Avg MAE {outcomes.get('average_mae') or '-'} | Avg MFE {outcomes.get('average_mfe') or '-'}\n\n"
+            "Approval gates remain evidence-led: 3 consecutive sessions at 95%+ coverage and "
+            "30 confirmed outcomes cannot be fabricated by software."
+        )
+
+    def run_counterfactual(self):
+        trade_date = self.date_input.date().toString("dd-MM-yyyy")
+        try:
+            review = build_counterfactual_review(
+                self.db, trade_date, self.proposed_score.value(), self.proposed_matches.value(),
+            )
+        except ValueError as error:
+            QMessageBox.information(self, "Counterfactual replay", str(error))
+            return
+        self.validation_details.setPlainText(
+            f"SAFE COUNTERFACTUAL REPLAY — {trade_date}\n"
+            f"Saved evaluations: {review['attempts']}\n"
+            f"Current rule candidates: {review['current_candidate_count']}\n"
+            f"Proposed rule candidates: {review['proposed_candidate_count']}\n"
+            f"Additional review-only candidates: {review['additional_candidate_count']}\n"
+            f"Hard-blocked candidates remain blocked: {review['hard_blocked_count']}\n\n"
+            "This comparison does not alter production settings. Forward outcomes and false-entry rate "
+            "must validate any future threshold change."
         )
 
     def set_selected_status(self, status: str):

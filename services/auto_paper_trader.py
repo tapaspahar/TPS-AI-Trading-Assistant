@@ -15,6 +15,7 @@ from engine.trade_plan_engine import create_review_plan
 from engine.tps_entry_confirmation import evaluate_tps_entry_v2
 from services.option_contract_service import UNDERLYING_QUOTES, OptionContractService, contracts_near_spot
 from services.economic_calendar_service import EconomicCalendarService
+from services.provider_telemetry import record_request, start_request
 
 
 def _attempt(status, checked_at, *, capture=None, chart=None, candidate=None, future=None, blockers=None, chain=None, timing=None):
@@ -91,13 +92,29 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
         progress = database.paper_trade_progress(today)
         service = OptionContractService()
         future = service.get_front_month_future(symbol)
-        candles = client.get_recent_candles(future["exchange"], future["token"], "FIVE_MINUTE", 5)
+        provider = getattr(client, "provider_name", "Broker")
+        request_started = start_request()
+        try:
+            candles = client.get_recent_candles(future["exchange"], future["token"], "FIVE_MINUTE", 5)
+        except Exception as error:
+            record_request(provider, "auto-paper-candles", request_started, outcome="FAILURE",
+                           error_code=type(error).__name__, details={"message": str(error)})
+            raise
+        record_request(provider, "auto-paper-candles", request_started, outcome="SUCCESS",
+                       data_timestamp=candles[-1].get("time") if candles else None,
+                       details={"rows": len(candles), "symbol": symbol})
         candles = _completed_candles(candles, checked_at)
         if len(candles) < 51:
             raise ValueError("At least 51 completed 5-minute candles are required for the automatic TPS v2 check.")
-        provider = getattr(client, "provider_name", "Broker")
         capture = build_live_capture(symbol, "5m", candles, f"{provider} current-month future {future['symbol']}")
         capture["candle_time"] = candles[-1].get("time")
+        capture["provider"] = provider
+        try:
+            capture["provider_data_age_seconds"] = max(0, int((
+                checked_at.replace(tzinfo=None) - datetime.fromisoformat(str(capture["candle_time"])).replace(tzinfo=None)
+            ).total_seconds()))
+        except (TypeError, ValueError):
+            capture["provider_data_age_seconds"] = None
         snapshot = ChartSnapshot(
             price=float(capture["close"]), ema_5=float(capture["ema_5"]), ema_20=float(capture["ema_20"]), ema_50=float(capture["ema_50"]),
             vwap=float(capture["vwap"]) if capture["vwap"] else None, supertrend=float(capture["supertrend"]),
@@ -159,6 +176,7 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             "pe_score": (side_evaluations.get("PE") or {}).get("score"),
             "market_environment": environment,
             "event_risk": event_risk,
+            "provider": provider,
             "final_confidence": max(0, round(strategy["score"] * float(environment.get("risk_multiplier", 1)))),
         }
         timing_stage = signal_timing_stage(strategy, settings)
@@ -221,6 +239,14 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             recovery_assessment=OvertradingGuard().assess(settings, database, checked_at),
         )
         plan["execution_safety"] = safety
+        plan["signal_timing"] = dict(timing)
+        plan["evidence_context"] = {
+            "candle_time": capture.get("candle_time"), "atr_14": capture.get("atr_14"),
+            "volume": capture.get("volume"), "volume_ratio": capture.get("volume_ratio"),
+            "volume_threshold": environment.get("volume_threshold"), "market_regime": environment.get("regime"),
+            "zones": strategy.get("zones") or {}, "provider": provider,
+            "provider_data_age_seconds": capture.get("provider_data_age_seconds"),
+        }
         if not safety["allowed"]:
             chart["warnings"].extend(safety["blockers"])
             result = _attempt(
@@ -252,7 +278,6 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             )
             result["proposed_plan"] = plan
             return _record(database, symbol, result)
-        trade_id = database.save_paper_trade(plan)
         final_capture_at = datetime.now().isoformat(timespec="seconds")
         if not isinstance(timing, dict):
             timing = _fallback_timing("FIRST VALID", checked_at, capture.get("candle_time"))
@@ -261,6 +286,8 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             timing["delay_seconds"] = max(0, int((
                 datetime.fromisoformat(final_capture_at) - datetime.fromisoformat(timing["signal_discovery_at"])
             ).total_seconds()))
+        plan["signal_timing"] = dict(timing)
+        trade_id = database.save_paper_trade(plan)
         chart["signal_timing"] = timing
         result = _attempt("Paper trade captured", checked_at, capture=capture, chart=chart, candidate=candidate, future=future, chain=chain, timing=timing)
         result.update({"trade_id": trade_id, "plan": plan, "capture": capture})

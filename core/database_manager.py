@@ -7,6 +7,7 @@ import csv
 import json
 import os
 import shutil
+from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
 from engine.tps_engine import TPSEngine
@@ -116,7 +117,9 @@ class Database:
             self.cursor.execute("ALTER TABLE trades ADD COLUMN closed_at TEXT")
         paper_columns = {row["name"] for row in self.cursor.execute("PRAGMA table_info(paper_trade_links)")}
         for name, definition in (("last_ltp", "REAL"), ("min_ltp", "REAL"), ("max_ltp", "REAL"), ("last_alert_level", "TEXT"),
-                                 ("initial_stoploss", "REAL"), ("trailing_stoploss", "REAL"), ("plan_json", "TEXT")):
+                                 ("initial_stoploss", "REAL"), ("trailing_stoploss", "REAL"), ("plan_json", "TEXT"),
+                                 ("entry_lateness_seconds", "INTEGER"), ("premium_spread_percent", "REAL"),
+                                 ("initial_atr", "REAL"), ("mae", "REAL"), ("mfe", "REAL")):
             if name not in paper_columns:
                 self.cursor.execute(f"ALTER TABLE paper_trade_links ADD COLUMN {name} {definition}")
         self.cursor.execute(
@@ -210,6 +213,16 @@ class Database:
             "final_capture_at": "TEXT",
             "timing_delay_seconds": "INTEGER",
             "timing_stage": "TEXT",
+            "volume_reason_code": "TEXT",
+            "chart_support": "REAL",
+            "chart_resistance": "REAL",
+            "oi_support": "REAL",
+            "oi_resistance": "REAL",
+            "level_confluence": "TEXT",
+            "level_distance_atr": "REAL",
+            "level_age_seconds": "INTEGER",
+            "provider": "TEXT",
+            "provider_data_age_seconds": "INTEGER",
         }.items():
             if column not in attempt_columns:
                 self.cursor.execute(f"ALTER TABLE auto_trade_attempts ADD COLUMN {column} {definition}")
@@ -345,6 +358,62 @@ class Database:
             )
             """
         )
+        self.cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS evaluation_slots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                trade_date TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                scheduled_at TEXT NOT NULL,
+                candle_time TEXT NOT NULL,
+                heartbeat_at TEXT NOT NULL,
+                status TEXT NOT NULL,
+                reason_code TEXT NOT NULL,
+                details_json TEXT NOT NULL,
+                UNIQUE(symbol, candle_time)
+            )
+            """
+        )
+        self.cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_evaluation_slots_date ON evaluation_slots(trade_date, symbol, candle_time)"
+        )
+        self.cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS broker_request_telemetry (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                provider TEXT NOT NULL,
+                operation TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                completed_at TEXT NOT NULL,
+                duration_ms INTEGER NOT NULL,
+                outcome TEXT NOT NULL,
+                attempt_count INTEGER NOT NULL,
+                cache_hit INTEGER NOT NULL DEFAULT 0,
+                data_timestamp TEXT,
+                data_age_seconds INTEGER,
+                error_code TEXT,
+                details_json TEXT NOT NULL
+            )
+            """
+        )
+        self.cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_broker_telemetry_time ON broker_request_telemetry(provider, completed_at DESC)"
+        )
+        self.cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS counterfactual_reviews (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                trade_date TEXT NOT NULL,
+                generated_at TEXT NOT NULL,
+                current_score INTEGER NOT NULL,
+                proposed_score INTEGER NOT NULL,
+                current_matches INTEGER NOT NULL,
+                proposed_matches INTEGER NOT NULL,
+                result_json TEXT NOT NULL,
+                UNIQUE(trade_date, proposed_score, proposed_matches)
+            )
+            """
+        )
         self.connection.commit()
 
     def save_self_development_review(self, review: dict) -> int:
@@ -423,6 +492,181 @@ class Database:
             )
             self.connection.commit()
         return changed
+
+    def save_evaluation_slot(
+        self, symbol: str, scheduled_at: str, candle_time: str, status: str,
+        reason_code: str, details: dict | None = None, heartbeat_at: str | None = None,
+    ) -> int:
+        """Persist one expected completed-candle slot without inventing a market evaluation."""
+        heartbeat = heartbeat_at or datetime.now().astimezone().isoformat(timespec="seconds")
+        try:
+            trade_date = datetime.fromisoformat(str(candle_time)).strftime("%d-%m-%Y")
+        except ValueError:
+            trade_date = datetime.now().strftime("%d-%m-%Y")
+        self.cursor.execute(
+            """
+            INSERT INTO evaluation_slots
+                (trade_date, symbol, scheduled_at, candle_time, heartbeat_at, status, reason_code, details_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(symbol, candle_time) DO UPDATE SET
+                scheduled_at=excluded.scheduled_at,
+                heartbeat_at=excluded.heartbeat_at,
+                status=CASE
+                    WHEN evaluation_slots.status = 'EVALUATED' THEN evaluation_slots.status
+                    WHEN excluded.status = 'EVALUATED' THEN excluded.status
+                    ELSE excluded.status END,
+                reason_code=CASE
+                    WHEN evaluation_slots.status = 'EVALUATED' THEN evaluation_slots.reason_code
+                    WHEN excluded.status = 'EVALUATED' THEN excluded.reason_code
+                    ELSE excluded.reason_code END,
+                details_json=excluded.details_json
+            """,
+            (
+                trade_date, str(symbol).upper(), str(scheduled_at), str(candle_time), heartbeat,
+                str(status).upper(), str(reason_code).upper(),
+                json.dumps(details or {}, ensure_ascii=False, default=str),
+            ),
+        )
+        self.connection.commit()
+        row = self.cursor.execute(
+            "SELECT id FROM evaluation_slots WHERE symbol = ? AND candle_time = ?",
+            (str(symbol).upper(), str(candle_time)),
+        ).fetchone()
+        return int(row["id"])
+
+    def reconcile_evaluation_slots(
+        self, symbol: str, now: datetime, *, enabled: bool, connected: bool
+    ) -> int:
+        """Backfill today's missing slot audit with explicit non-signal reason codes."""
+        if now.weekday() >= 5:
+            return 0
+        market_start = now.replace(hour=9, minute=20, second=0, microsecond=0)
+        market_end = now.replace(hour=15, minute=30, second=0, microsecond=0)
+        end = min(now.replace(second=0, microsecond=0), market_end)
+        if end < market_start:
+            return 0
+        existing = {
+            str(row["candle_time"])
+            for row in self.cursor.execute(
+                "SELECT candle_time FROM evaluation_slots WHERE trade_date = ? AND symbol = ?",
+                (now.strftime("%d-%m-%Y"), str(symbol).upper()),
+            ).fetchall()
+        }
+        attempts = {
+            str(row["candle_time"])
+            for row in self.cursor.execute(
+                "SELECT candle_time FROM auto_trade_attempts WHERE trade_date = ? AND symbol = ? AND candle_time IS NOT NULL",
+                (now.strftime("%d-%m-%Y"), str(symbol).upper()),
+            ).fetchall()
+        }
+        reason = "AUTO_MODE_DISABLED" if not enabled else "BROKER_DISCONNECTED" if not connected else "MISSED_SLOT_BACKFILL"
+        count = 0
+        scheduled = market_start
+        while scheduled <= end:
+            candle = scheduled - timedelta(minutes=5)
+            candle_key = candle.astimezone().isoformat(timespec="seconds") if candle.tzinfo else candle.isoformat(timespec="seconds")
+            if candle_key not in existing:
+                evaluated = any(value.startswith(candle.strftime("%Y-%m-%dT%H:%M")) for value in attempts)
+                self.save_evaluation_slot(
+                    symbol, scheduled.isoformat(timespec="seconds"), candle_key,
+                    "EVALUATED" if evaluated else "GAP", "ATTEMPT_SAVED" if evaluated else reason,
+                    {"backfilled": True, "auto_mode_enabled": enabled, "broker_connected": connected},
+                )
+                count += 1
+            scheduled += timedelta(minutes=5)
+        return count
+
+    def get_evaluation_health(self, trade_date: str, symbol: str | None = "NIFTY") -> dict:
+        if symbol and str(symbol).upper() != "ALL":
+            rows = self.cursor.execute(
+                "SELECT * FROM evaluation_slots WHERE trade_date = ? AND symbol = ? ORDER BY candle_time",
+                (trade_date, str(symbol).upper()),
+            ).fetchall()
+            label = str(symbol).upper()
+        else:
+            rows = self.cursor.execute(
+                "SELECT * FROM evaluation_slots WHERE trade_date = ? ORDER BY symbol, candle_time",
+                (trade_date,),
+            ).fetchall()
+            label = "ALL"
+        counts = Counter(str(row["status"]) for row in rows)
+        reasons = Counter(str(row["reason_code"]) for row in rows if str(row["status"]) != "EVALUATED")
+        total = len(rows)
+        evaluated = int(counts.get("EVALUATED", 0))
+        return {
+            "trade_date": trade_date, "symbol": label, "expected_slots": total,
+            "evaluated_slots": evaluated, "gap_slots": total - evaluated,
+            "coverage_percent": round(evaluated * 100 / total, 1) if total else 0.0,
+            "gap_reasons": dict(reasons), "rows": rows,
+        }
+
+    def save_broker_telemetry(self, event: dict) -> int:
+        self.cursor.execute(
+            """INSERT INTO broker_request_telemetry
+               (provider, operation, started_at, completed_at, duration_ms, outcome, attempt_count,
+                cache_hit, data_timestamp, data_age_seconds, error_code, details_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                str(event.get("provider") or "Broker"), str(event.get("operation") or "unknown"),
+                str(event.get("started_at")), str(event.get("completed_at")),
+                int(event.get("duration_ms") or 0), str(event.get("outcome") or "UNKNOWN").upper(),
+                int(event.get("attempt_count") or 1), int(bool(event.get("cache_hit"))),
+                event.get("data_timestamp"), event.get("data_age_seconds"), event.get("error_code"),
+                json.dumps(event.get("details") or {}, ensure_ascii=False, default=str),
+            ),
+        )
+        self.connection.commit()
+        return int(self.cursor.lastrowid)
+
+    def get_broker_health(self, provider: str | None = None, limit: int = 500) -> dict:
+        where, values = "", []
+        if provider:
+            where, values = "WHERE provider = ?", [provider]
+        rows = self.cursor.execute(
+            f"SELECT * FROM broker_request_telemetry {where} ORDER BY id DESC LIMIT ?",
+            (*values, max(1, min(int(limit), 5000))),
+        ).fetchall()
+        failures = sum(str(row["outcome"]) != "SUCCESS" for row in rows)
+        last_good = next((row for row in rows if str(row["outcome"]) == "SUCCESS"), None)
+        return {
+            "requests": len(rows), "failures": failures,
+            "success_rate": round((len(rows) - failures) * 100 / len(rows), 1) if rows else 0.0,
+            "last_good_at": last_good["completed_at"] if last_good else None,
+            "last_good_data_age_seconds": last_good["data_age_seconds"] if last_good else None,
+            "providers": dict(Counter(str(row["provider"]) for row in rows)), "rows": rows,
+        }
+
+    def save_counterfactual_review(self, review: dict) -> int:
+        self.cursor.execute(
+            """INSERT INTO counterfactual_reviews
+               (trade_date, generated_at, current_score, proposed_score, current_matches, proposed_matches, result_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(trade_date, proposed_score, proposed_matches) DO UPDATE SET
+                   generated_at=excluded.generated_at, current_score=excluded.current_score,
+                   current_matches=excluded.current_matches, result_json=excluded.result_json""",
+            (
+                review["trade_date"], review["generated_at"], int(review["current_score"]),
+                int(review["proposed_score"]), int(review["current_matches"]),
+                int(review["proposed_matches"]), json.dumps(review, ensure_ascii=False, default=str),
+            ),
+        )
+        self.connection.commit()
+        row = self.cursor.execute(
+            "SELECT id FROM counterfactual_reviews WHERE trade_date=? AND proposed_score=? AND proposed_matches=?",
+            (review["trade_date"], int(review["proposed_score"]), int(review["proposed_matches"])),
+        ).fetchone()
+        return int(row["id"])
+
+    def get_counterfactual_reviews(self, trade_date: str | None = None, limit: int = 100) -> list[sqlite3.Row]:
+        if trade_date:
+            return self.cursor.execute(
+                "SELECT * FROM counterfactual_reviews WHERE trade_date=? ORDER BY generated_at DESC LIMIT ?",
+                (trade_date, max(1, min(int(limit), 1000))),
+            ).fetchall()
+        return self.cursor.execute(
+            "SELECT * FROM counterfactual_reviews ORDER BY generated_at DESC LIMIT ?",
+            (max(1, min(int(limit), 1000)),),
+        ).fetchall()
 
     def save_notification(
         self, category: str, title: str, message: str, created_at: str | None = None,
@@ -771,10 +1015,15 @@ class Database:
         trade_id = self.save_open_trade(trade)
         self.cursor.execute(
             """INSERT INTO paper_trade_links
-               (trade_id, exchange, token, contract_symbol, initial_stoploss, trailing_stoploss, plan_json)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+               (trade_id, exchange, token, contract_symbol, initial_stoploss, trailing_stoploss,
+                entry_lateness_seconds, premium_spread_percent, initial_atr, plan_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (trade_id, str(contract["exchange"]), str(contract["token"]), str(contract["symbol"]),
-             float(plan["stoploss"]), float(plan["stoploss"]), json.dumps(plan, ensure_ascii=False, default=str)),
+             float(plan["stoploss"]), float(plan["stoploss"]),
+             (plan.get("signal_timing") or {}).get("delay_seconds"),
+             (plan.get("execution_safety") or {}).get("spread_percent"),
+             (plan.get("evidence_context") or {}).get("atr_14"),
+             json.dumps(plan, ensure_ascii=False, default=str)),
         )
         self.cursor.execute(
             "INSERT OR IGNORE INTO trade_alerts (trade_id, created_at, alert_type, title, message) VALUES (?, ?, ?, ?, ?)",
@@ -820,8 +1069,11 @@ class Database:
             alert_level = "CRITICAL" if loss_progress >= .90 else "STRONG" if loss_progress >= .75 else "EARLY" if loss_progress >= .50 else None
             self.cursor.execute(
                 """UPDATE paper_trade_links SET last_ltp = ?, min_ltp = ?, max_ltp = ?,
-                          last_alert_level = COALESCE(?, last_alert_level), trailing_stoploss = ? WHERE trade_id = ?""",
-                (ltp, minimum, maximum, alert_level, active_stop, int(row["id"])),
+                          last_alert_level = COALESCE(?, last_alert_level), trailing_stoploss = ?,
+                          mae = ?, mfe = ? WHERE trade_id = ?""",
+                (ltp, minimum, maximum, alert_level, active_stop,
+                 round(max(0.0, float(row["entry"]) - minimum), 2),
+                 round(max(0.0, maximum - float(row["entry"])), 2), int(row["id"])),
             )
             if alert_level:
                 self.cursor.execute(
@@ -1116,9 +1368,38 @@ class Database:
         chart = attempt.get("chart") or {}
         strategy = chart.get("strategy") or {}
         timing = attempt.get("timing") or {}
+        capture = attempt.get("capture") or {}
+        candidate = str(attempt.get("candidate") or "").upper()
+        selected_side = (strategy.get("side_evaluations") or {}).get(candidate) or {}
+        zones = strategy.get("zones") or {}
+        environment = chart.get("market_environment") or {}
         checked_at = str(attempt.get("checked_at") or datetime.now().isoformat(timespec="seconds"))
         candle_time = attempt.get("candle_time")
         outcome = "TRADE CAPTURED" if result.get("plan") else "NO TRADE" if chart else "RETRY PENDING" if result.get("retry_pending") else "SKIPPED"
+        volume = capture.get("volume")
+        volume_ratio = capture.get("volume_ratio")
+        threshold = float(environment.get("volume_threshold") or 1.5)
+        volume_reason = (
+            "MISSING_PROVIDER_VOLUME" if volume in (None, "", 0, 0.0)
+            else "LOW_VIX_STRICT_BENCHMARK" if environment.get("regime") == "LOW VOLATILITY" and float(volume_ratio or 0) < threshold
+            else "WEAK_PARTICIPATION" if float(volume_ratio or 0) < threshold
+            else "DIRECTIONAL_VOLUME_CONFIRMED"
+        )
+        support_match = bool(zones.get("support_confluence"))
+        resistance_match = bool(zones.get("resistance_confluence"))
+        confluence = "BOTH" if support_match and resistance_match else "SUPPORT" if support_match else "RESISTANCE" if resistance_match else "NONE"
+        relevant_levels = (
+            (zones.get("chart_resistance"), zones.get("oi_resistance")) if candidate == "CE"
+            else (zones.get("chart_support"), zones.get("oi_support"))
+        )
+        level_distances = [abs(float(capture.get("close")) - float(level)) for level in relevant_levels if level not in (None, "") and capture.get("close") not in (None, "")]
+        atr = float(capture.get("atr_14") or 0)
+        level_distance_atr = round(min(level_distances) / atr, 3) if level_distances and atr > 0 else None
+        level_age_seconds = None
+        try:
+            level_age_seconds = max(0, int((datetime.fromisoformat(checked_at).replace(tzinfo=None) - datetime.fromisoformat(str(candle_time)).replace(tzinfo=None)).total_seconds()))
+        except (TypeError, ValueError):
+            pass
         values = (
             checked_at, candle_time, datetime.fromisoformat(checked_at).strftime("%d-%m-%Y"), str(symbol).upper(),
             attempt.get("future_symbol"), outcome, chart.get("decision"), attempt.get("candidate"),
@@ -1126,6 +1407,10 @@ class Database:
             result.get("trade_id"), result.get("status", "Auto paper cycle completed"),
             timing.get("signal_discovery_at"), timing.get("first_valid_trigger_at"),
             timing.get("final_capture_at"), timing.get("delay_seconds"), timing.get("stage"),
+            volume_reason, zones.get("chart_support"), zones.get("chart_resistance"),
+            zones.get("oi_support"), zones.get("oi_resistance"), confluence,
+            level_distance_atr, level_age_seconds, chart.get("provider") or capture.get("provider"),
+            capture.get("provider_data_age_seconds"),
             json.dumps(result, ensure_ascii=False, default=str),
         )
         serialized = values[-1]
@@ -1142,23 +1427,50 @@ class Database:
                 """UPDATE auto_trade_attempts SET checked_at = ?, trade_date = ?, future_symbol = ?, outcome = ?,
                           decision = ?, candidate = ?, confirmations_passed = ?, confirmations_total = ?, score = ?,
                           trade_id = ?, status_text = ?, signal_discovered_at = ?, first_valid_trigger_at = ?,
-                          final_capture_at = ?, timing_delay_seconds = ?, timing_stage = ?, details_json = ? WHERE id = ?""",
+                          final_capture_at = ?, timing_delay_seconds = ?, timing_stage = ?, volume_reason_code = ?,
+                          chart_support = ?, chart_resistance = ?, oi_support = ?, oi_resistance = ?,
+                          level_confluence = ?, level_distance_atr = ?, level_age_seconds = ?, provider = ?,
+                          provider_data_age_seconds = ?, details_json = ? WHERE id = ?""",
                 (values[0], values[2], values[4], values[5], values[6], values[7], values[8], values[9], values[10],
-                 values[11], values[12], values[13], values[14], values[15], values[16], values[17], values[18], existing["id"]),
+                 values[11], values[12], *values[13:], existing["id"]),
             )
             self.connection.commit()
+            if candle_time:
+                try:
+                    scheduled_at = (datetime.fromisoformat(str(candle_time)) + timedelta(minutes=5)).isoformat(timespec="seconds")
+                except ValueError:
+                    scheduled_at = checked_at
+                self.save_evaluation_slot(
+                    symbol, scheduled_at, str(candle_time),
+                    "EVALUATED" if chart else "RETRY", "ATTEMPT_SAVED" if chart else outcome,
+                    {"attempt_id": int(existing["id"]), "outcome": outcome}, heartbeat_at=checked_at,
+                )
             return True
         result_row = self.cursor.execute(
             """INSERT INTO auto_trade_attempts (
                    checked_at, candle_time, trade_date, symbol, future_symbol, outcome, decision, candidate,
                    confirmations_passed, confirmations_total, score, trade_id, status_text,
                    signal_discovered_at, first_valid_trigger_at, final_capture_at, timing_delay_seconds,
-                   timing_stage, details_json
-               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   timing_stage, volume_reason_code, chart_support, chart_resistance, oi_support, oi_resistance,
+                   level_confluence, level_distance_atr, level_age_seconds, provider,
+                   provider_data_age_seconds, details_json
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             values,
         )
+        inserted = result_row.rowcount == 1
+        attempt_id = int(result_row.lastrowid or 0)
         self.connection.commit()
-        return result_row.rowcount == 1
+        if candle_time:
+            try:
+                scheduled_at = (datetime.fromisoformat(str(candle_time)) + timedelta(minutes=5)).isoformat(timespec="seconds")
+            except ValueError:
+                scheduled_at = checked_at
+            self.save_evaluation_slot(
+                symbol, scheduled_at, str(candle_time),
+                "EVALUATED" if chart else "RETRY", "ATTEMPT_SAVED" if chart else outcome,
+                {"attempt_id": attempt_id, "outcome": outcome}, heartbeat_at=checked_at,
+            )
+        return inserted
 
     def signal_timing_context(
         self, symbol: str, candidate: str, checked_at: str, candle_time: str | None, stage: str,
@@ -1216,6 +1528,32 @@ class Database:
             "SELECT * FROM trades WHERE trade_date = ? ORDER BY trade_time ASC, id ASC",
             (trade_date,),
         ).fetchall()
+
+    def get_paper_outcome_quality(self, limit: int = 500) -> list[dict]:
+        """Return the complete timing/execution/excursion dataset used for post-mortem review."""
+        rows = self.cursor.execute(
+            """SELECT t.id, t.trade_date, t.trade_time, t.symbol, t.option_type, t.entry, t.exit,
+                      t.stoploss, t.target, t.outcome, t.pnl, t.setup, t.created_at, t.closed_at,
+                      p.contract_symbol, p.initial_stoploss, p.entry_lateness_seconds,
+                      p.premium_spread_percent, p.initial_atr, p.mae, p.mfe, p.min_ltp, p.max_ltp,
+                      p.plan_json
+               FROM trades t JOIN paper_trade_links p ON p.trade_id=t.id
+               ORDER BY t.id DESC LIMIT ?""",
+            (max(1, min(int(limit), 5000)),),
+        ).fetchall()
+        result = []
+        for row in rows:
+            value = dict(row)
+            entry = float(row["entry"] or 0)
+            minimum = row["min_ltp"]
+            maximum = row["max_ltp"]
+            value["mae"] = float(row["mae"]) if row["mae"] is not None else round(max(0.0, entry - float(minimum)), 2) if minimum is not None else None
+            value["mfe"] = float(row["mfe"]) if row["mfe"] is not None else round(max(0.0, float(maximum) - entry), 2) if maximum is not None else None
+            value["risk_points"] = round(entry - float(row["initial_stoploss"] or row["stoploss"] or 0), 2)
+            value["mae_r"] = round(float(value["mae"]) / value["risk_points"], 2) if value["mae"] is not None and value["risk_points"] > 0 else None
+            value["mfe_r"] = round(float(value["mfe"]) / value["risk_points"], 2) if value["mfe"] is not None and value["risk_points"] > 0 else None
+            result.append(value)
+        return result
 
     def save_post_market_tps_analysis(self, analysis: dict) -> int:
         """Create or refresh one permanent date-wise TPS post-market note."""

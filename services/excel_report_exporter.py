@@ -34,6 +34,9 @@ REPORTS = (
     ReportDefinition("trend_memory", "Trend Memory", "Trend Memory", "daily_trend_memory", "trade_date", "id"),
     ReportDefinition("post_market", "Post Market Analysis", "Post Market Analysis", "post_market_tps_analysis", "trade_date", "id"),
     ReportDefinition("self_development", "AI Self-Development", "AI Self Development", "self_development_reviews", "trade_date", "id"),
+    ReportDefinition("evaluation_health", "Evaluation Slot Health", "Evaluation Health", "evaluation_slots", "trade_date", "id"),
+    ReportDefinition("broker_telemetry", "Broker Reliability Telemetry", "Broker Telemetry", "broker_request_telemetry", "completed_at", "id"),
+    ReportDefinition("counterfactual_reviews", "Counterfactual Reviews", "Counterfactual Reviews", "counterfactual_reviews", "trade_date", "id"),
 )
 
 

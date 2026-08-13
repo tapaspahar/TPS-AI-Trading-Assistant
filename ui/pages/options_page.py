@@ -628,8 +628,10 @@ class OptionsPage(QWidget):
             self.auto_paper_progress.setText("Paused. Existing open paper trades remain quote-monitored; no new paper trade will be captured.")
 
     def check_auto_paper_cycle(self):
-        if not self.auto_paper_enabled.isChecked() or self.auto_paper_running or not LiveSession.connected():
+        enabled = self.auto_paper_enabled.isChecked()
+        if not enabled or self.auto_paper_running:
             return
+        connected = LiveSession.connected()
         now = datetime.now().astimezone()
         market_open = now.weekday() < 5 and ((now.hour == 9 and now.minute >= 15) or 10 <= now.hour < 15 or (now.hour == 15 and now.minute <= 30))
         if not market_open:
@@ -637,6 +639,25 @@ class OptionsPage(QWidget):
             return
         bucket_start = now.replace(minute=(now.minute // 5) * 5, second=0, microsecond=0)
         bucket = bucket_start.isoformat()
+        audit_db = Database()
+        try:
+            audit_db.reconcile_evaluation_slots(
+                self.underlying.currentText(), now, enabled=enabled, connected=connected,
+            )
+            candle_time = (bucket_start - timedelta(minutes=5)).isoformat(timespec="seconds")
+            audit_db.save_evaluation_slot(
+                self.underlying.currentText(), bucket, candle_time, "HEARTBEAT", "CYCLE_STARTED",
+                {"auto_mode_enabled": enabled, "broker_connected": connected},
+                heartbeat_at=now.isoformat(timespec="seconds"),
+            )
+        finally:
+            audit_db.close()
+        if not connected:
+            self.auto_paper_status.emit(
+                "Auto paper evaluation gap recorded: broker live data is disconnected. "
+                "TPS will resume on the next completed candle after reconnection."
+            )
+            return
         if bucket == self.last_auto_paper_bucket:
             return
         self.auto_paper_running = True

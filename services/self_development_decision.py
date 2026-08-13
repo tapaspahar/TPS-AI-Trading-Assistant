@@ -50,6 +50,11 @@ def build_self_development_review(database: Database, trade_date: str, now: date
     failed = {str(k): int(v) for k, v in (metrics.get("failed_conditions") or {}).items()}
     blockers = {str(k): int(v) for k, v in (metrics.get("hard_blockers") or {}).items()}
     retry_reasons = {str(k): int(v) for k, v in (metrics.get("retry_reasons") or {}).items()}
+    slot_health = database.get_evaluation_health(trade_date, "ALL")
+    if slot_health["expected_slots"]:
+        coverage = float(slot_health["coverage_percent"])
+        evaluated = max(evaluated, int(slot_health["evaluated_slots"]))
+        attempts = max(attempts, int(slot_health["expected_slots"]))
     best = list(metrics.get("best_attempts") or [])
     repeats = _historical_repeat_context(database, metrics)
     trades = database.get_trades_for_date(trade_date)
@@ -57,10 +62,25 @@ def build_self_development_review(database: Database, trade_date: str, now: date
     stop_hits = sum("STOP" in str(row["outcome"]).upper() for row in trades)
     suggestions: list[dict] = []
 
+    implementation = {
+        "evaluation_pipeline": "IMPLEMENTED — LIVE COVERAGE PROOF PENDING",
+        "coverage_gap": "IMPLEMENTED — 3-SESSION PROOF PENDING",
+        "broker_reliability": "IMPLEMENTED — LIVE TELEMETRY ACCUMULATING",
+        "zero_capture_calibration": "IMPLEMENTED — OUTCOME APPROVAL PENDING",
+        "entry_timing": "IMPLEMENTED — NO-LOOK-AHEAD VALIDATION PENDING",
+        "volume_evidence": "IMPLEMENTED — WALK-FORWARD EVIDENCE PENDING",
+        "level_context": "IMPLEMENTED — REPLAY EVIDENCE PENDING",
+        "outcome_quality": "IMPLEMENTED — 30-SAMPLE APPROVAL PENDING",
+        "sample_size": "TRACKING ACTIVE — EVIDENCE PENDING",
+        "overtrading_guard": "IMPLEMENTED — MONITORING ACTIVE",
+        "healthy_monitor": "MONITORING ACTIVE",
+    }
+
     def add(key: str, priority: str, area: str, observation: str, evidence: str, suggestion: str, validation: str):
         suggestions.append({
             "key": key, "priority": priority, "area": area, "observation": observation,
             "evidence": evidence, "suggestion": suggestion, "validation": validation, "status": "OPEN",
+            "implementation_status": implementation.get(key, "PLANNED"),
         })
 
     if attempts == 0 or evaluated == 0:
@@ -219,4 +239,3 @@ def ensure_completed_self_development_reviews(database: Database, limit: int = 6
             generate_and_save_self_development_review(database, str(source["trade_date"]))
             updated.append(str(source["trade_date"]))
     return updated
-

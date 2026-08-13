@@ -9,9 +9,14 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.3.0"
-LAST_UPDATED_AT = "13-08-2026 16:25:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.3.0 - 13-08-2026 16:25 IST"
+LAST_UPDATED_AT = "13-08-2026 18:30:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.3.0 - 13-08-2026 18:30 IST"
 RELEASE_NOTES = (
+    "Completed Release 1.3 evidence validation with persistent five-minute heartbeat, missed-slot backfill and explicit gap reason codes.",
+    "Added broker reliability telemetry, data-age tracking and last-good request evidence for auto-paper diagnostics.",
+    "Added safe counterfactual score/confirmation replay that never changes production settings or bypasses hard blockers.",
+    "Added volume reason classification, chart/OI level confluence, ATR distance, level age and paper outcome MAE/MFE evidence.",
+    "Added a Release 1.3 validation dashboard with separate implementation and live-evidence approval states.",
     "Added a complete Excel Report Center with one-day, inclusive date-range and all-available filters plus a multi-sheet All TPS Reports workbook.",
     "Added styled XLSX exports for Trade Journal, Auto Attempts, Notifications, Auto Opportunities, Market Snapshots, PCR/OI, Gap Probability, Trend Memory, Post Market Analysis and AI Self-Development records.",
     "Added direct date/period Excel export controls to the main audit and analysis report pages while retaining existing CSV exports.",
