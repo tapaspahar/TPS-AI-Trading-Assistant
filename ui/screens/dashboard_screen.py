@@ -230,6 +230,8 @@ class DashboardScreen(QWidget):
             self.notifier.notify(
                 "trend_memory", f"TPS similar market pattern — {current['symbol']}",
                 f"{best['similarity']:.1f}% match with {best['trade_date']}. Us din: {best['outcome_text']}",
+                dedupe_key=f"{current['trade_date']}:{current['symbol']}:{best['trade_date']}",
+                once_per_day=True,
             )
 
     def notify_trade_capture(self, plan):
