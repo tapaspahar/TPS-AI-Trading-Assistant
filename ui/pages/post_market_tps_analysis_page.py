@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from core.database_manager import Database
 from services.post_market_tps_analysis import ensure_completed_post_market_reports, generate_and_save_post_market_analysis
+from ui.widgets.excel_export_dialog import open_excel_export
 
 
 class PostMarketTpsAnalysisPage(QWidget):
@@ -52,6 +53,9 @@ class PostMarketTpsAnalysisPage(QWidget):
         refresh_button = QPushButton("Saved Dates Refresh Karein")
         refresh_button.clicked.connect(self.refresh)
         controls.addWidget(refresh_button)
+        excel = QPushButton("Export Excel by Date / Period")
+        excel.clicked.connect(lambda: open_excel_export(self, self.db, "post_market"))
+        controls.addWidget(excel)
         layout.addLayout(controls)
 
         self.status = QLabel()

@@ -17,6 +17,7 @@ from services.self_development_decision import (
     ensure_completed_self_development_reviews,
     generate_and_save_self_development_review,
 )
+from ui.widgets.excel_export_dialog import open_excel_export
 
 
 class SelfDevelopmentPage(QWidget):
@@ -50,6 +51,9 @@ class SelfDevelopmentPage(QWidget):
         refresh = QPushButton("Refresh Saved Reviews")
         refresh.clicked.connect(self.refresh)
         controls.addWidget(refresh)
+        excel = QPushButton("Export Excel by Date / Period")
+        excel.clicked.connect(lambda: open_excel_export(self, self.db, "self_development"))
+        controls.addWidget(excel)
         layout.addLayout(controls)
         cards = QGridLayout()
         self.health = self._card("System Health", "-")

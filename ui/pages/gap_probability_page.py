@@ -15,6 +15,7 @@ from engine.gap_probability_engine import GapProbabilityEngine
 from services.live_session import LiveSession
 from services.next_day_bias_data_service import NextDayBiasDataService
 from ui.widgets.cards.dashboard_card import DashboardCard
+from ui.widgets.excel_export_dialog import open_excel_export
 
 
 ACTIONABLE_STAGE = "3:20 ACTIONABLE"
@@ -30,6 +31,7 @@ class GapProbabilityPage(QWidget):
     def __init__(self):
         super().__init__()
         self.live_values = None
+        self.db = Database()
         self._requested_stage = None
         self._load_in_progress = False
         self._last_auto_attempt = {}
@@ -65,6 +67,9 @@ class GapProbabilityPage(QWidget):
         controls.addWidget(QLabel("Index"), 0, 0)
         controls.addWidget(self.symbol, 0, 1)
         controls.addWidget(self.load_button, 0, 2)
+        excel = QPushButton("Export Excel by Date / Period")
+        excel.clicked.connect(lambda: open_excel_export(self, self.db, "gap_probability"))
+        controls.addWidget(excel, 0, 3)
         layout.addLayout(controls)
         self.status = QLabel(
             "Connect broker data first. TPS auto-captures the selected index near 3:20 PM and again "

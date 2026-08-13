@@ -1,6 +1,13 @@
-from PySide6.QtWidgets import QFileDialog, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
+from datetime import date
+
+from PySide6.QtCore import QDate
+from PySide6.QtWidgets import (
+    QCheckBox, QComboBox, QDateEdit, QFileDialog, QFormLayout, QGroupBox,
+    QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget,
+)
 
 from core.database_manager import Database
+from services.excel_report_exporter import ExcelReportExporter, REPORTS
 
 
 class ReportsPage(QWidget):
@@ -18,6 +25,39 @@ class ReportsPage(QWidget):
         export = QPushButton("Export Journal to CSV")
         export.clicked.connect(self.export_csv)
         layout.addWidget(export)
+
+        excel_box = QGroupBox("Excel Report Center — date-wise and period-wise export")
+        excel_layout = QVBoxLayout(excel_box)
+        form = QFormLayout()
+        self.report_type = QComboBox()
+        self.report_type.addItem("All TPS Reports (one multi-sheet workbook)", "__all__")
+        for definition in REPORTS:
+            self.report_type.addItem(definition.label, definition.key)
+        form.addRow("Report", self.report_type)
+        date_row = QHBoxLayout()
+        self.start_date = QDateEdit(QDate.currentDate())
+        self.end_date = QDateEdit(QDate.currentDate())
+        for editor in (self.start_date, self.end_date):
+            editor.setCalendarPopup(True)
+            editor.setDisplayFormat("dd-MM-yyyy")
+        date_row.addWidget(QLabel("From")); date_row.addWidget(self.start_date)
+        date_row.addWidget(QLabel("To")); date_row.addWidget(self.end_date)
+        form.addRow("Period", date_row)
+        self.all_dates = QCheckBox("All available dates")
+        self.all_dates.toggled.connect(self._toggle_dates)
+        form.addRow("", self.all_dates)
+        excel_layout.addLayout(form)
+        quick = QHBoxLayout()
+        today = QPushButton("Today")
+        today.clicked.connect(self._select_today)
+        last_seven = QPushButton("Last 7 Days")
+        last_seven.clicked.connect(self._select_last_seven)
+        export_excel = QPushButton("Export Selected Report to Excel")
+        export_excel.clicked.connect(self.export_excel)
+        quick.addWidget(today); quick.addWidget(last_seven); quick.addWidget(export_excel)
+        excel_layout.addLayout(quick)
+        excel_layout.addWidget(QLabel("Tip: same From and To date exports one day; a wider period exports an inclusive date range."))
+        layout.addWidget(excel_box)
         layout.addStretch()
         self.refresh()
 
@@ -58,3 +98,48 @@ class ReportsPage(QWidget):
             QMessageBox.critical(self, "Export failed", str(error))
             return
         QMessageBox.information(self, "Export complete", f"Exported {count} trade(s) to CSV.")
+
+    def _toggle_dates(self, checked):
+        self.start_date.setEnabled(not checked)
+        self.end_date.setEnabled(not checked)
+
+    def _select_today(self):
+        self.all_dates.setChecked(False)
+        self.start_date.setDate(QDate.currentDate())
+        self.end_date.setDate(QDate.currentDate())
+
+    def _select_last_seven(self):
+        self.all_dates.setChecked(False)
+        self.start_date.setDate(QDate.currentDate().addDays(-6))
+        self.end_date.setDate(QDate.currentDate())
+
+    @staticmethod
+    def _python_date(value: QDate) -> date:
+        return date(value.year(), value.month(), value.day())
+
+    def export_excel(self):
+        key = self.report_type.currentData()
+        keys = None if key == "__all__" else [key]
+        start = end = None
+        if not self.all_dates.isChecked():
+            start = self._python_date(self.start_date.date())
+            end = self._python_date(self.end_date.date())
+            if start > end:
+                QMessageBox.warning(self, "Invalid period", "From date cannot be after To date.")
+                return
+        default_name = "TPS_All_Reports.xlsx" if keys is None else f"TPS_{key}.xlsx"
+        path, _ = QFileDialog.getSaveFileName(self, "Export TPS Excel Report", default_name, "Excel Workbook (*.xlsx)")
+        if not path:
+            return
+        if not path.lower().endswith(".xlsx"):
+            path += ".xlsx"
+        try:
+            counts = ExcelReportExporter(self.db).export(path, keys, start, end)
+        except (OSError, ValueError) as error:
+            QMessageBox.critical(self, "Excel export failed", str(error))
+            return
+        total = sum(counts.values())
+        QMessageBox.information(
+            self, "Excel export complete",
+            f"{len(counts)} report sheet(s) and {total} record(s) exported successfully.\n\n{path}",
+        )

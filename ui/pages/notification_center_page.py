@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 
 from core.database_manager import Database
 from services.notification_service import NOTIFICATION_LABELS
+from ui.widgets.excel_export_dialog import open_excel_export
 
 
 class NotificationCenterPage(QWidget):
@@ -48,9 +49,11 @@ class NotificationCenterPage(QWidget):
         mark_all.clicked.connect(self.mark_all_read)
         export = QPushButton("Export CSV")
         export.clicked.connect(self.export_csv)
+        excel = QPushButton("Export Excel by Date / Period")
+        excel.clicked.connect(lambda: open_excel_export(self, self.db, "notifications"))
         clean = QPushButton("Clean Repeated Alerts")
         clean.clicked.connect(self.clean_repeated_alerts)
-        for button in (today, all_rows, unread, self.mark_selected_button, mark_all, export, clean):
+        for button in (today, all_rows, unread, self.mark_selected_button, mark_all, export, excel, clean):
             actions.addWidget(button)
         layout.addLayout(actions)
 

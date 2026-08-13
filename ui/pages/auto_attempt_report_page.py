@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
 
 from core.database_manager import Database
 from services.auto_attempt_report import format_auto_paper_attempt
+from ui.widgets.excel_export_dialog import open_excel_export
 
 
 class AutoAttemptReportPage(QWidget):
@@ -29,7 +30,9 @@ class AutoAttemptReportPage(QWidget):
         all_rows.clicked.connect(lambda: self.refresh(today_only=False))
         export = QPushButton("Export Attempts to CSV")
         export.clicked.connect(self.export_csv)
-        actions.addWidget(today); actions.addWidget(all_rows); actions.addWidget(export)
+        excel = QPushButton("Export Excel by Date / Period")
+        excel.clicked.connect(lambda: open_excel_export(self, self.db, "auto_attempts"))
+        actions.addWidget(today); actions.addWidget(all_rows); actions.addWidget(export); actions.addWidget(excel)
         layout.addLayout(actions)
 
         self.summary = QLabel()

@@ -13,6 +13,7 @@ from engine.pcr_sentiment_engine import analyze_pcr_sentiment
 from services.live_session import LiveSession
 from services.option_contract_service import OptionContractService, UNDERLYING_QUOTES, contracts_near_spot
 from ui.widgets.cards.dashboard_card import DashboardCard
+from ui.widgets.excel_export_dialog import open_excel_export
 
 
 def _compact(value):
@@ -32,6 +33,7 @@ class PutCallRatioPage(QWidget):
     def __init__(self):
         super().__init__()
         self.service = OptionContractService()
+        self.db = Database()
         self.loading = False
         self.last_sentiment = {}
         outer = QVBoxLayout(self); outer.setContentsMargins(0, 0, 0, 0)
@@ -53,6 +55,9 @@ class PutCallRatioPage(QWidget):
         self.refresh_button.clicked.connect(self.refresh)
         controls.addWidget(QLabel("Underlying"), 0, 0); controls.addWidget(self.symbol, 0, 1)
         controls.addWidget(self.refresh_button, 0, 2)
+        excel = QPushButton("Export PCR / OI Excel by Date / Period")
+        excel.clicked.connect(lambda: open_excel_export(self, self.db, "pcr_observations"))
+        controls.addWidget(excel, 0, 3)
         layout.addLayout(controls)
         grid = QGridLayout(); grid.setHorizontalSpacing(8); grid.setVerticalSpacing(8)
         self.cards = {

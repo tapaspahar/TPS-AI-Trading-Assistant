@@ -16,6 +16,7 @@ from services.auto_opportunity_service import AutoOpportunityService
 from services.live_session import LiveSession
 from services.notification_service import NotificationService
 from ui.widgets.cards.dashboard_card import DashboardCard
+from ui.widgets.excel_export_dialog import open_excel_export
 
 
 class AutoOpportunityPage(QWidget):
@@ -26,6 +27,7 @@ class AutoOpportunityPage(QWidget):
     def __init__(self):
         super().__init__()
         self.scanning = False
+        self.db = Database()
         self.last_bucket = None
         self.last_notified = set()
         outer = QVBoxLayout(self); outer.setContentsMargins(0, 0, 0, 0)
@@ -41,6 +43,8 @@ class AutoOpportunityPage(QWidget):
         self.status.setWordWrap(True); layout.addWidget(self.status)
         self.run = QPushButton("Run Diagnostic Scan Now")
         self.run.clicked.connect(lambda: self.scan(force=True)); layout.addWidget(self.run)
+        excel = QPushButton("Export Opportunity Report to Excel by Date / Period")
+        excel.clicked.connect(lambda: open_excel_export(self, self.db, "opportunities")); layout.addWidget(excel)
 
         grid = QGridLayout(); self.cards = {
             "last": DashboardCard("Last automatic scan", "Waiting"),

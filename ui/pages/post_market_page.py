@@ -3,6 +3,7 @@ from datetime import datetime
 from PySide6.QtWidgets import QFormLayout, QLineEdit, QLabel, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 
 from core.database_manager import Database
+from ui.widgets.excel_export_dialog import open_excel_export
 
 
 class PostMarketPage(QWidget):
@@ -20,6 +21,9 @@ class PostMarketPage(QWidget):
         button = QPushButton("Load Saved Market Report")
         button.clicked.connect(self.refresh)
         layout.addWidget(button)
+        excel = QPushButton("Export Market Snapshots to Excel by Date / Period")
+        excel.clicked.connect(lambda: open_excel_export(self, self.db, "market_snapshots"))
+        layout.addWidget(excel)
         self.summary = QLabel()
         self.summary.setWordWrap(True)
         layout.addWidget(self.summary)

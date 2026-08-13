@@ -9,9 +9,12 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.3.0"
-LAST_UPDATED_AT = "13-08-2026 15:30:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.3.0 - 13-08-2026 15:30 IST"
+LAST_UPDATED_AT = "13-08-2026 16:25:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.3.0 - 13-08-2026 16:25 IST"
 RELEASE_NOTES = (
+    "Added a complete Excel Report Center with one-day, inclusive date-range and all-available filters plus a multi-sheet All TPS Reports workbook.",
+    "Added styled XLSX exports for Trade Journal, Auto Attempts, Notifications, Auto Opportunities, Market Snapshots, PCR/OI, Gap Probability, Trend Memory, Post Market Analysis and AI Self-Development records.",
+    "Added direct date/period Excel export controls to the main audit and analysis report pages while retaining existing CSV exports.",
     "Added no-look-ahead signal timing telemetry with separate discovery, first-valid trigger and final paper-capture timestamps plus measured delay.",
     "Added an opt-in Early Watch paper-observation notification for near-qualified completed candles; it is disabled by default and never bypasses final strategy or safety approval.",
     "Expanded Auto Attempt Report and CSV export with timing stage, timing milestones and delay evidence for replay validation against false entries.",

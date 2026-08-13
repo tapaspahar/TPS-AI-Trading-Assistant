@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
 
 from core.database_manager import Database
 from services.trend_memory_service import ensure_completed_trend_memories, load_trend_memory_view
+from ui.widgets.excel_export_dialog import open_excel_export
 
 
 class TrendMemoryPage(QWidget):
@@ -28,7 +29,9 @@ class TrendMemoryPage(QWidget):
         self.symbol.currentTextChanged.connect(self.refresh)
         refresh = QPushButton("Refresh & Match Historical Patterns")
         refresh.clicked.connect(self.refresh)
-        controls.addWidget(QLabel("Index")); controls.addWidget(self.symbol, 1); controls.addWidget(refresh, 2)
+        excel = QPushButton("Export Excel by Date / Period")
+        excel.clicked.connect(lambda: open_excel_export(self, self.db, "trend_memory"))
+        controls.addWidget(QLabel("Index")); controls.addWidget(self.symbol, 1); controls.addWidget(refresh, 2); controls.addWidget(excel, 2)
         layout.addLayout(controls)
         self.summary = QLabel()
         self.summary.setWordWrap(True)
