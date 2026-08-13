@@ -70,6 +70,7 @@ DEFAULT_SETTINGS = {
         "auto_opportunity": True,
         "broker_connection": True,
         "trend_memory": True,
+        "scalper": True,
     },
 }
 

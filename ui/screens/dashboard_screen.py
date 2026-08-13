@@ -32,6 +32,7 @@ from ui.pages.put_call_ratio_page import PutCallRatioPage
 from ui.pages.gap_probability_page import GapProbabilityPage
 from ui.pages.auto_opportunity_page import AutoOpportunityPage
 from ui.pages.trend_memory_page import TrendMemoryPage
+from ui.pages.scalper_page import ScalperPage
 from ui.widgets.glass_effects import add_glass_shadow
 from ui.widgets.accessible_scroll import configure_scroll_area
 from services.post_market_tps_analysis import ensure_completed_post_market_reports
@@ -89,13 +90,14 @@ class DashboardScreen(QWidget):
         self.gapProbabilityPage = GapProbabilityPage()
         self.autoOpportunityPage = AutoOpportunityPage()
         self.trendMemoryPage = TrendMemoryPage()
+        self.scalperPage = ScalperPage()
         for page in (self.dashboardPage, self.liveMarketPage, self.optionsPage, self.chartCapturePage, self.journalPage,
                      self.checklistPage, self.aiPage, self.riskPage, self.reportsPage, self.settingsPage,
                      self.backtestPage, self.postMarketPage, self.replayPage, self.equityPage,
                      self.autoAttemptReportPage, self.aboutPage, self.helpPage, self.nextDayBiasPage,
                      self.smartMoneyPage, self.casAnalysisPage, self.stockOptionsWatchPage, self.optionStrategiesPage,
                      self.postMarketTpsAnalysisPage, self.preCandlePage, self.powerfulEnginePage, self.putCallRatioPage,
-                     self.gapProbabilityPage, self.autoOpportunityPage, self.trendMemoryPage):
+                     self.gapProbabilityPage, self.autoOpportunityPage, self.trendMemoryPage, self.scalperPage):
             self.stack.addWidget(page)
         self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
         self.journalPage.trade_saved.connect(self.reportsPage.refresh)
@@ -124,6 +126,8 @@ class DashboardScreen(QWidget):
         self.optionsPage.open_chart_capture.connect(lambda: self.show_page(3))
         self.settingsPage.live_connected.connect(self.start_default_nifty)
         self.settingsPage.live_connected.connect(lambda: self.autoOpportunityPage.scan(force=True))
+        self.settingsPage.live_connected.connect(self.scalperPage.start_monitoring)
+        self.scalperPage.scalp_alert.connect(self.notify_scalp_watch)
         for button, index in ((self.sidebar.dashboardButton, 0), (self.sidebar.liveMarketButton, 1),
                               (self.sidebar.optionsButton, 2), (self.sidebar.chartCaptureButton, 3),
                               (self.sidebar.journalButton, 4), (self.sidebar.checklistButton, 5),
@@ -144,6 +148,7 @@ class DashboardScreen(QWidget):
         self.sidebar.gapProbabilityButton.clicked.connect(lambda _checked=False: self.show_page(26))
         self.sidebar.autoOpportunityButton.clicked.connect(lambda _checked=False: self.show_page(27))
         self.sidebar.trendMemoryButton.clicked.connect(lambda _checked=False: self.show_page(28))
+        self.sidebar.scalperButton.clicked.connect(lambda _checked=False: self.show_page(29))
         body_layout.addWidget(self.stack)
         main_layout.addLayout(body_layout, 1)
         self.informationPanel = InformationPanel()
@@ -264,6 +269,13 @@ class DashboardScreen(QWidget):
             f"{sentiment.get('sentiment', 'OI context updated')} | OI-PCR {pcr_text}. Chart confirmation remains mandatory.",
         )
 
+    def notify_scalp_watch(self, result):
+        self.notifier.notify(
+            "scalper", f"TPS {result.get('action')} — {result.get('symbol')}",
+            f"Completed candle {result.get('candle_time')} | Reference {result.get('entry_reference', 0):,.2f} | "
+            f"SL {result.get('stop', 0):,.2f} | T1 {result.get('target1', 0):,.2f} | Score {result.get('score')}/100. Paper/research alert only.",
+        )
+
     def show_page(self, index: int):
         self.sidebar.set_active(index)
         if index == 0:
@@ -291,6 +303,8 @@ class DashboardScreen(QWidget):
             self.autoOpportunityPage.refresh_history()
         elif index == 28:
             self.trendMemoryPage.refresh()
+        elif index == 29:
+            self.scalperPage.analyze(force=True)
         self.stack.setCurrentIndex(index)
 
     def handle_ai_decision(self, context):

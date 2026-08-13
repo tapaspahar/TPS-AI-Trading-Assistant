@@ -56,6 +56,7 @@ class Sidebar(QFrame):
         self.gapProbabilityButton = nav("3:20 + 3:40 Gap Probability")
         self.autoOpportunityButton = nav("Auto Opportunity Radar")
         self.trendMemoryButton = nav("Trend Memory Monitor")
+        self.scalperButton = nav("Scalper Command Center")
         # Keep the visual journey in the same order a trader uses the app:
         # market context -> chart confirmation -> AI evaluation -> option plan -> journal.
         self.buttons = (
@@ -63,7 +64,7 @@ class Sidebar(QFrame):
             self.aiButton, self.optionsButton, self.autoOpportunityButton, self.autoAttemptReportButton, self.journalButton,
             self.checklistButton, self.riskButton, self.reportButton, self.backtestButton, self.replayButton,
             self.postMarketButton, self.postMarketTpsAnalysisButton, self.nextDayBiasButton, self.casAnalysisButton, self.stockOptionsWatchButton,
-            self.optionStrategiesButton, self.putCallRatioButton, self.gapProbabilityButton, self.trendMemoryButton,
+            self.optionStrategiesButton, self.putCallRatioButton, self.gapProbabilityButton, self.scalperButton, self.trendMemoryButton,
             self.smartMoneyButton, self.preCandleButton, self.powerfulEngineButton, self.settingsButton, self.aboutButton, self.helpButton,
         )
         # Stack page numbers intentionally remain stable even when the visual
@@ -99,6 +100,7 @@ class Sidebar(QFrame):
             26: self.gapProbabilityButton,
             27: self.autoOpportunityButton,
             28: self.trendMemoryButton,
+            29: self.scalperButton,
         }
         self.menu_group = QButtonGroup(self)
         self.menu_group.setExclusive(True)

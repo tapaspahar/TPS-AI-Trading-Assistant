@@ -9,9 +9,12 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.2.1"
-LAST_UPDATED_AT = "13-08-2026 08:09:52 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.2.1 - 13-08-2026 08:09 IST"
+LAST_UPDATED_AT = "13-08-2026 09:05:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.2.1 - 13-08-2026 09:05 IST"
 RELEASE_NOTES = (
+    "Added TPS Scalper Command Center with completed 1-minute triggers, 5-minute direction, EMA/VWAP, momentum, futures-volume expansion, adaptive confluence threshold and duplicate-safe desktop watches.",
+    "Added official NSE IX GIFT Nifty context plus clearly labelled external US/Asia reference breadth; global movement is a bounded confirmation layer and cannot override Indian completed-candle direction.",
+    "Added explainable scalp entry reference, ATR protection, two targets and a complete PASS/WAIT evidence ledger while retaining read-only, notification-only safety.",
     "Added Trend Memory Monitor with a permanent daily market-fingerprint database for trend, chart shape, Candle DNA, EMA/VWAP/SuperTrend, volume, RSI/ATR and OI-PCR context.",
     "Added live historical analog matching and an optional desktop alert when the developing session reaches 80% similarity with a completed saved market day, including that day's actual outcome.",
     "Published maintenance Release 1.2.1 with aligned application, Windows executable, installer, portable ZIP and Help Center version metadata.",
