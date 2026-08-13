@@ -45,6 +45,9 @@ DEFAULT_SETTINGS = {
     "theme": "dark",
     "ui_style": "glassmorphism",
     "broker_provider": "angel_one",
+    # A user-approved, read-only strategy monitor survives software restarts.
+    # It contains plan legs only, never broker credentials or an order token.
+    "active_option_strategy_plan": None,
     "notifications_enabled": True,
     "notification_sound": True,
     "notification_preferences": {
@@ -159,6 +162,7 @@ class SettingsStore:
             "theme": str(settings.get("theme", current["theme"])).lower(),
             "ui_style": str(settings.get("ui_style", current["ui_style"])).lower(),
             "broker_provider": str(settings.get("broker_provider", current["broker_provider"])).lower(),
+            "active_option_strategy_plan": settings.get("active_option_strategy_plan", current["active_option_strategy_plan"]),
             "notifications_enabled": bool(settings.get("notifications_enabled", current["notifications_enabled"])),
             "notification_sound": bool(settings.get("notification_sound", current["notification_sound"])),
             "notification_preferences": {
@@ -210,6 +214,8 @@ class SettingsStore:
         from services.broker_registry import BROKERS
         if values["broker_provider"] not in BROKERS:
             raise ValueError("Choose a valid broker provider.")
+        if values["active_option_strategy_plan"] is not None and not isinstance(values["active_option_strategy_plan"], dict):
+            raise ValueError("Active option strategy plan must be a saved plan or empty.")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         if self.path.exists() and self._read_file(self.path):
             shutil.copy2(self.path, self.backup_path)

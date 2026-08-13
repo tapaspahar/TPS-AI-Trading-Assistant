@@ -8,6 +8,11 @@ class BrokerRegistryTests(unittest.TestCase):
     def test_common_broker_profiles_are_available(self):
         self.assertTrue({"angel_one", "zerodha", "upstox", "dhan", "paytm_money", "fyers", "shoonya", "other"} <= set(BROKERS))
 
+    def test_supported_brokers_explain_one_time_setup_and_link_official_page(self):
+        for broker_id in ("angel_one", "dhan", "paytm_money"):
+            self.assertTrue(BROKERS[broker_id].setup_url.startswith("https://"))
+            self.assertIn("One-time", BROKERS[broker_id].login_summary)
+
     @patch("services.dhan_client.DhanClient")
     def test_dhan_profile_uses_automatic_token_adapter(self, client_type):
         result = create_broker_client("dhan", {"client_id": "123", "pin": "123456", "totp_secret": "secret"})

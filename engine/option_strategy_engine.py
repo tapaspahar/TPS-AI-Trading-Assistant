@@ -100,8 +100,12 @@ def _iron_condor(rows, strikes, spot, support, resistance):
     above = [strike for strike in strikes if strike > spot]
     if len(below) < 2 or len(above) < 2:
         return None
-    short_put = min(below, key=lambda strike: abs(strike - support)) if support and support < spot else below[-1]
-    short_call = min(above, key=lambda strike: abs(strike - resistance)) if resistance and resistance > spot else above[0]
+    # Keep one quoted strike beyond every short leg so the suggestion is
+    # always a fully defined-risk spread even when the implied range lies
+    # outside the focused quote window.
+    short_put_choices, short_call_choices = below[1:], above[:-1]
+    short_put = min(short_put_choices, key=lambda strike: abs(strike - support)) if support and support < spot else short_put_choices[-1]
+    short_call = min(short_call_choices, key=lambda strike: abs(strike - resistance)) if resistance and resistance > spot else short_call_choices[0]
     put_index, call_index = strikes.index(short_put), strikes.index(short_call)
     if put_index < 1 or call_index >= len(strikes) - 1:
         return None
@@ -152,6 +156,8 @@ def recommend_option_strategy(symbol, spot, candles, capture, chain, environment
         "vix": environment.get("vix"), "vix_zone": vix_zone,
         "expected_daily_range": environment.get("expected_daily_range"),
         "remaining_expected_range": environment.get("remaining_expected_range"),
+        "vix_expected_low": round(float(spot) - float(environment.get("expected_daily_range") or 0), 2) if environment.get("expected_daily_range") else None,
+        "vix_expected_high": round(float(spot) + float(environment.get("expected_daily_range") or 0), 2) if environment.get("expected_daily_range") else None,
         "regular_move_target_points": environment.get("regular_move_target_points"),
         "reasons": reasons, "warning": "Review-only defined-risk research. Verify live prices, liquidity, margin and payoff in the broker before any manual action.",
     }
@@ -165,7 +171,14 @@ def recommend_option_strategy(symbol, spot, candles, capture, chain, environment
     if direction in {"BULLISH", "BEARISH"}:
         plan = _debit_spread(rows, strikes, float(spot), direction)
     elif regime == "SIDEWAYS / TRANSITION" and vix_zone in {"HEALTHY TREND", "HIGH VOLATILITY"}:
-        plan = _iron_condor(rows, strikes, float(spot), chain.get("put_support"), chain.get("call_resistance"))
+        vix_move = float(environment.get("expected_daily_range") or 0)
+        # Place the short wings around the more conservative of the VIX estimate
+        # and live ATM-straddle estimate; OI zones remain confirmation context.
+        option_move = float(chain.get("expected_move") or 0)
+        boundary_move = max(vix_move, option_move)
+        lower = float(spot) - boundary_move if boundary_move else chain.get("put_support")
+        upper = float(spot) + boundary_move if boundary_move else chain.get("call_resistance")
+        plan = _iron_condor(rows, strikes, float(spot), lower, upper)
     if not plan:
         return {**base, "state": "WAIT", "strategy": "No clean limited-risk setup", "legs": [], "blockers": ["Live direction/regime and tradeable spread prices do not form a valid defined-risk payoff"]}
     risk_cap = float(settings.get("capital", 0)) * float(settings.get("risk_percent", 1)) / 100

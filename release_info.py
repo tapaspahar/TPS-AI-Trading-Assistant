@@ -9,9 +9,12 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.3.0"
-LAST_UPDATED_AT = "13-08-2026 18:30:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.3.0 - 13-08-2026 18:30 IST"
+LAST_UPDATED_AT = "13-08-2026 19:20:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.3.0 - 13-08-2026 19:20 IST"
 RELEASE_NOTES = (
+    "Simplified supported-broker onboarding with an official setup/login button and clear one-time secure setup guidance; broker API authentication remains mandatory.",
+    "Enhanced Option Strategies with India-VIX/ATM-range-aware defined-risk strike selection and a save-and-monitor adjustment workflow.",
+    "Added completed-5-minute HOLD, WATCH and EXIT/REASSESS monitoring with exact close-leg actions, optional fresh defined-risk replacement and a strict no-naked-option rule.",
     "Completed Release 1.3 evidence validation with persistent five-minute heartbeat, missed-slot backfill and explicit gap reason codes.",
     "Added broker reliability telemetry, data-age tracking and last-good request evidence for auto-paper diagnostics.",
     "Added safe counterfactual score/confirmation replay that never changes production settings or bypasses hard blockers.",

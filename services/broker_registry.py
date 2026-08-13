@@ -15,6 +15,8 @@ class BrokerDefinition:
     name: str
     fields: tuple[tuple[str, str, bool], ...]
     adapter_available: bool = False
+    setup_url: str = ""
+    login_summary: str = ""
 
 
 BROKERS = {
@@ -22,7 +24,8 @@ BROKERS = {
         "angel_one", "Angel One", (
             ("api_key", "API Key", True), ("client_code", "Client Code", False),
             ("mpin", "MPIN", True), ("totp_secret", "TOTP Secret", True),
-        ), True,
+        ), True, "https://smartapi.angelone.in/",
+        "One-time setup: SmartAPI key + Client Code + MPIN + TOTP secret. After secure save, TPS auto-connects on startup.",
     ),
     "zerodha": BrokerDefinition(
         "zerodha", "Zerodha Kite", (
@@ -40,7 +43,8 @@ BROKERS = {
         "dhan", "Dhan", (
             ("client_id", "Client ID", False), ("pin", "Dhan PIN", True),
             ("totp_secret", "TOTP Secret", True),
-        ), True,
+        ), True, "https://web.dhan.co/",
+        "One-time setup: Dhan Client ID + PIN + TOTP secret. Dhan then issues the required 24-hour API session automatically.",
     ),
     "paytm_money": BrokerDefinition(
         "paytm_money", "Paytm Money", (
@@ -49,7 +53,8 @@ BROKERS = {
             ("access_token", "Access Token (auto-saved)", True),
             ("read_access_token", "Read Access Token (auto-saved)", True),
             ("public_access_token", "Public Access Token (auto-saved)", True),
-        ), True,
+        ), True, "https://developer.paytmmoney.com/",
+        "One-time developer-app authorization is required. TPS stores returned session tokens securely and reuses them until expiry.",
     ),
     "fyers": BrokerDefinition(
         "fyers", "Fyers", (

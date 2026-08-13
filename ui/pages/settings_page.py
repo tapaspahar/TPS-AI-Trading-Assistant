@@ -196,7 +196,7 @@ class SettingsPage(QWidget):
         credential_actions_layout.addWidget(save_credentials)
         credential_actions_layout.addWidget(forget_credentials, 1)
         broker_form.addRow(credential_actions)
-        self.open_broker_login = QPushButton("Open Paytm Login")
+        self.open_broker_login = QPushButton("Open Official Broker Setup / Login")
         self.open_broker_login.clicked.connect(self.open_selected_broker_login)
         self.open_broker_login.setMinimumHeight(38)
         broker_form.addRow(self.open_broker_login)
@@ -290,20 +290,31 @@ class SettingsPage(QWidget):
                 f"{definition.name} profile can be stored securely. Live connection requires its own TPS adapter because broker APIs and instrument tokens are different."
             )
             self.broker_status.setText("Connection status: adapter not installed")
-        self.open_broker_login.setVisible(broker_id == "paytm_money")
+        self.open_broker_login.setVisible(bool(definition.setup_url))
+        self.open_broker_login.setText(
+            "Open Paytm Authorization Login" if broker_id == "paytm_money" else f"Open Official {definition.name} API Setup"
+        )
+        if definition.login_summary:
+            self.broker_note.setText(
+                definition.login_summary
+                + " Broker ID alone cannot fetch market data because the broker must issue an authenticated API session. "
+                "TPS keeps the advanced values in Windows Credential Manager, never in GitHub."
+            )
 
     def open_selected_broker_login(self):
-        if self.broker_provider.currentData() != "paytm_money":
-            return
-        credentials = self.current_broker_credentials()
-        try:
-            from services.paytm_money_client import PaytmMoneyClient
-            url = PaytmMoneyClient(credentials.get("api_key", ""), credentials.get("api_secret", "")).login_url()
-        except ValueError as error:
-            QMessageBox.warning(self, "Paytm Money login", str(error))
-            return
+        broker_id = self.broker_provider.currentData()
+        definition = broker_definition(broker_id)
+        url = definition.setup_url
+        if broker_id == "paytm_money":
+            credentials = self.current_broker_credentials()
+            try:
+                from services.paytm_money_client import PaytmMoneyClient
+                url = PaytmMoneyClient(credentials.get("api_key", ""), credentials.get("api_secret", "")).login_url()
+            except ValueError:
+                # First-time users must create/authorize their developer app before a login URL exists.
+                url = definition.setup_url
         if not QDesktopServices.openUrl(QUrl(url)):
-            QMessageBox.warning(self, "Paytm Money login", "The Paytm Money login page could not be opened.")
+            QMessageBox.warning(self, f"{definition.name} setup", "The official broker setup page could not be opened.")
 
     def _save_selected_provider(self):
         values = self.store.load()
