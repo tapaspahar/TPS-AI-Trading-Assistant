@@ -56,7 +56,7 @@ class Sidebar(QFrame):
         self.gapProbabilityButton = nav("3:20 + 3:40 Gap Probability")
         self.autoOpportunityButton = nav("Auto Opportunity Radar")
         self.trendMemoryButton = nav("Trend Memory Monitor")
-        self.scalperButton = nav("Scalper Command Center")
+        self.scalperButton = nav("Options Scalper")
         # Keep the visual journey in the same order a trader uses the app:
         # market context -> chart confirmation -> AI evaluation -> option plan -> journal.
         self.buttons = (

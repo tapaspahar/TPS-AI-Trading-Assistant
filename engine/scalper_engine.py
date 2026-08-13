@@ -13,7 +13,7 @@ def _f(value, default=0.0):
 
 def evaluate_scalp(one_minute, five_minute, global_context=None, minimum_score=72):
     if len(one_minute) < 51 or len(five_minute) < 51:
-        raise ValueError("Scalper needs at least 51 completed 1-minute and 5-minute future candles.")
+        raise ValueError("Direction engine needs at least 51 completed 1-minute and 5-minute index-future candles; the future is evidence, not the scalp instrument.")
     c1 = [_f(row["close"]) for row in one_minute]
     c5 = [_f(row["close"]) for row in five_minute]
     latest = one_minute[-1]
@@ -66,15 +66,50 @@ def evaluate_scalp(one_minute, five_minute, global_context=None, minimum_score=7
         blockers.append("Future traded volume/VWAP unavailable")
     published = bool(direction and score >= minimum_score and len(blockers) <= 2 and volume_ratio >= 1.0)
     action = f"{direction} SCALP WATCH" if published else "WAIT"
-    risk = max(local_atr * .9, close * .00035)
-    stop = close - risk if direction == "CE" else close + risk if direction == "PE" else None
-    target1 = close + risk * 1.2 if direction == "CE" else close - risk * 1.2 if direction == "PE" else None
-    target2 = close + risk * 1.8 if direction == "CE" else close - risk * 1.8 if direction == "PE" else None
     return {"action": action, "published": published, "candidate": direction, "score": score,
-            "minimum_score": minimum_score, "entry_reference": close, "stop": stop,
-            "target1": target1, "target2": target2, "candle_time": latest.get("time"),
+            "minimum_score": minimum_score, "underlying_reference": close, "candle_time": latest.get("time"),
             "ema5": e5, "ema20": e20, "ema50": e50, "vwap": vwap,
             "volume_ratio": volume_ratio, "momentum": momentum, "global_bias": global_bias,
             "support": support, "resistance": resistance,
             "passed": [text for ok, text in checks if ok], "blockers": blockers,
             "warning": "WATCH means research/paper confirmation, not an order or guaranteed profitable scalp."}
+
+
+def evaluate_option_premium(candles, quote):
+    """Confirm the selected buy-option itself and create premium-based risk levels."""
+    if len(candles) < 21:
+        raise ValueError("Selected option needs at least 21 completed 1-minute premium candles.")
+    closes = [_f(row["close"]) for row in candles]
+    latest = candles[-1]
+    close = _f(latest["close"])
+    e5, e20 = ema(closes, 5), ema(closes, 20)
+    momentum = close - closes[-4]
+    recent = candles[-20:]
+    total_volume = sum(_f(row.get("volume")) for row in recent)
+    average_volume = total_volume / len(recent) if recent else 0
+    latest_volume = _f(latest.get("volume"))
+    volume_ratio = latest_volume / average_volume if average_volume else 0
+    vwap = (sum(((_f(row["high"]) + _f(row["low"]) + _f(row["close"])) / 3) * _f(row.get("volume")) for row in recent) / total_volume) if total_volume else None
+    depth = quote.get("depth") or {}; buys, sells = depth.get("buy") or [], depth.get("sell") or []
+    bid = _f(quote.get("bestBidPrice") or (buys[0].get("price") if buys else 0))
+    ask = _f(quote.get("bestAskPrice") or (sells[0].get("price") if sells else 0))
+    ltp = _f(quote.get("ltp"))
+    spread = (ask - bid) / max((ask + bid) / 2, .01) * 100 if ask >= bid > 0 else None
+    checks = [
+        (close > e5 > e20, "Selected option premium above EMA 5 > EMA 20"),
+        (vwap is not None and close > vwap, "Selected option premium above its VWAP"),
+        (momentum > 0, "Selected option three-minute momentum positive"),
+        (volume_ratio >= 1.0, "Selected option volume at/above 20-candle average"),
+        (ltp > 0 and (spread is None or spread <= 12), "Selected option quote and spread usable"),
+    ]
+    passed = [text for ok, text in checks if ok]
+    blockers = [text for ok, text in checks if not ok]
+    confirmed = len(passed) >= 4 and checks[-1][0]
+    entry = ask if ask > 0 else ltp if ltp > 0 else close
+    premium_atr = atr(candles, 14)
+    risk = max(premium_atr, entry * .08)
+    return {"confirmed": confirmed, "entry": entry, "stop": max(.05, entry - risk),
+            "target1": entry + risk * 1.2, "target2": entry + risk * 1.8,
+            "premium_close": close, "ema5": e5, "ema20": e20, "vwap": vwap,
+            "momentum": momentum, "volume_ratio": volume_ratio, "bid": bid, "ask": ask,
+            "ltp": ltp, "spread_percent": spread, "passed": passed, "blockers": blockers}

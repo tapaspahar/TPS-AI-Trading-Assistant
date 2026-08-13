@@ -41,7 +41,7 @@ NOTIFICATION_LABELS = {
     "auto_opportunity": "Auto Opportunity Radar",
     "broker_connection": "Broker connection status",
     "trend_memory": "Trend Memory historical-pattern match",
-    "scalper": "Scalper Command Center watch",
+    "scalper": "Near-expiry options scalper watch",
 }
 
 

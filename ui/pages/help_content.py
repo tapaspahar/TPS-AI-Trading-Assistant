@@ -208,13 +208,13 @@ PAGES = (
      "Choose an index and refresh. Saved days include actual outcomes; after six current 5-minute observations, an 80%+ analog can produce one desktop alert. Similarity is evidence, not a guaranteed forecast.",
      "Index choose karke refresh karein. Saved dates ke actual outcome dikhte hain; 6 current observations ke baad 80%+ analog par desktop alert aa sakta hai. Similarity forecast guarantee nahi hai.",
      "Index chun kar refresh karein. Chhah current observations ke baad 80% se adhik samanata par desktop alert aa sakta hai. Samanata bhavishyavani ki guarantee nahi hai."),
-    (29, "Scalper Command Center",
-     "Tracks completed 1-minute triggers inside the completed 5-minute direction and combines EMA/VWAP, momentum, futures volume and clearly sourced global context for fast scalp watches.",
-     "Completed 1-minute trigger ko 5-minute direction, EMA/VWAP, momentum, future volume aur clearly sourced global context ke saath mila kar fast scalp watch banata hai.",
-     "पूर्ण 1-मिनट ट्रिगर को 5-मिनट दिशा, EMA/VWAP, मोमेंटम, फ्यूचर वॉल्यूम और स्पष्ट स्रोत वाले वैश्विक संदर्भ से मिलाकर तेज़ स्कैल्प वॉच बनाता है।",
-     "Choose NIFTY/BANKNIFTY/SENSEX and a 60-95 confluence gate. Auto monitor checks every 20 seconds but evaluates only completed candles and sends one notification per published candle. GIFT Nifty/global movement is confirmation only. No order is placed.",
-     "Index aur 60-95 confluence gate choose karein. Auto monitor 20 second me check karta hai par sirf completed candle evaluate karke ek alert bhejta hai. GIFT Nifty/global move sirf confirmation hai; order place nahi hota.",
-     "इंडेक्स और 60-95 कन्फ्लुएंस सीमा चुनें। ऑटो मॉनिटर 20 सेकंड में जाँचता है, पर केवल पूर्ण कैंडल का मूल्यांकन कर एक अलर्ट भेजता है। GIFT Nifty/वैश्विक चाल केवल पुष्टि है; कोई ऑर्डर नहीं लगता।"),
+    (29, "Near-Expiry Options Scalper",
+     "Selects the nearest-expiry ATM or one-step ITM/OTM CE/PE strike. Index-future candles supply direction and volume context, while the selected option's own completed premium candles control confirmation, entry, stop and targets.",
+     "Nearest-expiry ATM ya one-step ITM/OTM CE/PE strike select karta hai. Index future sirf direction/volume context deta hai; selected option ki apni premium candles confirmation, entry, stop aur targets banati hain.",
+     "निकटतम एक्सपायरी का ATM या एक-स्टेप ITM/OTM CE/PE स्ट्राइक चुनता है। इंडेक्स फ्यूचर केवल दिशा/वॉल्यूम संदर्भ देता है; चुने हुए ऑप्शन की प्रीमियम कैंडल पुष्टि, एंट्री, स्टॉप और लक्ष्य बनाती हैं।",
+     "Choose index, strike mode and a 60-95 gate. Auto monitor checks every 20 seconds but evaluates completed future and option candles only. A watch needs direction plus selected-option EMA/VWAP/momentum/volume and quote-spread confirmation. No futures or options order is placed.",
+     "Index, strike mode aur 60-95 gate choose karein. Alert ke liye direction ke saath selected-option EMA/VWAP/momentum/volume aur spread confirmation chahiye. Future ya option order place nahi hota.",
+     "इंडेक्स, स्ट्राइक मोड और 60-95 सीमा चुनें। अलर्ट के लिए दिशा के साथ चुने हुए ऑप्शन की EMA/VWAP/मोमेंटम/वॉल्यूम और स्प्रेड पुष्टि जरूरी है। कोई ऑर्डर नहीं लगता।"),
 )
 
 

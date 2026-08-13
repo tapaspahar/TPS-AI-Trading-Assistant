@@ -1,9 +1,9 @@
-"""Broker-data assembly for the TPS Scalper Command Center."""
+"""Broker-data assembly for the TPS near-expiry options scalper."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from engine.scalper_engine import evaluate_scalp
+from engine.scalper_engine import evaluate_option_premium, evaluate_scalp
 from services.global_market_context import GlobalMarketContextService
 from services.option_contract_service import UNDERLYING_QUOTES, OptionContractService
 
@@ -28,7 +28,19 @@ class ScalperService:
             pass
         return data
 
-    def analyze(self, symbol, minimum_score=72, global_context=None):
+    @staticmethod
+    def _select_contract(choices, spot, candidate, strike_mode):
+        strikes = sorted({float(row["strike"]) for row in choices})
+        atm_index = min(range(len(strikes)), key=lambda index: abs(strikes[index] - spot))
+        offset = 0
+        if strike_mode == "1-step ITM":
+            offset = -1 if candidate == "CE" else 1
+        elif strike_mode == "1-step OTM":
+            offset = 1 if candidate == "CE" else -1
+        strike = strikes[max(0, min(len(strikes) - 1, atm_index + offset))]
+        return next(row for row in choices if float(row["strike"]) == strike)
+
+    def analyze(self, symbol, minimum_score=72, global_context=None, strike_mode="ATM"):
         future = self.contracts.get_front_month_future(symbol)
         one = self._completed(self.client.get_recent_candles(future["exchange"], future["token"], "ONE_MINUTE", 5), 1)
         five = self._completed(self.client.get_recent_candles(future["exchange"], future["token"], "FIVE_MINUTE", 30), 5)
@@ -43,20 +55,48 @@ class ScalperService:
             contracts = self.contracts.get_contracts(symbol)
             expiry = min(row["expiry"] for row in contracts)
             choices = [row for row in contracts if row["expiry"] == expiry and row["option_type"] == candidate]
-            contract = min(choices, key=lambda row: abs(float(row["strike"]) - spot))
+            contract = self._select_contract(choices, spot, candidate, strike_mode)
             quote = self.client.get_option_quote(contract["exchange"], contract["token"])
-            depth = quote.get("depth") or {}; buys, sells = depth.get("buy") or [], depth.get("sell") or []
-            bid = float(quote.get("bestBidPrice") or (buys[0].get("price") if buys else 0) or 0)
-            ask = float(quote.get("bestAskPrice") or (sells[0].get("price") if sells else 0) or 0)
-            ltp = float(quote.get("ltp", 0) or 0); volume = float(quote.get("tradeVolume", quote.get("volume", 0)) or 0)
-            spread = (ask - bid) / max((ask + bid) / 2, .01) * 100 if ask >= bid > 0 else None
-            liquid = ltp > 0 and (spread is None or spread <= 12)
-            liquidity = {"available": ltp > 0, "passed": liquid, "symbol": contract["symbol"],
-                         "ltp": ltp, "bid": bid, "ask": ask, "spread_percent": spread, "volume": volume,
-                         "status": "Liquidity gate passed" if liquid else "Option quote/spread gate failed"}
-            if result.get("published") and not liquid:
+            option_rows = self._completed(
+                self.client.get_recent_candles(contract["exchange"], contract["token"], "ONE_MINUTE", 5), 1
+            )
+            try:
+                premium = evaluate_option_premium(option_rows, quote)
+            except ValueError as error:
+                result["published"] = False
+                result["action"] = "WAIT"
+                result["blockers"].append(f"Option: {error}")
+                result.update({"option_contract": contract, "expiry": expiry,
+                               "strike_mode": strike_mode,
+                               "option_candle_time": option_rows[-1].get("time") if option_rows else None})
+                liquidity = {
+                    "available": bool(float(quote.get("ltp", 0) or 0)), "passed": False,
+                    "symbol": contract["symbol"], "strike": contract["strike"],
+                    "option_type": candidate, "expiry": expiry, "strike_mode": strike_mode,
+                    "ltp": float(quote.get("ltp", 0) or 0), "bid": 0.0, "ask": 0.0,
+                    "spread_percent": None, "premium_passed": [],
+                    "premium_blockers": [str(error)],
+                    "status": "Waiting for enough completed option-premium candles",
+                }
+                result["option_liquidity"] = liquidity
+                result.update({"symbol": symbol, "future_symbol": future["symbol"],
+                               "provider": getattr(self.client, "provider_name", "Broker"),
+                               "global_context": context})
+                return result
+            liquidity = {"available": premium["ltp"] > 0, "passed": premium["confirmed"],
+                         "symbol": contract["symbol"], "strike": contract["strike"],
+                         "option_type": candidate, "expiry": expiry, "strike_mode": strike_mode,
+                         "ltp": premium["ltp"], "bid": premium["bid"], "ask": premium["ask"],
+                         "spread_percent": premium["spread_percent"], "volume_ratio": premium["volume_ratio"],
+                         "premium_passed": premium["passed"], "premium_blockers": premium["blockers"],
+                         "status": "Option premium confirmation passed" if premium["confirmed"] else "Option premium confirmation failed"}
+            result.update({"option_contract": contract, "expiry": expiry, "strike_mode": strike_mode,
+                           "entry_reference": premium["entry"], "stop": premium["stop"],
+                           "target1": premium["target1"], "target2": premium["target2"],
+                           "option_candle_time": option_rows[-1].get("time")})
+            if result.get("published") and not premium["confirmed"]:
                 result["published"] = False; result["action"] = "WAIT"
-                result["blockers"].append("ATM option liquidity/spread gate failed")
+                result["blockers"].extend("Option: " + item for item in premium["blockers"])
         result["option_liquidity"] = liquidity
         result.update({"symbol": symbol, "future_symbol": future["symbol"],
                        "provider": getattr(self.client, "provider_name", "Broker"),

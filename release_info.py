@@ -9,9 +9,12 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.2.1"
-LAST_UPDATED_AT = "13-08-2026 09:05:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.2.1 - 13-08-2026 09:05 IST"
+LAST_UPDATED_AT = "13-08-2026 09:01:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.2.1 - 13-08-2026 09:01 IST"
 RELEASE_NOTES = (
+    "Redesigned Scalper Command Center as a nearest-expiry options scalper: actual watch instrument is an ATM/one-step ITM/OTM CE or PE strike, never an index-future trade.",
+    "Future candles now provide direction and traded-volume context only; the selected option's completed premium candles independently validate EMA/VWAP, momentum, volume and spread before publication.",
+    "Moved scalp Entry, SL, T1 and T2 to the selected option premium using ask/LTP and option-premium ATR, with exact contract, strike mode and expiry shown in the UI and notification.",
     "Added TPS Scalper Command Center with completed 1-minute triggers, 5-minute direction, EMA/VWAP, momentum, futures-volume expansion, adaptive confluence threshold and duplicate-safe desktop watches.",
     "Added official NSE IX GIFT Nifty context plus clearly labelled external US/Asia reference breadth; global movement is a bounded confirmation layer and cannot override Indian completed-candle direction.",
     "Added explainable scalp entry reference, ATR protection, two targets and a complete PASS/WAIT evidence ledger while retaining read-only, notification-only safety.",

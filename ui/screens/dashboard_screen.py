@@ -272,7 +272,7 @@ class DashboardScreen(QWidget):
     def notify_scalp_watch(self, result):
         self.notifier.notify(
             "scalper", f"TPS {result.get('action')} — {result.get('symbol')}",
-            f"Completed candle {result.get('candle_time')} | Reference {result.get('entry_reference', 0):,.2f} | "
+            f"{(result.get('option_liquidity') or {}).get('symbol', 'Near-expiry option')} | Premium entry ₹{result.get('entry_reference', 0):,.2f} | "
             f"SL {result.get('stop', 0):,.2f} | T1 {result.get('target1', 0):,.2f} | Score {result.get('score')}/100. Paper/research alert only.",
         )
 
