@@ -45,6 +45,7 @@ class Sidebar(QFrame):
         self.equityButton = nav("Equity Research")
         self.autoAttemptReportButton = nav("Auto Attempt Report")
         self.notificationCenterButton = nav("Notification Center")
+        self.recoveryCenterButton = nav("Overtrading Protection")
         self.aboutButton = nav("About")
         self.helpButton = nav("Help")
         self.nextDayBiasButton = nav("Next-Day Bias")
@@ -64,7 +65,7 @@ class Sidebar(QFrame):
         self.buttons = (
             self.dashboardButton, self.liveMarketButton, self.equityButton, self.chartCaptureButton,
             self.aiButton, self.optionsButton, self.autoOpportunityButton, self.autoAttemptReportButton,
-            self.notificationCenterButton, self.journalButton,
+            self.notificationCenterButton, self.recoveryCenterButton, self.journalButton,
             self.checklistButton, self.riskButton, self.reportButton, self.backtestButton, self.replayButton,
             self.postMarketButton, self.postMarketTpsAnalysisButton, self.selfDevelopmentButton, self.nextDayBiasButton, self.casAnalysisButton, self.stockOptionsWatchButton,
             self.optionStrategiesButton, self.putCallRatioButton, self.gapProbabilityButton, self.scalperButton, self.trendMemoryButton,
@@ -106,6 +107,7 @@ class Sidebar(QFrame):
             29: self.scalperButton,
             30: self.notificationCenterButton,
             31: self.selfDevelopmentButton,
+            32: self.recoveryCenterButton,
         }
         self.menu_group = QButtonGroup(self)
         self.menu_group.setExclusive(True)

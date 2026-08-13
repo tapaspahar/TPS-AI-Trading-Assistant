@@ -229,6 +229,13 @@ PAGES = (
      "Select a saved date to inspect health, verdict, priority, observation, evidence, suggested development and its approval test. Mark suggestions Reviewed or reopen them. TPS never changes source code or strategy rules automatically.",
      "Saved date select karke health, verdict, priority, observation, evidence, suggested development aur approval test dekhein. Suggestion ko Reviewed ya Open mark kar sakte hain. TPS code/rules khud change nahi karta.",
      "सुरक्षित दिनांक चुनकर स्वास्थ्य, निर्णय, प्राथमिकता, अवलोकन, प्रमाण, विकास सुझाव और अनुमोदन परीक्षण देखें। सुझाव को Reviewed या Open करें। TPS स्वयं कोड या नियम नहीं बदलता।"),
+    (32, "Overtrading Protection Center",
+     "Release 1.3 behavioural safety center that enforces a daily check-in, paper-only commitment, a bounded daily paper limit, consecutive-loss cooling and validation progress.",
+     "Release 1.3 ka behavioural safety center daily check-in, paper-only commitment, limited paper trades, consecutive-loss cooling aur validation progress enforce karta hai.",
+     "Release 1.3 ka safety center daily check-in, paper-only commitment, limited paper trades, loss cooling aur validation progress ko enforce karta hai.",
+     "Choose your honest current state and confirm paper-only use. CALM/STABLE plus the commitment may unlock bounded paper observation; stress, anger, FOMO, revenge, missing check-in, the daily limit or the loss lock pauses new captures. Scores cannot bypass the guard.",
+     "Apni current state honestly select karke paper-only commitment confirm karein. CALM/STABLE aur commitment par bounded paper observation mil sakta hai; stress, anger, FOMO, revenge, missing check-in, daily limit ya loss lock new capture rokta hai. Koi score guard bypass nahi kar sakta.",
+     "Apni vartaman mansik sthiti sachchai se chunein aur paper-only commitment confirm karein. Stress, anger, FOMO, revenge, check-in ki kami, daily limit ya loss lock naye capture ko rokta hai. Koi score safety guard bypass nahi kar sakta."),
 )
 
 

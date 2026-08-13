@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from core.database_manager import Database
+from core.overtrading_guard import OvertradingGuard
 from engine.decision_engine import ChartSnapshot, DecisionEngine
 from engine.live_setup_capture import build_live_capture
 from engine.market_environment import analyze_market_environment
@@ -133,6 +134,7 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
         daily_limit = float(settings.get("capital", 100000)) * float(settings.get("daily_loss_percent", 3)) / 100
         progress["daily_remaining"] = max(0, daily_limit - max(0, -float(progress.get("realized_pnl", 0))))
         operational_blockers = []
+        recovery = OvertradingGuard().assess(settings, database, checked_at)
         if settings.get("news_risk_pause"): operational_blockers.append("Emergency News Risk Pause is ON")
         if event_risk.get("blocked") and not settings.get("event_risk_override"): operational_blockers.append("High-impact economic event no-trade window is active")
         if not event_risk.get("available") and settings.get("event_feed_fail_closed"): operational_blockers.append("Economic-calendar feed unavailable (fail-closed)")
@@ -140,6 +142,8 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
         adaptive_limit = environment["adaptive_max_trades"]
         if progress["trades"] >= adaptive_limit: operational_blockers.append(f"Adaptive daily paper-trade limit reached ({progress['trades']}/{adaptive_limit})")
         if progress["daily_remaining"] <= 0: operational_blockers.append("Daily loss limit exhausted")
+        operational_blockers.extend(recovery.get("blockers") or [])
+        chart["recovery_guard"] = recovery
         if operational_blockers:
             chart["warnings"].extend(operational_blockers)
             result = _attempt(
@@ -177,6 +181,7 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
         safety = assess_execution_safety(
             now=checked_at, candle_time=capture.get("candle_time"), quote=selected_quote, plan=plan,
             settings=safety_settings, progress=progress, cooldown_remaining=cooldown, event_risk=event_risk, expiry_day=expiry_day,
+            recovery_assessment=OvertradingGuard().assess(settings, database, checked_at),
         )
         plan["execution_safety"] = safety
         if not safety["allowed"]:

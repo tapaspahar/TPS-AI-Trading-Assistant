@@ -36,3 +36,15 @@ class ExecutionSafetyTests(unittest.TestCase):
         result = assess_execution_safety(**values)
         self.assertTrue(result["allowed"])
         self.assertTrue(any("overridden" in warning for warning in result["warnings"]))
+
+    def test_recovery_guard_cannot_be_overridden_by_strategy_score(self):
+        values = self.base()
+        values["recovery_assessment"] = {
+            "allowed": False,
+            "blockers": ["Daily Recovery check-in is incomplete"],
+            "warnings": ["Paper validation: 3/30 sessions"],
+        }
+        result = assess_execution_safety(**values)
+        self.assertFalse(result["allowed"])
+        self.assertIn("Daily Recovery check-in is incomplete", result["blockers"])
+        self.assertIn("Paper validation: 3/30 sessions", result["warnings"])

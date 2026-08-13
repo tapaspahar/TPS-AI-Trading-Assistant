@@ -1,5 +1,5 @@
 #define MyAppName "TPS AI Trading Assistant"
-#define MyAppVersion "1.2.2"
+#define MyAppVersion "1.3.0"
 #define MyAppPublisher "Tapas Kumar Pahar"
 #define MyAppExeName "TPS AI Trading Assistant.exe"
 
@@ -7,18 +7,18 @@
 AppId={{4E04311B-86B2-4925-A17C-27967D357CB0}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppVerName={#MyAppName} Release 1.2.2 (13-08-2026)
+AppVerName={#MyAppName} Release 1.3 (13-08-2026)
 AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\TPS AI Trading Assistant
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 OutputDir=..\release
-OutputBaseFilename=TPS-AI-Trading-Assistant-Setup-1.2.2
+OutputBaseFilename=TPS-AI-Trading-Assistant-Setup-1.3.0
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
-UninstallDisplayName={#MyAppName} Release 1.2.2
+UninstallDisplayName={#MyAppName} Release 1.3
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 

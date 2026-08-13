@@ -11,6 +11,7 @@ from engine.tps_entry_confirmation import CONDITION_WEIGHTS
 from engine.trade_plan_engine import create_review_plan
 from engine.greeks_engine import calculate_greeks
 from services.auto_paper_trader import run_auto_paper_cycle
+from core.overtrading_guard import OvertradingGuard
 from services.live_session import LiveSession
 from services.option_contract_service import UNDERLYING_QUOTES, OptionContractService, buying_risk, contracts_near_spot
 
@@ -528,10 +529,23 @@ class OptionsPage(QWidget):
             QMessageBox.warning(self, "Paper trade", "Refresh the selected expiry OI/PCR data first.")
             return
         try:
+            settings = SettingsStore().load()
+            database = Database()
+            try:
+                recovery = OvertradingGuard().assess(settings, database)
+            finally:
+                database.close()
+            if not recovery["allowed"]:
+                QMessageBox.warning(
+                    self, "Recovery Mode",
+                    "Paper capture blocked:\n\n" + "\n".join(f"• {item}" for item in recovery["blockers"])
+                    + "\n\nOpen Overtrading Protection Center to complete today's check-in."
+                )
+                return
             contracts = [contract for contract in self.contracts if contract["expiry"] == expiry]
             plan = create_review_plan(
                 self.underlying.currentText(), self.spot_price, contracts, self.chain_context["quote_rows"],
-                self.chart_context, self.chain_context, SettingsStore().load(), requested_lots=1,
+                self.chart_context, self.chain_context, settings, requested_lots=1,
             )
             database = Database()
             try:

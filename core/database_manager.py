@@ -885,6 +885,25 @@ class Database:
         remaining = created + timedelta(minutes=int(minutes)) - now.replace(tzinfo=None)
         return max(0, int((remaining.total_seconds() + 59) // 60))
 
+    def paper_loss_streak(self) -> dict:
+        """Return the latest consecutive closed-paper loss streak."""
+        rows = self.cursor.execute(
+            """SELECT t.pnl, t.outcome, t.closed_at, t.created_at
+               FROM trades t JOIN paper_trade_links p ON p.trade_id=t.id
+               WHERE t.status='CLOSED' ORDER BY COALESCE(t.closed_at, t.created_at) DESC, t.id DESC"""
+        ).fetchall()
+        count = 0
+        latest_closed_at = None
+        loss_outcomes = {"STOP LOSS HIT", "TRAILING STOP HIT"}
+        for row in rows:
+            is_loss = float(row["pnl"] or 0) < 0 or str(row["outcome"] or "").upper() in loss_outcomes
+            if not is_loss:
+                break
+            if latest_closed_at is None:
+                latest_closed_at = row["closed_at"] or row["created_at"]
+            count += 1
+        return {"count": count, "latest_closed_at": latest_closed_at}
+
     def close_trade(self, trade_id: int, exit_price: float, outcome: str = "MANUAL EXIT") -> bool:
         """Record the actual exit for one previously saved open trade."""
         if exit_price <= 0:

@@ -13,6 +13,13 @@ DEFAULT_SETTINGS = {
     "risk_percent": 1.0,
     "daily_loss_percent": 3.0,
     "max_trades_per_day": 5,
+    # Release 1.3 capital-protection defaults. Recovery mode governs paper
+    # captures only; TPS remains unable to place a broker order.
+    "recovery_mode_enabled": True,
+    "recovery_daily_trade_limit": 1,
+    "recovery_loss_streak_limit": 2,
+    "recovery_lock_hours": 48,
+    "recovery_min_paper_sessions": 30,
     "trade_plan_min_score": 95,
     "tps_required_matches": 5,
     "tps_match_mode": "adaptive",
@@ -123,6 +130,11 @@ class SettingsStore:
             "risk_percent": float(settings["risk_percent"]),
             "daily_loss_percent": float(settings["daily_loss_percent"]),
             "max_trades_per_day": int(settings["max_trades_per_day"]),
+            "recovery_mode_enabled": bool(settings.get("recovery_mode_enabled", current["recovery_mode_enabled"])),
+            "recovery_daily_trade_limit": int(settings.get("recovery_daily_trade_limit", current["recovery_daily_trade_limit"])),
+            "recovery_loss_streak_limit": int(settings.get("recovery_loss_streak_limit", current["recovery_loss_streak_limit"])),
+            "recovery_lock_hours": int(settings.get("recovery_lock_hours", current["recovery_lock_hours"])),
+            "recovery_min_paper_sessions": int(settings.get("recovery_min_paper_sessions", current["recovery_min_paper_sessions"])),
             "trade_plan_min_score": int(settings.get("trade_plan_min_score", current["trade_plan_min_score"])),
             "tps_required_matches": int(settings.get("tps_required_matches", current["tps_required_matches"])),
             "tps_match_mode": str(settings.get("tps_match_mode", current["tps_match_mode"])),
@@ -155,6 +167,14 @@ class SettingsStore:
             raise ValueError("Capital must be positive and risk percentage must be between 0 and 100.")
         if not 0 < values["daily_loss_percent"] <= 100 or values["max_trades_per_day"] < 1:
             raise ValueError("Daily-loss percentage must be between 0 and 100, and trade limit must be at least 1.")
+        if not 1 <= values["recovery_daily_trade_limit"] <= values["max_trades_per_day"]:
+            raise ValueError("Recovery daily limit must be between 1 and the normal maximum-trades limit.")
+        if not 1 <= values["recovery_loss_streak_limit"] <= 10:
+            raise ValueError("Recovery loss-streak limit must be between 1 and 10.")
+        if not 1 <= values["recovery_lock_hours"] <= 168:
+            raise ValueError("Recovery lock must be between 1 and 168 hours.")
+        if not 1 <= values["recovery_min_paper_sessions"] <= 250:
+            raise ValueError("Recovery paper-session target must be between 1 and 250.")
         if not 0 <= values["trade_plan_min_score"] <= 100:
             raise ValueError("Trade-plan minimum score must be between 0 and 100.")
         allowed_conditions = {

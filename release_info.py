@@ -1,17 +1,21 @@
 """Application release metadata kept in one place."""
 
 APP_NAME = "TPS AI Trading Assistant"
-VERSION = "1.2.2"
-DISPLAY_VERSION = "Release 1.2.2"
+VERSION = "1.3.0"
+DISPLAY_VERSION = "Release 1.3"
 RELEASE_DATE = "13-08-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
-SOFTWARE_UPDATE_VERSION = "v1.2.2"
-LAST_UPDATED_AT = "13-08-2026 13:46:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.2.2 - 13-08-2026 13:46 IST"
+SOFTWARE_UPDATE_VERSION = "v1.3.0"
+LAST_UPDATED_AT = "13-08-2026 14:45:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.3.0 - 13-08-2026 14:45 IST"
 RELEASE_NOTES = (
+    "Started Release 1.3 with a dedicated Overtrading Protection Center and a persistent daily emotional-safety check-in.",
+    "Enabled Recovery Mode by default: one new paper capture per day, a 48-hour cooling lock after two consecutive paper losses, and a 30-session paper-validation target.",
+    "Applied the central recovery guard to both automatic and manual paper captures so strategy scores and signals cannot override behavioural safety locks.",
+    "Kept market observation, reports and historical evidence available while captures are paused; TPS still has no broker-order placement endpoint.",
     "Corrected installed-app startup placement so Release 1.2.2 opens maximized inside the current monitor work area with the native title bar, TPS header and footer visible.",
     "Published maintenance Release 1.2.2 with aligned application, Windows executable, installer, portable ZIP and checksum metadata.",
     "Made Trend Memory similarity alerts restart-safe and limited each logical current-day/historical-day match to one delivered notification per day.",

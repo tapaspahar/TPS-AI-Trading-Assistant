@@ -99,6 +99,17 @@ class SettingsPage(QWidget):
         save.clicked.connect(self.save)
         layout.addWidget(save)
         layout.addWidget(QLabel("Settings are stored only on this computer. They do not connect to a broker or place trades."))
+        recovery_box = QGroupBox("Release 1.3 - Overtrading Protection")
+        recovery_layout = QVBoxLayout(recovery_box)
+        recovery_note = QLabel(
+            f"Recovery Mode is active by default: maximum {values['recovery_daily_trade_limit']} new paper capture/day, "
+            f"{values['recovery_lock_hours']}-hour cooling after {values['recovery_loss_streak_limit']} consecutive "
+            f"paper losses, and {values['recovery_min_paper_sessions']} separate paper sessions before real-money "
+            "eligibility can be reviewed. Daily check-in and current lock status are available in Overtrading Protection Center."
+        )
+        recovery_note.setWordWrap(True)
+        recovery_layout.addWidget(recovery_note)
+        layout.addWidget(recovery_box)
         notification_box = QGroupBox("Notification Center - desktop alerts")
         notification_layout = QVBoxLayout(notification_box)
         self.notifications_enabled = QCheckBox("Enable TPS desktop notifications")

@@ -35,6 +35,7 @@ from ui.pages.trend_memory_page import TrendMemoryPage
 from ui.pages.scalper_page import ScalperPage
 from ui.pages.notification_center_page import NotificationCenterPage
 from ui.pages.self_development_page import SelfDevelopmentPage
+from ui.pages.recovery_center_page import RecoveryCenterPage
 from ui.widgets.glass_effects import add_glass_shadow
 from ui.widgets.accessible_scroll import configure_scroll_area
 from services.post_market_tps_analysis import ensure_completed_post_market_reports
@@ -109,6 +110,7 @@ class DashboardScreen(QWidget):
         self.scalperPage = ScalperPage()
         self.notificationCenterPage = NotificationCenterPage()
         self.selfDevelopmentPage = SelfDevelopmentPage()
+        self.recoveryCenterPage = RecoveryCenterPage()
         for page in (self.dashboardPage, self.liveMarketPage, self.optionsPage, self.chartCapturePage, self.journalPage,
                      self.checklistPage, self.aiPage, self.riskPage, self.reportsPage, self.settingsPage,
                      self.backtestPage, self.postMarketPage, self.replayPage, self.equityPage,
@@ -116,7 +118,7 @@ class DashboardScreen(QWidget):
                      self.smartMoneyPage, self.casAnalysisPage, self.stockOptionsWatchPage, self.optionStrategiesPage,
                      self.postMarketTpsAnalysisPage, self.preCandlePage, self.powerfulEnginePage, self.putCallRatioPage,
                      self.gapProbabilityPage, self.autoOpportunityPage, self.trendMemoryPage, self.scalperPage,
-                     self.notificationCenterPage, self.selfDevelopmentPage):
+                     self.notificationCenterPage, self.selfDevelopmentPage, self.recoveryCenterPage):
             self.stack.addWidget(page)
         self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
         self.journalPage.trade_saved.connect(self.reportsPage.refresh)
@@ -172,6 +174,7 @@ class DashboardScreen(QWidget):
         self.sidebar.scalperButton.clicked.connect(lambda _checked=False: self.show_page(29))
         self.sidebar.notificationCenterButton.clicked.connect(lambda _checked=False: self.show_page(30))
         self.sidebar.selfDevelopmentButton.clicked.connect(lambda _checked=False: self.show_page(31))
+        self.sidebar.recoveryCenterButton.clicked.connect(lambda _checked=False: self.show_page(32))
         body_layout.addWidget(self.stack)
         main_layout.addLayout(body_layout, 1)
         self.informationPanel = InformationPanel()

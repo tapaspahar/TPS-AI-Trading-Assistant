@@ -18,7 +18,7 @@ def _quote_number(quote, *names):
 
 
 def assess_execution_safety(*, now, candle_time, quote, plan, settings, progress, cooldown_remaining=0,
-                            event_risk=None, expiry_day=False):
+                            event_risk=None, expiry_day=False, recovery_assessment=None):
     now = now.astimezone(IST) if now.tzinfo else now.replace(tzinfo=IST)
     blockers, warnings = [], []
     session = market_session(now)
@@ -67,6 +67,10 @@ def assess_execution_safety(*, now, candle_time, quote, plan, settings, progress
         blockers.append("Daily loss limit is exhausted")
     if cooldown_remaining > 0:
         blockers.append(f"Paper-trade cooldown active for {cooldown_remaining} more minute(s)")
+    if recovery_assessment and not recovery_assessment.get("allowed", False):
+        blockers.extend(recovery_assessment.get("blockers") or ["Recovery Mode blocked this capture"])
+    if recovery_assessment:
+        warnings.extend(recovery_assessment.get("warnings") or [])
     if settings.get("news_risk_pause"):
         blockers.append("Emergency News Risk Pause is ON")
     if event_risk and event_risk.get("blocked") and not settings.get("event_risk_override"):
