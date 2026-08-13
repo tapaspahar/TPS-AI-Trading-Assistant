@@ -1,5 +1,5 @@
-from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QHBoxLayout, QScrollArea, QStackedWidget, QVBoxLayout, QWidget
+from PySide6.QtCore import QSize, QTimer
+from PySide6.QtWidgets import QHBoxLayout, QScrollArea, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget
 
 from ui.widgets.header import Header
 from ui.widgets.information_panel import InformationPanel
@@ -43,6 +43,18 @@ from services.notification_service import NotificationService
 from services.trend_memory_service import ensure_completed_trend_memories, get_live_trend_analogs
 
 
+class ResponsiveStackedWidget(QStackedWidget):
+    """Keep hidden workspace size hints from forcing the shell off-screen."""
+
+    def minimumSizeHint(self):
+        # QStackedWidget normally returns the largest minimum hint from every
+        # page, including hidden report/help tables. With display scaling this
+        # can make the top-level window larger than the monitor work area and
+        # push its native title bar above the screen. Individual long pages
+        # already own scroll areas, so the shell itself may safely shrink.
+        return QSize(0, 0)
+
+
 class DashboardScreen(QWidget):
     def __init__(self):
         super().__init__()
@@ -61,8 +73,9 @@ class DashboardScreen(QWidget):
         self.sidebar = Sidebar()
         add_glass_shadow(self.sidebar, blur=20, y_offset=3, opacity=75)
         body_layout.addWidget(self.sidebar)
-        self.stack = QStackedWidget()
+        self.stack = ResponsiveStackedWidget()
         self.stack.setObjectName("contentStack")
+        self.stack.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         add_glass_shadow(self.stack, blur=25, y_offset=5, opacity=75)
         self.dashboardPage = DashboardPage()
         self.liveMarketPage = LiveMarketPage()
