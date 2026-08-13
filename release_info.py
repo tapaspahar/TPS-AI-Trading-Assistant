@@ -1,17 +1,18 @@
 """Application release metadata kept in one place."""
 
 APP_NAME = "TPS AI Trading Assistant"
-VERSION = "1.3.0"
-DISPLAY_VERSION = "Release 1.3"
+VERSION = "1.3.1"
+DISPLAY_VERSION = "Release 1.3.1"
 RELEASE_DATE = "13-08-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
-SOFTWARE_UPDATE_VERSION = "v1.3.0"
-LAST_UPDATED_AT = "13-08-2026 19:20:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.3.0 - 13-08-2026 19:20 IST"
+SOFTWARE_UPDATE_VERSION = "v1.3.1"
+LAST_UPDATED_AT = "13-08-2026 16:46:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.3.1 - 13-08-2026 16:46 IST"
 RELEASE_NOTES = (
+    "Published Release 1.3.1 with simplified supported-broker onboarding and VIX/ATM-range-aware defined-risk strategy adjustment monitoring.",
     "Simplified supported-broker onboarding with an official setup/login button and clear one-time secure setup guidance; broker API authentication remains mandatory.",
     "Enhanced Option Strategies with India-VIX/ATM-range-aware defined-risk strike selection and a save-and-monitor adjustment workflow.",
     "Added completed-5-minute HOLD, WATCH and EXIT/REASSESS monitoring with exact close-leg actions, optional fresh defined-risk replacement and a strict no-naked-option rule.",

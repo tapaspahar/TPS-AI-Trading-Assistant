@@ -7,9 +7,9 @@ from datetime import datetime
 
 from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
-    QAbstractItemView, QDateEdit, QGridLayout, QHBoxLayout, QLabel, QListWidget,
+    QAbstractItemView, QDateEdit, QGridLayout, QHBoxLayout, QHeaderView, QLabel, QListWidget,
     QListWidgetItem, QMessageBox, QPlainTextEdit, QPushButton, QSplitter,
-    QSpinBox, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QSpinBox, QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from core.database_manager import Database
@@ -73,40 +73,46 @@ class SelfDevelopmentPage(QWidget):
         for column, card in enumerate((self.coverage, self.broker_health, self.validation_samples, self.pipeline)):
             cards.addWidget(card[0], 1, column)
         layout.addLayout(cards)
-        replay = QHBoxLayout()
-        replay.addWidget(QLabel("Counterfactual score"))
-        self.proposed_score = QSpinBox()
-        self.proposed_score.setRange(0, 100)
-        replay.addWidget(self.proposed_score)
-        replay.addWidget(QLabel("Required confirmations"))
-        self.proposed_matches = QSpinBox()
-        self.proposed_matches.setRange(1, 10)
-        replay.addWidget(self.proposed_matches)
-        run_replay = QPushButton("Run Safe Counterfactual Replay")
-        run_replay.clicked.connect(self.run_counterfactual)
-        replay.addWidget(run_replay)
-        layout.addLayout(replay)
-        splitter = QSplitter()
+        splitter = QSplitter(Qt.Horizontal)
+        splitter.setChildrenCollapsible(False)
         self.date_list = QListWidget()
-        self.date_list.setMinimumWidth(270)
+        self.date_list.setMinimumWidth(285)
+        self.date_list.setMaximumWidth(360)
         self.date_list.currentItemChanged.connect(self.load_selected_review)
         splitter.addWidget(self.date_list)
+
         right = QWidget()
         right_layout = QVBoxLayout(right)
+        right_layout.setContentsMargins(8, 0, 0, 0)
         self.status = QLabel()
         self.status.setWordWrap(True)
         right_layout.addWidget(self.status)
-        self.table = QTableWidget(0, 7)
+
+        tabs = QTabWidget()
+        tabs.setDocumentMode(True)
+
+        suggestions_tab = QWidget()
+        suggestions_layout = QVBoxLayout(suggestions_tab)
+        suggestions_layout.setContentsMargins(4, 8, 4, 4)
+        suggestions_layout.addWidget(QLabel("Development suggestions — select a row to review its evidence and approval test"))
+        self.table = QTableWidget(0, 5)
         self.table.setHorizontalHeaderLabels(
-            ("Priority", "Area", "Observation", "Evidence", "Development suggestion", "Implementation", "Review status")
+            ("Priority", "Area", "Observation summary", "Implementation", "Review status")
         )
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
-        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.setAlternatingRowColors(True)
+        self.table.setMinimumHeight(220)
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.Stretch)
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         self.table.itemSelectionChanged.connect(self.show_selected_suggestion)
-        right_layout.addWidget(self.table, 2)
+        suggestions_layout.addWidget(self.table, 3)
         action_row = QHBoxLayout()
         reviewed = QPushButton("Mark Selected Reviewed")
         reviewed.clicked.connect(lambda: self.set_selected_status("REVIEWED"))
@@ -114,19 +120,45 @@ class SelfDevelopmentPage(QWidget):
         reopen.clicked.connect(lambda: self.set_selected_status("OPEN"))
         action_row.addWidget(reviewed)
         action_row.addWidget(reopen)
-        right_layout.addLayout(action_row)
-        right_layout.addWidget(QLabel("Selected suggestion - evidence and approval test"))
+        suggestions_layout.addLayout(action_row)
+        suggestions_layout.addWidget(QLabel("Selected suggestion — complete evidence and approval test"))
         self.details = QPlainTextEdit()
         self.details.setReadOnly(True)
-        self.details.setMinimumHeight(150)
-        right_layout.addWidget(self.details, 1)
-        right_layout.addWidget(QLabel("Release 1.3 validation evidence (read-only)"))
+        self.details.setMinimumHeight(210)
+        suggestions_layout.addWidget(self.details, 2)
+        tabs.addTab(suggestions_tab, "Suggestions & Review")
+
+        validation_tab = QWidget()
+        validation_layout = QVBoxLayout(validation_tab)
+        validation_layout.setContentsMargins(8, 10, 8, 8)
+        validation_layout.addWidget(QLabel("Release 1.3 validation evidence — read-only; no production rule is changed here"))
+        replay = QGridLayout()
+        replay.addWidget(QLabel("Counterfactual score"), 0, 0)
+        self.proposed_score = QSpinBox()
+        self.proposed_score.setRange(0, 100)
+        replay.addWidget(self.proposed_score, 0, 1)
+        replay.addWidget(QLabel("Required confirmations"), 0, 2)
+        self.proposed_matches = QSpinBox()
+        self.proposed_matches.setRange(1, 10)
+        replay.addWidget(self.proposed_matches, 0, 3)
+        run_replay = QPushButton("Run Safe Counterfactual Replay")
+        run_replay.clicked.connect(self.run_counterfactual)
+        replay.addWidget(run_replay, 0, 4)
+        replay.setColumnStretch(1, 1)
+        replay.setColumnStretch(3, 1)
+        replay.setColumnStretch(4, 2)
+        validation_layout.addLayout(replay)
         self.validation_details = QPlainTextEdit()
         self.validation_details.setReadOnly(True)
-        self.validation_details.setMinimumHeight(150)
-        right_layout.addWidget(self.validation_details, 1)
+        self.validation_details.setMinimumHeight(420)
+        validation_layout.addWidget(self.validation_details, 1)
+        tabs.addTab(validation_tab, "Validation Evidence & Replay")
+
+        right_layout.addWidget(tabs, 1)
         splitter.addWidget(right)
-        splitter.setSizes([280, 1100])
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
+        splitter.setSizes([310, 1200])
         layout.addWidget(splitter, 1)
         self.refresh(auto_generate=False)
         settings = SettingsStore().load()
@@ -137,6 +169,7 @@ class SelfDevelopmentPage(QWidget):
     def _card(title: str, value: str):
         shell = QWidget()
         shell.setObjectName("metricCard")
+        shell.setMinimumHeight(82)
         card_layout = QVBoxLayout(shell)
         heading = QLabel(title)
         heading.setObjectName("cardTitle")
@@ -218,8 +251,7 @@ class SelfDevelopmentPage(QWidget):
         for row_index, suggestion in enumerate(self.suggestions):
             values = (
                 suggestion.get("priority", ""), suggestion.get("area", ""),
-                suggestion.get("observation", ""), suggestion.get("evidence", ""),
-                suggestion.get("suggestion", ""), suggestion.get("implementation_status", "LEGACY / UNKNOWN"),
+                suggestion.get("observation", ""), suggestion.get("implementation_status", "LEGACY / UNKNOWN"),
                 suggestion.get("status", "OPEN"),
             )
             for column, value in enumerate(values):
@@ -228,8 +260,6 @@ class SelfDevelopmentPage(QWidget):
                 if column == 0:
                     item.setData(Qt.UserRole, suggestion.get("key"))
                 self.table.setItem(row_index, column, item)
-        self.table.resizeColumnsToContents()
-        self.table.horizontalHeader().setStretchLastSection(True)
         generated = str(row["generated_at"]).replace("T", " ")
         self.status.setText(
             f"Saved date: {trade_date} | Generated: {generated} | Suggestions: {len(self.suggestions)} | Open: {open_items}"
