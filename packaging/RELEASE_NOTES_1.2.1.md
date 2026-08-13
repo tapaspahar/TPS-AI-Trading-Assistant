@@ -4,6 +4,8 @@ Release date: 12-08-2026
 
 ## Highlights
 
+- Corrected SENSEX auto-paper confirmation so sparse futures-volume samples are excluded as unavailable evidence instead of being counted as a failed directional-volume signal.
+- Kept EMA/SuperTrend checks active in calm sessions and added a bounded fresh-trigger grace band while retaining genuine execution and risk blockers.
 - Added separate 3:20 PM actionable and 3:40 PM closing-confirmation gap forecasts on the same page.
 - Added automatic selected-index capture, retry-safe closing recalculation and CONFIRMED/CHANGED comparison.
 - Protected gap forecasts from weekends, stale broker candles and repeated API retries.

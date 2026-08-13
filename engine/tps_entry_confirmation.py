@@ -115,6 +115,22 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
     strong_quality = volume_ratio >= volume_threshold and not capture.get("fake_breakout_risk", True)
     ce_recent_impulse = _recent_impulse_volume(candles, volume_ema, volume_threshold, "CE")
     pe_recent_impulse = _recent_impulse_volume(candles, volume_ema, volume_threshold, "PE")
+    # SENSEX (and occasionally another thin current-month future) can return
+    # only a handful of traded units in a completed five-minute candle.  That
+    # is not evidence against an otherwise clean move; it is an unusable
+    # sample.  Do not award a volume pass, but do not make sparse broker data
+    # consume one of the user's checklist matches either.  A genuinely heavy
+    # current/recent impulse remains applicable even when the rolling average
+    # is small.
+    current_volume = float(capture.get("volume") or 0)
+    volume_data_reliable = bool(
+        volume_ema and (
+            volume_ema >= 100
+            or current_volume >= 100
+            or ce_recent_impulse
+            or pe_recent_impulse
+        )
+    )
     ce_volume_ok = not capture.get("fake_breakout_risk", True) and (
         (strong_quality and candle_direction == "BULLISH") or (recent_bullish_touch and ce_recent_impulse)
     )
@@ -136,20 +152,20 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
         "CE": [
             _side_condition("Market structure", structure_state.startswith("Bullish"), structure_state),
             _side_condition("Price vs VWAP", vwap is not None and close > vwap, f"Close {close:.2f} > VWAP {vwap:.2f}" if vwap is not None else "VWAP unavailable"),
-            _side_condition("EMA 5/20/50 alignment", ema_5 > ema_20 > ema_50, f"EMA5 {ema_5:.2f} > EMA20 {ema_20:.2f} > EMA50 {ema_50:.2f}", regime not in {"LOW VOLATILITY", "SIDEWAYS / TRANSITION"}),
-            _side_condition("SuperTrend confirmation", close > trend_line, f"Close {close:.2f} > SuperTrend {trend_line:.2f}", regime != "LOW VOLATILITY"),
+            _side_condition("EMA 5/20/50 alignment", ema_5 > ema_20 > ema_50, f"EMA5 {ema_5:.2f} > EMA20 {ema_20:.2f} > EMA50 {ema_50:.2f}"),
+            _side_condition("SuperTrend confirmation", close > trend_line, f"Close {close:.2f} > SuperTrend {trend_line:.2f}"),
             _side_condition("Pullback and reversal", recent_bullish_touch and close > opening, f"EMA/VWAP touch within {tolerance:.2f}; candle {candle_direction}"),
-            _side_condition("Directional volume", ce_volume_ok, ce_volume_detail),
+            _side_condition("Directional volume", ce_volume_ok, ce_volume_detail if volume_data_reliable else f"Sparse futures-volume sample ({current_volume:.0f}; EMA20 {volume_ema or 0:.2f}) — excluded, not failed", volume_data_reliable),
             _side_condition("OI/PCR context", pcr_oi is not None and pcr_volume is not None and pcr_oi >= .75 and pcr_volume <= 1.25, f"OI PCR {pcr_oi if pcr_oi is not None else '-'}; Volume PCR {pcr_volume if pcr_volume is not None else '-'}", pcr_oi is not None and pcr_volume is not None),
             _side_condition("Market environment / VIX", environment_ok, environment_detail),
         ],
         "PE": [
             _side_condition("Market structure", structure_state.startswith("Bearish"), structure_state),
             _side_condition("Price vs VWAP", vwap is not None and close < vwap, f"Close {close:.2f} < VWAP {vwap:.2f}" if vwap is not None else "VWAP unavailable"),
-            _side_condition("EMA 5/20/50 alignment", ema_5 < ema_20 < ema_50, f"EMA5 {ema_5:.2f} < EMA20 {ema_20:.2f} < EMA50 {ema_50:.2f}", regime not in {"LOW VOLATILITY", "SIDEWAYS / TRANSITION"}),
-            _side_condition("SuperTrend confirmation", close < trend_line, f"Close {close:.2f} < SuperTrend {trend_line:.2f}", regime != "LOW VOLATILITY"),
+            _side_condition("EMA 5/20/50 alignment", ema_5 < ema_20 < ema_50, f"EMA5 {ema_5:.2f} < EMA20 {ema_20:.2f} < EMA50 {ema_50:.2f}"),
+            _side_condition("SuperTrend confirmation", close < trend_line, f"Close {close:.2f} < SuperTrend {trend_line:.2f}"),
             _side_condition("Pullback and reversal", recent_bearish_touch and close < opening, f"EMA/VWAP touch within {tolerance:.2f}; candle {candle_direction}"),
-            _side_condition("Directional volume", pe_volume_ok, pe_volume_detail),
+            _side_condition("Directional volume", pe_volume_ok, pe_volume_detail if volume_data_reliable else f"Sparse futures-volume sample ({current_volume:.0f}; EMA20 {volume_ema or 0:.2f}) — excluded, not failed", volume_data_reliable),
             _side_condition("OI/PCR context", pcr_oi is not None and pcr_volume is not None and pcr_oi <= 1.25 and pcr_volume >= .80, f"OI PCR {pcr_oi if pcr_oi is not None else '-'}; Volume PCR {pcr_volume if pcr_volume is not None else '-'}", pcr_oi is not None and pcr_volume is not None),
             _side_condition("Market environment / VIX", environment_ok, environment_detail),
         ],
@@ -176,7 +192,10 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
         elif match_mode == "all":
             required, required_reason = applicable_count, "all applicable conditions"
         elif match_mode == "adaptive" and environment:
-            ratio = .75 if regime == "TRENDING" else .80 if regime == "HIGH VOLATILITY" else .90
+            # The score threshold already measures evidence strength.  Asking
+            # for 90% of the remaining checks in a calm market made one sparse
+            # data point an accidental all-or-nothing veto.
+            ratio = .75 if regime == "TRENDING" else .85 if regime == "SIDEWAYS / TRANSITION" else .80
             required = max(1, min(applicable_count, ceil(applicable_count * ratio)))
             required_reason = f"adaptive {regime or 'unknown'} regime ({ratio * 100:.0f}% of applicable conditions)"
         else:
@@ -184,6 +203,7 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
             required_reason = f"configured count {required} of applicable conditions"
         passed = sum(item["passed"] for item in selected)
         blockers = []
+        quality_warnings = []
         if not applicable_count:
             blockers.append("No selected checklist condition is applicable to the current candle")
         if capture.get("fake_breakout_risk", True):
@@ -201,12 +221,18 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
                 blockers.append("Resistance level is unavailable")
             elif 0 <= room < required_room and not breakout:
                 blockers.append(f"CE entry is too close to resistance ({room:.2f} < {required_room:.2f} points room)")
-            if extension_atr > max_extension_atr:
-                blockers.append(f"Late CE entry: price is {extension_atr:.2f} ATR above VWAP/EMA20 (maximum {max_extension_atr:.2f})")
+            extension_hard_limit = min(2.0, max_extension_atr * 1.25)
+            if extension_atr > extension_hard_limit:
+                blockers.append(f"Late CE entry: price is {extension_atr:.2f} ATR above VWAP/EMA20 (hard limit {extension_hard_limit:.2f})")
+            elif extension_atr > max_extension_atr:
+                if trigger_ok:
+                    quality_warnings.append(f"CE extension {extension_atr:.2f} ATR is above preferred {max_extension_atr:.2f}, but within the fresh-trigger grace band")
+                else:
+                    blockers.append(f"Late CE entry: {extension_atr:.2f} ATR extension has no fresh pullback/reversal trigger")
             if rsi is not None and rsi >= ce_max_rsi:
                 blockers.append(f"Late CE entry: RSI {rsi:.1f} is above the {ce_max_rsi:.1f} chase limit")
             if not trigger_ok:
-                blockers.append("No fresh bullish EMA/VWAP pullback-and-reversal trigger")
+                quality_warnings.append("No fresh bullish EMA/VWAP pullback-and-reversal trigger; checklist/score must qualify without it")
         else:
             trigger_ok = recent_bearish_touch and close < opening and candle_direction == "BEARISH"
             timing_reference = min(level for level in (ema_20, vwap) if level is not None)
@@ -220,12 +246,18 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
                 blockers.append("Support level is unavailable")
             elif 0 <= room < required_room and not breakdown:
                 blockers.append(f"PE entry is too close to support ({room:.2f} < {required_room:.2f} points room)")
-            if extension_atr > max_extension_atr:
-                blockers.append(f"Late PE entry: price is {extension_atr:.2f} ATR below VWAP/EMA20 (maximum {max_extension_atr:.2f})")
+            extension_hard_limit = min(2.0, max_extension_atr * 1.25)
+            if extension_atr > extension_hard_limit:
+                blockers.append(f"Late PE entry: price is {extension_atr:.2f} ATR below VWAP/EMA20 (hard limit {extension_hard_limit:.2f})")
+            elif extension_atr > max_extension_atr:
+                if trigger_ok:
+                    quality_warnings.append(f"PE extension {extension_atr:.2f} ATR is below preferred {max_extension_atr:.2f}, but within the fresh-trigger grace band")
+                else:
+                    blockers.append(f"Late PE entry: {extension_atr:.2f} ATR extension has no fresh pullback/reversal trigger")
             if rsi is not None and rsi <= pe_min_rsi:
                 blockers.append(f"Late PE entry: RSI {rsi:.1f} is below the {pe_min_rsi:.1f} chase limit")
             if not trigger_ok:
-                blockers.append("No fresh bearish EMA/VWAP pullback-and-reversal trigger")
+                quality_warnings.append("No fresh bearish EMA/VWAP pullback-and-reversal trigger; checklist/score must qualify without it")
         checklist_matched = applicable_count > 0 and passed >= required
         score_matched = score >= minimum_score
         ready = checklist_matched and score_matched and not blockers
@@ -234,7 +266,8 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
             "not_applicable_confirmations": [item for item in common[side] if item["name"] in enabled and not item.get("applicable", True)],
             "passed": passed, "total": len(selected), "required": required, "score": score,
             "checklist_matched": checklist_matched, "score_matched": score_matched,
-            "hard_blockers": blockers, "trade_ready": ready,
+            "hard_blockers": blockers, "quality_warnings": quality_warnings, "trade_ready": ready,
+            "required_reason": required_reason,
             "entry_quality": {
                 "reference": timing_reference, "extension_points": round(extension_points, 2),
                 "extension_atr": round(extension_atr, 2), "maximum_extension_atr": max_extension_atr,
@@ -243,7 +276,7 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
                 "required_room_points": round(required_room, 2),
                 "regular_move_target_points": round(regular_target, 2) if regular_target else None,
                 "environment_regime": environment.get("regime", "unavailable"),
-                "timely": extension_atr <= max_extension_atr and (
+                "timely": extension_atr <= extension_hard_limit and (
                     rsi is None or (rsi < ce_max_rsi if side == "CE" else rsi > pe_min_rsi)
                 ) and trigger_ok,
             },
@@ -265,12 +298,13 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
         "version": "TPS Entry Confirmation System v3 - independent CE/PE",
         "direction": direction, "candidate": selected["candidate"], "side_evaluations": side_results,
         "confirmations": selected["confirmations"], "selected_confirmations": selected["selected_confirmations"],
-        "passed": selected["passed"], "required": required, "total": selected["total"], "score": selected["score"],
+        "passed": selected["passed"], "required": selected["required"], "total": selected["total"], "score": selected["score"],
         "minimum_score": minimum_score, "enabled_conditions": enabled,
-        "match_mode": match_mode, "required_reason": required_reason,
+        "match_mode": match_mode, "required_reason": selected["required_reason"],
         "trade_ready": bool(selected["trade_ready"]),
         "decision": f"TPS V3 {selected['candidate']} PAPER ENTRY CONFIRMED" if selected["trade_ready"] else f"{selected['candidate']} {selected['state']}",
         "blockers": selected["hard_blockers"], "hard_blockers": selected["hard_blockers"],
+        "quality_warnings": selected.get("quality_warnings", []),
         "pcr_oi": pcr_oi, "pcr_volume": pcr_volume, "structure_state": structure_state,
         "market_environment": environment,
         "zones": {"chart_support": chart_support, "chart_resistance": chart_resistance,

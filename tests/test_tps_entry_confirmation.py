@@ -144,7 +144,7 @@ class TpsEntryConfirmationTests(unittest.TestCase):
 
     @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
     @patch("engine.tps_entry_confirmation.ema", return_value=95)
-    def test_low_volatility_marks_irrelevant_and_unavailable_checks_na(self, _ema, _supertrend):
+    def test_low_volatility_keeps_trend_checks_and_marks_only_missing_data_na(self, _ema, _supertrend):
         environment = {
             "regime": "LOW VOLATILITY", "vix_zone": "CALM / RANGE", "risk_multiplier": .75,
             "volume_threshold": 1.7, "max_entry_extension_atr": .65,
@@ -152,11 +152,50 @@ class TpsEntryConfirmationTests(unittest.TestCase):
         result = evaluate_tps_entry_v2(self.candles, self.capture, {}, self.settings, environment)
         ce = result["side_evaluations"]["CE"]
         not_applicable = {item["name"]: item["status"] for item in ce["not_applicable_confirmations"]}
-        self.assertEqual(not_applicable["EMA 5/20/50 alignment"], "N/A")
-        self.assertEqual(not_applicable["SuperTrend confirmation"], "N/A")
         self.assertEqual(not_applicable["OI/PCR context"], "N/A")
-        self.assertEqual(ce["total"], 5)
+        self.assertNotIn("EMA 5/20/50 alignment", not_applicable)
+        self.assertNotIn("SuperTrend confirmation", not_applicable)
+        self.assertEqual(ce["total"], 7)
         self.assertLessEqual(ce["required"], ce["total"])
+
+    @patch("engine.tps_entry_confirmation.analyze_candles", return_value={
+        "state": "Bullish structure", "support": 78080.0, "resistance": 78160.0,
+    })
+    def test_sensex_1145_sparse_volume_is_excluded_and_near_extension_is_not_vetoed(self, _structure):
+        candles = [
+            {"open": 78100, "high": 78130, "low": 78090, "close": 78120, "volume": 20}
+            for _ in range(60)
+        ]
+        candles[-1].update({"open": 78160, "high": 78170, "low": 78160, "close": 78170, "volume": 4})
+        capture = {
+            "symbol": "SENSEX", "open": "78160", "high": "78170", "low": "78160", "close": "78170",
+            "ema_5": "78127.83", "ema_20": "78120.96", "ema_50": "78119.48",
+            "vwap": "78137.34", "supertrend": "78025.59", "atr_14": "44.11", "rsi_14": "52.56",
+            "volume": "4", "volume_ema": "58.59", "volume_ratio": ".07",
+            "candle_direction": "BULLISH", "fake_breakout_risk": False,
+        }
+        chain = {"pcr_oi": 1.02, "pcr_volume": 1.09, "call_resistance": 78000, "put_support": 77700}
+        environment = {
+            "regime": "LOW VOLATILITY", "vix_zone": "CALM / RANGE", "risk_multiplier": .75,
+            "volume_threshold": 1.7, "max_entry_extension_atr": .65, "regular_move_target_points": 56.48,
+        }
+        settings = {
+            "trade_plan_min_score": 60, "tps_required_matches": 5, "tps_match_mode": "adaptive",
+            "tps_enabled_conditions": [
+                "EMA 5/20/50 alignment", "SuperTrend confirmation", "Pullback and reversal",
+                "Directional volume", "OI/PCR context",
+            ],
+        }
+        result = evaluate_tps_entry_v2(candles, capture, chain, settings, environment)
+        ce = result["side_evaluations"]["CE"]
+        volume = next(item for item in ce["confirmations"] if item["name"] == "Directional volume")
+        self.assertEqual(volume["status"], "N/A")
+        self.assertIn("Sparse futures-volume", volume["detail"])
+        self.assertEqual((ce["passed"], ce["required"], ce["total"]), (4, 4, 4))
+        self.assertTrue(ce["trade_ready"])
+        self.assertTrue(ce["entry_quality"]["timely"])
+        self.assertFalse(ce["hard_blockers"])
+        self.assertTrue(any("grace band" in item for item in ce["quality_warnings"]))
 
     @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
     @patch("engine.tps_entry_confirmation.ema", return_value=95)
