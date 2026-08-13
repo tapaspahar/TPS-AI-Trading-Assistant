@@ -280,6 +280,7 @@ class DashboardScreen(QWidget):
         self.notifier.notify(
             "support_resistance", alert.get("title", "TPS support/resistance alert"),
             alert.get("message", "Price is near a marked chart level."),
+            dedupe_key=alert.get("dedupe_key") or alert.get("title"), once_per_day=True,
         )
 
     def notify_pcr_sentiment(self, result):

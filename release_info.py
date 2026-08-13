@@ -9,9 +9,11 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.2.1"
-LAST_UPDATED_AT = "13-08-2026 12:51:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.2.1 - 13-08-2026 12:51 IST"
+LAST_UPDATED_AT = "13-08-2026 13:20:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.2.1 - 13-08-2026 13:20 IST"
 RELEASE_NOTES = (
+    "Stopped repeated Support/Resistance and Auto Opportunity popup floods with restart-safe daily event identities instead of changing live-price message text.",
+    "Added Notification Center cleanup for historic repeated alerts while retaining the first daily event record.",
     "Added AI Self-Development Decision Center with permanent date-wise system health, evidence-led rectification suggestions, priority and Open/Reviewed workflow.",
     "Daily reviews audit monitoring coverage, broker retries, zero-capture calibration, entry timing, volume and level evidence, overtrading and target/stop outcomes without silently changing code or strategy rules.",
     "Added a permanent Notification Center that records every delivered TPS desktop alert with local date/time, source category, title, full message and read/unread state.",

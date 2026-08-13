@@ -129,6 +129,8 @@ class AutoOpportunityPage(QWidget):
             notifier.notify(
                 "auto_opportunity", f"TPS Opportunity: {row['action']} {row['symbol']}",
                 f"{row.get('instrument')} | Entry {row.get('entry')} | Stop {row.get('stop')} | T1 {row.get('target_1')} | Score {row.get('score')}/100",
+                dedupe_key=f"{row.get('symbol')}:{row.get('action')}:{row.get('instrument')}",
+                once_per_day=True,
             )
 
     def refresh_history(self):

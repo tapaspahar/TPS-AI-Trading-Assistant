@@ -474,6 +474,10 @@ class LiveMarketPage(QWidget):
             "ABOVE_RESISTANCE": "is above the marked resistance zone",
         }[state]
         self.level_alert.emit({
+            # One support and one resistance event per symbol/day. The level
+            # may move slightly after every candle; that must not create a
+            # fresh popup flood for the same logical market event.
+            "dedupe_key": f"{symbol}:{level_name}",
             "title": f"TPS {level_name} alert — {symbol}",
             "message": (
                 f"{symbol} {action}. Price {float(price):,.2f}; {level_name} "

@@ -165,6 +165,28 @@ class DatabaseTests(unittest.TestCase):
         self.assertIn("created_at,status,category,title,message", exported)
         self.assertIn("TPS paper trade captured", exported)
 
+    def test_notification_event_key_is_restart_safe_and_cleanup_removes_old_floods(self):
+        event_key = "2026-08-13:support_resistance:SENSEX:SUPPORT:78000"
+        first = self.db.save_notification(
+            "support_resistance", "TPS support alert - SENSEX", "entered support at 78002",
+            "2026-08-13T10:20:00+05:30", event_key=event_key,
+        )
+        duplicate = self.db.save_notification(
+            "support_resistance", "TPS support alert - SENSEX", "below support at 77999",
+            "2026-08-13T10:21:00+05:30", event_key=event_key,
+        )
+        self.assertGreater(first, 0)
+        self.assertEqual(duplicate, 0)
+        self.db.save_notification(
+            "support_resistance", "TPS support alert - NIFTY", "entered at 25000",
+            "2026-08-13T11:00:00+05:30",
+        )
+        self.db.save_notification(
+            "support_resistance", "TPS support alert - NIFTY", "below at 24999",
+            "2026-08-13T11:01:00+05:30",
+        )
+        self.assertEqual(self.db.remove_repeated_notifications(), 1)
+
     def test_open_ce_trade_gets_one_reversal_alert(self):
         trade_id = self.db.save_open_trade(sample_trade(exit=0.0))
         for timeframe in ("5m", "15m"):

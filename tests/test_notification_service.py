@@ -4,7 +4,9 @@ import unittest
 from pathlib import Path
 
 from core.settings_store import SettingsStore
-from services.notification_service import category_enabled
+from datetime import datetime, timezone
+
+from services.notification_service import category_enabled, daily_event_key
 
 
 class NotificationSettingsTests(unittest.TestCase):
@@ -26,6 +28,14 @@ class NotificationSettingsTests(unittest.TestCase):
     def test_global_switch_disables_every_category(self):
         settings = {"notifications_enabled": False, "notification_preferences": {"trade_capture": True}}
         self.assertFalse(category_enabled(settings, "trade_capture"))
+
+    def test_daily_event_key_ignores_changing_tick_message(self):
+        now = datetime(2026, 8, 13, 10, 15, tzinfo=timezone.utc)
+        first = daily_event_key("support_resistance", "SENSEX:support:78000", now)
+        second = daily_event_key("support_resistance", "SENSEX:support:78000", now)
+        other_level = daily_event_key("support_resistance", "SENSEX:support:78100", now)
+        self.assertEqual(first, second)
+        self.assertNotEqual(first, other_level)
 
 
 if __name__ == "__main__":

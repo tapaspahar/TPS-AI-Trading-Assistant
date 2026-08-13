@@ -48,7 +48,9 @@ class NotificationCenterPage(QWidget):
         mark_all.clicked.connect(self.mark_all_read)
         export = QPushButton("Export CSV")
         export.clicked.connect(self.export_csv)
-        for button in (today, all_rows, unread, self.mark_selected_button, mark_all, export):
+        clean = QPushButton("Clean Repeated Alerts")
+        clean.clicked.connect(self.clean_repeated_alerts)
+        for button in (today, all_rows, unread, self.mark_selected_button, mark_all, export, clean):
             actions.addWidget(button)
         layout.addLayout(actions)
 
@@ -157,3 +159,14 @@ class NotificationCenterPage(QWidget):
             return
         QMessageBox.information(self, "Export complete", f"Exported {count} notification(s) to CSV.")
 
+    def clean_repeated_alerts(self):
+        answer = QMessageBox.question(
+            self, "Clean repeated alerts",
+            "Purane repeated Support/Resistance, Auto Opportunity aur exact duplicate alerts remove karein? "
+            "Har daily event ka pehla record safe rahega.",
+        )
+        if answer != QMessageBox.Yes:
+            return
+        removed = self.db.remove_repeated_notifications()
+        self.refresh()
+        QMessageBox.information(self, "Cleanup complete", f"{removed} repeated alert record(s) remove hue.")

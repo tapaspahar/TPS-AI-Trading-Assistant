@@ -310,6 +310,15 @@ class Database:
         self.cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(is_read, created_at DESC)"
         )
+        notification_columns = {
+            row["name"] for row in self.cursor.execute("PRAGMA table_info(notifications)")
+        }
+        if "event_key" not in notification_columns:
+            self.cursor.execute("ALTER TABLE notifications ADD COLUMN event_key TEXT")
+        self.cursor.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_event_key "
+            "ON notifications(event_key) WHERE event_key IS NOT NULL"
+        )
         self.cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS self_development_reviews (
@@ -404,16 +413,45 @@ class Database:
         return changed
 
     def save_notification(
-        self, category: str, title: str, message: str, created_at: str | None = None
+        self, category: str, title: str, message: str, created_at: str | None = None,
+        event_key: str | None = None,
     ) -> int:
         """Persist one desktop alert so its history survives application updates."""
         timestamp = created_at or datetime.now().astimezone().isoformat(timespec="seconds")
         result = self.cursor.execute(
-            "INSERT INTO notifications (created_at, category, title, message) VALUES (?, ?, ?, ?)",
-            (timestamp, str(category), str(title), str(message)),
+            "INSERT OR IGNORE INTO notifications (created_at, category, title, message, event_key) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (timestamp, str(category), str(title), str(message), event_key),
         )
         self.connection.commit()
-        return int(result.lastrowid)
+        return int(result.lastrowid) if result.rowcount else 0
+
+    def remove_repeated_notifications(self) -> int:
+        """Remove historic popup floods while keeping the first daily event."""
+        before = int(self.cursor.execute(
+            "SELECT COUNT(*) AS count FROM notifications"
+        ).fetchone()["count"])
+        self.cursor.execute(
+            """
+            DELETE FROM notifications
+            WHERE id IN (
+                SELECT duplicate.id
+                FROM notifications AS duplicate
+                JOIN notifications AS first
+                  ON substr(duplicate.created_at, 1, 10) = substr(first.created_at, 1, 10)
+                 AND duplicate.category = first.category
+                 AND duplicate.title = first.title
+                 AND duplicate.id > first.id
+                WHERE duplicate.category IN ('support_resistance', 'auto_opportunity')
+                   OR duplicate.message = first.message
+            )
+            """
+        )
+        self.connection.commit()
+        after = int(self.cursor.execute(
+            "SELECT COUNT(*) AS count FROM notifications"
+        ).fetchone()["count"])
+        return before - after
 
     def get_notifications(
         self, *, today_only: bool = False, unread_only: bool = False, limit: int = 1000

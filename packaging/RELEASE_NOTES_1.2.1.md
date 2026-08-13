@@ -4,6 +4,8 @@ Release date: 12-08-2026
 
 ## Highlights
 
+- Prevented repeated Support/Resistance and Auto Opportunity alerts by saving one logical symbol/level/setup event per trading day, even after restart.
+- Added Clean Repeated Alerts to remove historic popup floods while retaining the first daily event record.
 - Added AI Self-Development Decision Center with date-wise health score, explainable evidence, prioritized rectification suggestions and Open/Reviewed status.
 - Added automatic post-market review/backfill covering data health, missed evaluations, broker retries, signal calibration, entry timing and actual paper-trade outcomes. TPS never applies its own code or rule changes silently.
 - Added a permanent Notification Center with date/time, source category, title, complete message and read/unread status for every delivered TPS desktop alert.

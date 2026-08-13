@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from time import monotonic
 
 from PySide6.QtCore import QObject, Signal
@@ -55,6 +56,12 @@ def category_enabled(settings: dict, category: str) -> bool:
     )
 
 
+def daily_event_key(category: str, dedupe_key: str, now: datetime | None = None) -> str:
+    """Build a restart-safe identity for one logical alert per local day."""
+    current = now or datetime.now().astimezone()
+    return f"{current.strftime('%Y-%m-%d')}:{category}:{str(dedupe_key).strip().upper()}"
+
+
 class NotificationService(QObject):
     """One system-tray notifier shared by the whole desktop application."""
 
@@ -79,25 +86,32 @@ class NotificationService(QObject):
             cls._instance = cls(parent)
         return cls._instance
 
-    def notify(self, category: str, title: str, message: str, *, force: bool = False) -> bool:
+    def notify(
+        self, category: str, title: str, message: str, *, force: bool = False,
+        dedupe_key: str | None = None, once_per_day: bool = False,
+        repeat_after_seconds: int = 20,
+    ) -> bool:
         settings = SettingsStore().load()
         if not force and not category_enabled(settings, category):
             return False
-        signature = (category, title, message)
+        event_key = daily_event_key(category, dedupe_key) if dedupe_key and once_per_day else None
+        signature = (category, dedupe_key or title, "" if dedupe_key else message)
         now = monotonic()
-        if not force and now - self._recent.get(signature, 0) < 20:
+        if not force and now - self._recent.get(signature, 0) < max(0, int(repeat_after_seconds)):
             return False
-        self._recent[signature] = now
-        if settings.get("notification_sound", True):
-            QApplication.beep()
         # The notification ledger is independent of the transient Windows
         # popup.  This makes every delivered TPS alert permanently auditable.
         try:
-            self.db.save_notification(category, title, message)
+            notification_id = self.db.save_notification(category, title, message, event_key=event_key)
+            if event_key and not notification_id:
+                return False
         except Exception:
             # A temporary database lock must not suppress a time-sensitive
             # desktop alert; subsequent alerts continue to be recorded.
             pass
+        self._recent[signature] = now
+        if settings.get("notification_sound", True):
+            QApplication.beep()
         self.tray.showMessage(title, message, QSystemTrayIcon.Information, 10_000)
         self.notification_sent.emit(category, title, message)
         return True
