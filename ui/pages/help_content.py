@@ -222,6 +222,13 @@ PAGES = (
      "Use Today, All or Unread filters; select an alert for full detail, mark one/all as read, or export the current view to CSV. Disabled or duplicate-suppressed alerts are not recorded because they were not delivered.",
      "Today, All ya Unread filter use karein; alert select karke full detail padhein, selected/all ko read mark karein ya current view CSV me export karein. Disabled ya duplicate-suppressed popup delivered nahi hua, isliye record nahi hota.",
      "Today, All या Unread फ़िल्टर चुनें; पूरा विवरण पढ़ें, एक/सभी अलर्ट को पढ़ा हुआ चिह्नित करें या वर्तमान सूची CSV में निर्यात करें। बंद या डुप्लिकेट-दबा हुआ अलर्ट दिया नहीं गया, इसलिए दर्ज नहीं होता।"),
+    (31, "AI Self-Development Decision Center",
+     "Audits each completed post-market report and saves explainable software-health findings and evidence-led development rectification suggestions.",
+     "Har completed post-market report ko audit karke software health aur evidence-based development rectification suggestions date-wise save karta hai.",
+     "हर पूर्ण पोस्ट-मार्केट रिपोर्ट का ऑडिट करके सॉफ्टवेयर स्वास्थ्य और प्रमाण-आधारित सुधार सुझाव दिनांक के अनुसार सुरक्षित करता है।",
+     "Select a saved date to inspect health, verdict, priority, observation, evidence, suggested development and its approval test. Mark suggestions Reviewed or reopen them. TPS never changes source code or strategy rules automatically.",
+     "Saved date select karke health, verdict, priority, observation, evidence, suggested development aur approval test dekhein. Suggestion ko Reviewed ya Open mark kar sakte hain. TPS code/rules khud change nahi karta.",
+     "सुरक्षित दिनांक चुनकर स्वास्थ्य, निर्णय, प्राथमिकता, अवलोकन, प्रमाण, विकास सुझाव और अनुमोदन परीक्षण देखें। सुझाव को Reviewed या Open करें। TPS स्वयं कोड या नियम नहीं बदलता।"),
 )
 
 

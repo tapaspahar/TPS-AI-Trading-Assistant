@@ -310,7 +310,98 @@ class Database:
         self.cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(is_read, created_at DESC)"
         )
+        self.cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS self_development_reviews (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                trade_date TEXT NOT NULL UNIQUE,
+                generated_at TEXT NOT NULL,
+                source_generated_at TEXT NOT NULL,
+                health_score INTEGER NOT NULL,
+                verdict TEXT NOT NULL,
+                summary_text TEXT NOT NULL,
+                suggestions_json TEXT NOT NULL
+            )
+            """
+        )
         self.connection.commit()
+
+    def save_self_development_review(self, review: dict) -> int:
+        """Save one date-wise rectification review while retaining review states."""
+        existing = self.get_self_development_review(str(review["trade_date"]))
+        previous_states = {}
+        if existing:
+            try:
+                previous_states = {
+                    str(item.get("key")): str(item.get("status") or "OPEN")
+                    for item in json.loads(existing["suggestions_json"] or "[]")
+                }
+            except (TypeError, ValueError, json.JSONDecodeError):
+                previous_states = {}
+        suggestions = []
+        for item in review.get("suggestions") or []:
+            value = dict(item)
+            value["status"] = previous_states.get(str(value.get("key")), str(value.get("status") or "OPEN"))
+            suggestions.append(value)
+        self.cursor.execute(
+            """
+            INSERT INTO self_development_reviews
+                (trade_date, generated_at, source_generated_at, health_score, verdict, summary_text, suggestions_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(trade_date) DO UPDATE SET
+                generated_at=excluded.generated_at,
+                source_generated_at=excluded.source_generated_at,
+                health_score=excluded.health_score,
+                verdict=excluded.verdict,
+                summary_text=excluded.summary_text,
+                suggestions_json=excluded.suggestions_json
+            """,
+            (
+                review["trade_date"], review["generated_at"], review["source_generated_at"],
+                int(review["health_score"]), review["verdict"], review["summary_text"],
+                json.dumps(suggestions, ensure_ascii=False, default=str),
+            ),
+        )
+        self.connection.commit()
+        row = self.get_self_development_review(str(review["trade_date"]))
+        return int(row["id"])
+
+    def get_self_development_review(self, trade_date: str) -> sqlite3.Row | None:
+        return self.cursor.execute(
+            "SELECT * FROM self_development_reviews WHERE trade_date = ?", (trade_date,)
+        ).fetchone()
+
+    def get_self_development_reviews(self, limit: int = 500) -> list[sqlite3.Row]:
+        return self.cursor.execute(
+            """SELECT * FROM self_development_reviews
+               ORDER BY substr(trade_date, 7, 4) || substr(trade_date, 4, 2) || substr(trade_date, 1, 2) DESC
+               LIMIT ?""",
+            (max(1, min(int(limit), 5000)),),
+        ).fetchall()
+
+    def update_self_development_suggestion_status(
+        self, trade_date: str, suggestion_key: str, status: str
+    ) -> bool:
+        row = self.get_self_development_review(trade_date)
+        if not row:
+            return False
+        try:
+            suggestions = json.loads(row["suggestions_json"] or "[]")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return False
+        changed = False
+        for item in suggestions:
+            if str(item.get("key")) == str(suggestion_key):
+                item["status"] = "REVIEWED" if str(status).upper() == "REVIEWED" else "OPEN"
+                changed = True
+                break
+        if changed:
+            self.cursor.execute(
+                "UPDATE self_development_reviews SET suggestions_json = ? WHERE trade_date = ?",
+                (json.dumps(suggestions, ensure_ascii=False, default=str), trade_date),
+            )
+            self.connection.commit()
+        return changed
 
     def save_notification(
         self, category: str, title: str, message: str, created_at: str | None = None

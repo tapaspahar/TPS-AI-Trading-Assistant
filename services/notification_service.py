@@ -43,6 +43,7 @@ NOTIFICATION_LABELS = {
     "broker_connection": "Broker connection status",
     "trend_memory": "Trend Memory historical-pattern match",
     "scalper": "Near-expiry options scalper watch",
+    "self_development": "AI Self-Development Decision Center",
 }
 
 

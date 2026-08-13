@@ -71,6 +71,7 @@ DEFAULT_SETTINGS = {
         "broker_connection": True,
         "trend_memory": True,
         "scalper": True,
+        "self_development": True,
     },
 }
 

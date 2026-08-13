@@ -4,6 +4,8 @@ Release date: 12-08-2026
 
 ## Highlights
 
+- Added AI Self-Development Decision Center with date-wise health score, explainable evidence, prioritized rectification suggestions and Open/Reviewed status.
+- Added automatic post-market review/backfill covering data health, missed evaluations, broker retries, signal calibration, entry timing and actual paper-trade outcomes. TPS never applies its own code or rule changes silently.
 - Added a permanent Notification Center with date/time, source category, title, complete message and read/unread status for every delivered TPS desktop alert.
 - Added Today/All/Unread filters, sidebar unread count, full alert detail, mark-read actions and CSV export. Saved history remains in AppData across restarts and upgrades.
 - Corrected SENSEX auto-paper confirmation so sparse futures-volume samples are excluded as unavailable evidence instead of being counted as a failed directional-volume signal.

@@ -9,9 +9,11 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.2.1"
-LAST_UPDATED_AT = "13-08-2026 12:22:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.2.1 - 13-08-2026 12:22 IST"
+LAST_UPDATED_AT = "13-08-2026 12:51:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.2.1 - 13-08-2026 12:51 IST"
 RELEASE_NOTES = (
+    "Added AI Self-Development Decision Center with permanent date-wise system health, evidence-led rectification suggestions, priority and Open/Reviewed workflow.",
+    "Daily reviews audit monitoring coverage, broker retries, zero-capture calibration, entry timing, volume and level evidence, overtrading and target/stop outcomes without silently changing code or strategy rules.",
     "Added a permanent Notification Center that records every delivered TPS desktop alert with local date/time, source category, title, full message and read/unread state.",
     "Added Today, All and Unread notification views, unread sidebar count, selected-alert detail, mark-read controls and CSV export; notification history survives restarts and installer updates.",
     "Corrected SENSEX auto-paper confirmation so sparse current-month-future volume samples are shown as unavailable evidence instead of an automatic directional-volume failure.",

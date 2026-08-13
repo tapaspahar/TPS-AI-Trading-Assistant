@@ -34,9 +34,11 @@ from ui.pages.auto_opportunity_page import AutoOpportunityPage
 from ui.pages.trend_memory_page import TrendMemoryPage
 from ui.pages.scalper_page import ScalperPage
 from ui.pages.notification_center_page import NotificationCenterPage
+from ui.pages.self_development_page import SelfDevelopmentPage
 from ui.widgets.glass_effects import add_glass_shadow
 from ui.widgets.accessible_scroll import configure_scroll_area
 from services.post_market_tps_analysis import ensure_completed_post_market_reports
+from services.self_development_decision import ensure_completed_self_development_reviews
 from services.notification_service import NotificationService
 from services.trend_memory_service import ensure_completed_trend_memories, get_live_trend_analogs
 
@@ -93,6 +95,7 @@ class DashboardScreen(QWidget):
         self.trendMemoryPage = TrendMemoryPage()
         self.scalperPage = ScalperPage()
         self.notificationCenterPage = NotificationCenterPage()
+        self.selfDevelopmentPage = SelfDevelopmentPage()
         for page in (self.dashboardPage, self.liveMarketPage, self.optionsPage, self.chartCapturePage, self.journalPage,
                      self.checklistPage, self.aiPage, self.riskPage, self.reportsPage, self.settingsPage,
                      self.backtestPage, self.postMarketPage, self.replayPage, self.equityPage,
@@ -100,7 +103,7 @@ class DashboardScreen(QWidget):
                      self.smartMoneyPage, self.casAnalysisPage, self.stockOptionsWatchPage, self.optionStrategiesPage,
                      self.postMarketTpsAnalysisPage, self.preCandlePage, self.powerfulEnginePage, self.putCallRatioPage,
                      self.gapProbabilityPage, self.autoOpportunityPage, self.trendMemoryPage, self.scalperPage,
-                     self.notificationCenterPage):
+                     self.notificationCenterPage, self.selfDevelopmentPage):
             self.stack.addWidget(page)
         self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
         self.journalPage.trade_saved.connect(self.reportsPage.refresh)
@@ -155,6 +158,7 @@ class DashboardScreen(QWidget):
         self.sidebar.trendMemoryButton.clicked.connect(lambda _checked=False: self.show_page(28))
         self.sidebar.scalperButton.clicked.connect(lambda _checked=False: self.show_page(29))
         self.sidebar.notificationCenterButton.clicked.connect(lambda _checked=False: self.show_page(30))
+        self.sidebar.selfDevelopmentButton.clicked.connect(lambda _checked=False: self.show_page(31))
         body_layout.addWidget(self.stack)
         main_layout.addLayout(body_layout, 1)
         self.informationPanel = InformationPanel()
@@ -192,6 +196,17 @@ class DashboardScreen(QWidget):
             self.notifier.notify(
                 "post_market_analysis", "TPS post-market report ready",
                 f"{count} completed market-day report(s) were generated.",
+            )
+        try:
+            development_updates = ensure_completed_self_development_reviews(self.selfDevelopmentPage.db)
+        except Exception:
+            return
+        if development_updates and self.stack.currentIndex() == 31:
+            self.selfDevelopmentPage.refresh(auto_generate=False)
+        if development_updates:
+            self.notifier.notify(
+                "self_development", "TPS AI development review ready",
+                f"{len(development_updates)} evidence-led software rectification review(s) were generated. Human review is required.",
             )
     def update_trend_memory_monitor(self):
         """Finalize completed days and alert once when a strong analog appears."""
@@ -314,6 +329,8 @@ class DashboardScreen(QWidget):
             self.scalperPage.analyze(force=True)
         elif index == 30:
             self.notificationCenterPage.refresh()
+        elif index == 31:
+            self.selfDevelopmentPage.refresh(auto_generate=True)
         self.stack.setCurrentIndex(index)
 
     def handle_ai_decision(self, context):

@@ -41,6 +41,7 @@ class Sidebar(QFrame):
         self.replayButton = nav("Candle Replay")
         self.postMarketButton = nav("Post-Market Report")
         self.postMarketTpsAnalysisButton = nav("Post Market Analysis of TPS")
+        self.selfDevelopmentButton = nav("AI Development Center")
         self.equityButton = nav("Equity Research")
         self.autoAttemptReportButton = nav("Auto Attempt Report")
         self.notificationCenterButton = nav("Notification Center")
@@ -65,7 +66,7 @@ class Sidebar(QFrame):
             self.aiButton, self.optionsButton, self.autoOpportunityButton, self.autoAttemptReportButton,
             self.notificationCenterButton, self.journalButton,
             self.checklistButton, self.riskButton, self.reportButton, self.backtestButton, self.replayButton,
-            self.postMarketButton, self.postMarketTpsAnalysisButton, self.nextDayBiasButton, self.casAnalysisButton, self.stockOptionsWatchButton,
+            self.postMarketButton, self.postMarketTpsAnalysisButton, self.selfDevelopmentButton, self.nextDayBiasButton, self.casAnalysisButton, self.stockOptionsWatchButton,
             self.optionStrategiesButton, self.putCallRatioButton, self.gapProbabilityButton, self.scalperButton, self.trendMemoryButton,
             self.smartMoneyButton, self.preCandleButton, self.powerfulEngineButton, self.settingsButton, self.aboutButton, self.helpButton,
         )
@@ -104,6 +105,7 @@ class Sidebar(QFrame):
             28: self.trendMemoryButton,
             29: self.scalperButton,
             30: self.notificationCenterButton,
+            31: self.selfDevelopmentButton,
         }
         self.menu_group = QButtonGroup(self)
         self.menu_group.setExclusive(True)
