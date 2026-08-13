@@ -4,6 +4,7 @@ Release date: 13-08-2026
 
 ## Highlights
 
+- Corrected the AI Development Center layout at 1080p with dedicated page scrolling and non-overlapping suggestion, detail and validation panels.
 - Simplified supported-broker onboarding with direct official setup/login guidance and secure one-time credential storage.
 - Added India VIX and ATM-straddle expected-range-aware defined-risk strategy selection.
 - Added persistent monitoring for saved Bull Call Spreads, Bear Put Spreads and Iron Condors.

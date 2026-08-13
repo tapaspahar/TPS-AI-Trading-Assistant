@@ -9,7 +9,7 @@ from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView, QDateEdit, QGridLayout, QHBoxLayout, QHeaderView, QLabel, QListWidget,
     QListWidgetItem, QMessageBox, QPlainTextEdit, QPushButton, QSplitter,
-    QSpinBox, QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QScrollArea, QSpinBox, QTabWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from core.database_manager import Database
@@ -32,7 +32,18 @@ class SelfDevelopmentPage(QWidget):
         self.db = Database()
         self.rows = []
         self.suggestions = []
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.NoFrame)
+        content = QWidget()
+        content.setMinimumHeight(1120)
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(14, 12, 14, 18)
+        layout.setSpacing(10)
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
         title = QLabel("AI Self-Development Decision Center")
         title.setObjectName("pageTitle")
         layout.addWidget(title)
@@ -159,6 +170,7 @@ class SelfDevelopmentPage(QWidget):
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([310, 1200])
+        splitter.setMinimumHeight(610)
         layout.addWidget(splitter, 1)
         self.refresh(auto_generate=False)
         settings = SettingsStore().load()

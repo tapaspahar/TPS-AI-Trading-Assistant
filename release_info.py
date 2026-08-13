@@ -9,9 +9,10 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.3.1"
-LAST_UPDATED_AT = "13-08-2026 16:46:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.3.1 - 13-08-2026 16:46 IST"
+LAST_UPDATED_AT = "13-08-2026 17:20:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.3.1 - 13-08-2026 17:20 IST"
 RELEASE_NOTES = (
+    "Corrected the AI Development Center at 1080p by adding a dedicated wheel-and-arrow page scroll area, protected working height and non-overlapping suggestion and evidence panels.",
     "Published Release 1.3.1 with simplified supported-broker onboarding and VIX/ATM-range-aware defined-risk strategy adjustment monitoring.",
     "Simplified supported-broker onboarding with an official setup/login button and clear one-time secure setup guidance; broker API authentication remains mandatory.",
     "Enhanced Option Strategies with India-VIX/ATM-range-aware defined-risk strike selection and a save-and-monitor adjustment workflow.",
