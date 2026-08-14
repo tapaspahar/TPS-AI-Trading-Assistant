@@ -136,6 +136,11 @@ class OptionsPage(QWidget):
         self.required_matches = QSpinBox(); self.required_matches.setRange(1, len(CONDITION_WEIGHTS)); self.required_matches.setValue(saved_settings["tps_required_matches"])
         self.required_matches.valueChanged.connect(self.save_tps_checklist)
         checklist_form.addRow("Match rule", self.match_mode); checklist_form.addRow("Required matches", self.required_matches)
+        self.checklist_save_status = QLabel(
+            "Checklist changes save automatically. Saved values are restored after restart and software updates."
+        )
+        self.checklist_save_status.setWordWrap(True)
+        checklist_form.addRow(self.checklist_save_status)
         self.side_score_status = QLabel("CE score: waiting | PE score: waiting | Hard blockers: waiting")
         self.side_score_status.setWordWrap(True); checklist_form.addRow(self.side_score_status)
         self.environment_status = QLabel("Market environment: waiting for live 5-minute data and India VIX")
@@ -511,6 +516,12 @@ class OptionsPage(QWidget):
             "tps_required_matches": self.required_matches.value(),
         })
         SettingsStore().save(settings)
+        saved_at = datetime.now().astimezone().strftime("%d-%m-%Y %H:%M:%S")
+        mode_text = self.match_mode.currentText()
+        self.checklist_save_status.setText(
+            f"✓ Checklist settings saved at {saved_at} | Selected evidence: {len(enabled)} | "
+            f"Match rule: {mode_text} | Required matches: {self.required_matches.value()}"
+        )
         self.update_plan_readiness()
 
     def save_news_risk_controls(self, *_args):
