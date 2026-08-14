@@ -13,6 +13,7 @@ from engine.expiry_strategy_engine import analyze_expiry_strategy
 from engine.option_chain_engine import analyze_option_chain
 from engine.trade_plan_engine import create_review_plan
 from engine.tps_entry_confirmation import evaluate_tps_entry_v2
+from engine.regular_scalp_validation import evaluate_regular_scalp_validation
 from services.option_contract_service import UNDERLYING_QUOTES, OptionContractService, contracts_near_spot
 from services.economic_calendar_service import EconomicCalendarService
 from services.provider_telemetry import record_request, start_request
@@ -179,6 +180,12 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             "provider": provider,
             "final_confidence": max(0, round(strategy["score"] * float(environment.get("risk_multiplier", 1)))),
         }
+        # This is deliberately an audit-only companion to strict TPS.  A READY
+        # scalp verdict cannot enter the capture path below unless the normal
+        # TPS strategy itself is also trade-ready.
+        chart["regular_scalp_validation"] = evaluate_regular_scalp_validation(
+            strategy, environment, capture, chain, settings,
+        )
         timing_stage = signal_timing_stage(strategy, settings)
         timing = database.signal_timing_context(
             symbol, candidate or "-", checked_at.isoformat(timespec="seconds"), capture.get("candle_time"), timing_stage,

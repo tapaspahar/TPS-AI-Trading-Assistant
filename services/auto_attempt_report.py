@@ -87,6 +87,17 @@ def format_auto_paper_attempt(result):
                 f"{item.get('minutes_from_now')} min"
                 for item in event.get("nearby_events", [])[:5]
             )
+        scalp = chart.get("regular_scalp_validation") or {}
+        if scalp:
+            lines.append(
+                f"Regular scalp paper validation: {scalp.get('status')} | Candidate {scalp.get('candidate') or '-'} | "
+                f"Evidence {scalp.get('passed', 0)}/{scalp.get('total', 0)}, score {scalp.get('score', 0)}/100 | "
+                f"Index objective {scalp.get('underlying_target_points')} points | Option-premium objective "
+                f"Rs {scalp.get('option_premium_target_points')} | Level room {scalp.get('level_room_points') or '-'}"
+            )
+            lines.append(scalp.get("target_note", ""))
+            if scalp.get("blockers"):
+                lines.append("Regular scalp blockers: " + "; ".join(scalp["blockers"]))
     proposed = result.get("proposed_plan") or result.get("plan") or {}
     safety = proposed.get("execution_safety") or {}
     if safety:

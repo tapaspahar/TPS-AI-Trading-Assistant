@@ -44,10 +44,19 @@ class SettingsStoreTests(unittest.TestCase):
             self.assertEqual(store.load()["trade_plan_min_score"], 95)
             self.assertEqual(store.load()["ui_style"], "glassmorphism")
             self.assertEqual(store.load()["tps_match_mode"], "adaptive")
+            self.assertFalse(store.load()["auto_paper_monitor_enabled"])
             saved = store.save({"capital": "250000", "risk_percent": "0.5", "daily_loss_percent": "2", "max_trades_per_day": "3", "theme": "light"})
             self.assertEqual(saved["max_trades_per_day"], 3)
             self.assertEqual(store.load()["theme"], "light")
             self.assertEqual(store.load()["capital"], 250000.0)
+
+    def test_auto_paper_monitor_opt_in_persists(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = SettingsStore(Path(directory) / "settings.json")
+            settings = store.load()
+            settings["auto_paper_monitor_enabled"] = True
+            self.assertTrue(store.save(settings)["auto_paper_monitor_enabled"])
+            self.assertTrue(store.load()["auto_paper_monitor_enabled"])
 
     def test_trade_plan_minimum_score_is_persisted_and_validated(self):
         with tempfile.TemporaryDirectory() as directory:

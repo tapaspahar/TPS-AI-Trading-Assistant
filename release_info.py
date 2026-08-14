@@ -9,9 +9,11 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.3.1"
-LAST_UPDATED_AT = "13-08-2026 21:51:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.3.1 - 13-08-2026 21:51 IST"
+LAST_UPDATED_AT = "14-08-2026 13:38:24 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.3.1 - 14-08-2026 13:38 IST"
 RELEASE_NOTES = (
+    "Added an opt-in Regular 20-Point Scalp paper-validation mode to Options Workspace with separate index-point and option-premium objectives, configurable evidence thresholds, READY/WATCH/NO TRADE classification and permanent five-minute attempt audit.",
+    "Regular scalp validation cannot capture or place an order and cannot bypass strict TPS hard blockers, nearby chart/OI levels, stale entry timing, directional-volume evidence or exhausted VIX/ATR movement budget.",
     "Added a dedicated Volatility Intelligence workspace comparing India VIX implied daily move with actual session movement, ATR and realised volatility.",
     "Replaced fixed-only VIX labels with a one-year historical percentile regime when sufficient broker history is available, while clearly retaining the older absolute fallback when history is unavailable.",
     "Added expected-range utilization, remaining movement budget, VIX rising/falling context and one shared volatility source for Market Snapshot and defined-risk Option Strategies.",

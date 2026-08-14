@@ -2,7 +2,7 @@ from datetime import date, datetime, timedelta
 from threading import Thread
 
 from PySide6.QtCore import QTimer, Signal
-from PySide6.QtWidgets import QCheckBox, QComboBox, QFormLayout, QGroupBox, QLabel, QMessageBox, QPushButton, QScrollArea, QSizePolicy, QSpinBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout, QGroupBox, QLabel, QMessageBox, QPushButton, QScrollArea, QSizePolicy, QSpinBox, QVBoxLayout, QWidget
 
 from core.settings_store import SettingsStore
 from core.database_manager import Database
@@ -46,6 +46,7 @@ class OptionsPage(QWidget):
         self.paper_monitoring = False
         self.auto_paper_running = False
         self.last_auto_paper_bucket = None
+        self.auto_paper_resume_requested = False
         self.service = OptionContractService()
         self.db = Database()
         outer_layout = QVBoxLayout(self)
@@ -79,6 +80,7 @@ class OptionsPage(QWidget):
         self.event_check.currentIndexChanged.connect(self.update_plan_readiness)
         self.minimum_score = QSpinBox(); self.minimum_score.setRange(0, 100)
         saved_settings = SettingsStore().load()
+        self.auto_paper_resume_requested = bool(saved_settings.get("auto_paper_monitor_enabled", False))
         self.news_pause = QCheckBox("Emergency News Risk Pause - block all new paper entries")
         self.news_pause.setChecked(bool(saved_settings.get("news_risk_pause", False)))
         self.news_pause.toggled.connect(self.save_news_risk_controls)
@@ -168,6 +170,37 @@ class OptionsPage(QWidget):
         auto_form.addRow(self.auto_paper_enabled)
         auto_form.addRow(self.auto_paper_progress)
         layout.addWidget(auto_box)
+        scalp_box = QGroupBox("Regular 20-Point Scalp - paper validation only")
+        scalp_form = QFormLayout(scalp_box)
+        self.regular_scalp_enabled = QCheckBox("Evaluate every completed 5-minute candle as SCALP READY / WATCH / NO TRADE")
+        self.regular_scalp_enabled.setChecked(bool(saved_settings.get("regular_scalp_validation_enabled", False)))
+        self.regular_scalp_underlying_target = QDoubleSpinBox(); self.regular_scalp_underlying_target.setRange(1, 500); self.regular_scalp_underlying_target.setDecimals(1)
+        self.regular_scalp_underlying_target.setValue(float(saved_settings.get("regular_scalp_underlying_target_points", 20)))
+        self.regular_scalp_underlying_target.setSuffix(" index points")
+        self.regular_scalp_premium_target = QDoubleSpinBox(); self.regular_scalp_premium_target.setRange(1, 500); self.regular_scalp_premium_target.setDecimals(1)
+        self.regular_scalp_premium_target.setValue(float(saved_settings.get("regular_scalp_premium_target_points", 20)))
+        self.regular_scalp_premium_target.setPrefix("Rs "); self.regular_scalp_premium_target.setSuffix(" premium")
+        self.regular_scalp_min_score = QSpinBox(); self.regular_scalp_min_score.setRange(0, 100)
+        self.regular_scalp_min_score.setValue(int(saved_settings.get("regular_scalp_min_score", 55))); self.regular_scalp_min_score.setSuffix(" / 100")
+        self.regular_scalp_min_confirmations = QSpinBox(); self.regular_scalp_min_confirmations.setRange(1, 8)
+        self.regular_scalp_min_confirmations.setValue(int(saved_settings.get("regular_scalp_min_confirmations", 3)))
+        self.regular_scalp_status = QLabel(
+            "Disabled." if not self.regular_scalp_enabled.isChecked() else
+            "Enabled for audit-only paper validation. It cannot bypass strict blockers or capture/place an order."
+        )
+        self.regular_scalp_status.setWordWrap(True)
+        for control in (self.regular_scalp_enabled, self.regular_scalp_underlying_target,
+                        self.regular_scalp_premium_target, self.regular_scalp_min_score,
+                        self.regular_scalp_min_confirmations):
+            signal = control.toggled if isinstance(control, QCheckBox) else control.valueChanged
+            signal.connect(self.save_regular_scalp_settings)
+        scalp_form.addRow(self.regular_scalp_enabled)
+        scalp_form.addRow("Underlying move objective", self.regular_scalp_underlying_target)
+        scalp_form.addRow("Option-premium objective", self.regular_scalp_premium_target)
+        scalp_form.addRow("Minimum validation score", self.regular_scalp_min_score)
+        scalp_form.addRow("Minimum confirmations", self.regular_scalp_min_confirmations)
+        scalp_form.addRow(self.regular_scalp_status)
+        layout.addWidget(scalp_box)
         self.send_plan_button = QPushButton("Send Review Plan to Journal")
         self.send_plan_button.clicked.connect(self.send_plan_to_journal)
         self.send_plan_button.setEnabled(False)
@@ -446,6 +479,21 @@ class OptionsPage(QWidget):
         self.send_plan_button.setEnabled(False)
         self.update_plan_readiness()
 
+    def save_regular_scalp_settings(self, *_args):
+        settings = SettingsStore().load()
+        settings.update({
+            "regular_scalp_validation_enabled": self.regular_scalp_enabled.isChecked(),
+            "regular_scalp_underlying_target_points": self.regular_scalp_underlying_target.value(),
+            "regular_scalp_premium_target_points": self.regular_scalp_premium_target.value(),
+            "regular_scalp_min_score": self.regular_scalp_min_score.value(),
+            "regular_scalp_min_confirmations": self.regular_scalp_min_confirmations.value(),
+        })
+        SettingsStore().save(settings)
+        self.regular_scalp_status.setText(
+            "Enabled for audit-only paper validation. It cannot bypass strict blockers or capture/place an order."
+            if self.regular_scalp_enabled.isChecked() else "Disabled."
+        )
+
     def save_tps_checklist(self, *_args):
         enabled = [name for name, check in self.condition_checks.items() if check.isChecked()]
         if not enabled:
@@ -482,6 +530,14 @@ class OptionsPage(QWidget):
         if LiveSession.connected() and not self.paper_monitor_timer.isActive():
             self.paper_monitor_timer.start(30_000)
             self.monitor_paper_trades()
+        if (
+            LiveSession.connected()
+            and self.auto_paper_resume_requested
+            and not self.auto_paper_enabled.isChecked()
+            and not self.news_pause.isChecked()
+            and self.event_check.currentText() == "No known high-impact event"
+        ):
+            self.auto_paper_enabled.setChecked(True)
 
     def create_trade_plan(self):
         if not self.contracts or self.spot_price is None:
@@ -620,10 +676,18 @@ class OptionsPage(QWidget):
                 self.auto_paper_enabled.blockSignals(True); self.auto_paper_enabled.setChecked(False); self.auto_paper_enabled.blockSignals(False)
                 QMessageBox.warning(self, "Auto paper trading", "Connect read-only broker data first.")
                 return
+            self.auto_paper_resume_requested = True
+            settings = SettingsStore().load()
+            settings["auto_paper_monitor_enabled"] = True
+            SettingsStore().save(settings)
             self.auto_paper_progress.setText("Enabled: waits for each new completed 5-minute candle. One open paper trade at a time; daily cap comes from Risk Settings.")
             self.auto_paper_timer.start(30_000)
             self.check_auto_paper_cycle()
         else:
+            self.auto_paper_resume_requested = False
+            settings = SettingsStore().load()
+            settings["auto_paper_monitor_enabled"] = False
+            SettingsStore().save(settings)
             self.auto_paper_timer.stop()
             self.auto_paper_progress.setText("Paused. Existing open paper trades remain quote-monitored; no new paper trade will be captured.")
 
@@ -783,6 +847,21 @@ class OptionsPage(QWidget):
                 expiry_strategy = environment.get("expiry_strategy") or {}
                 if expiry_strategy:
                     lines.append(f"Expiry strategy: {expiry_strategy.get('strategy')} | {expiry_strategy.get('reason')}")
+            scalp = chart.get("regular_scalp_validation") or {}
+            if scalp:
+                room = scalp.get("level_room_points")
+                lines.append(
+                    f"Regular scalp audit: {scalp.get('status')} | Candidate {scalp.get('candidate') or '-'} | "
+                    f"Evidence {scalp.get('passed', 0)}/{scalp.get('total', 0)} | Score {scalp.get('score', 0)}/100 | "
+                    f"Level room {format(room, '.1f') if room is not None else 'unavailable'} index points"
+                )
+                lines.append(
+                    f"Separate objectives: underlying {scalp.get('underlying_target_points')} index points | "
+                    f"option premium Rs {scalp.get('option_premium_target_points')} | "
+                    f"Paper audit only; automatic capture {'allowed' if scalp.get('auto_capture_allowed') else 'not allowed'}."
+                )
+                if scalp.get("blockers"):
+                    lines.append("Regular scalp blockers: " + "; ".join(scalp["blockers"]))
         chain = attempt.get("chain") or {}
         if chain:
             oi_pcr = f"{chain['pcr_oi']:.2f}" if chain.get("pcr_oi") is not None else "Unavailable"
@@ -823,6 +902,18 @@ class OptionsPage(QWidget):
                     f"Remaining {environment.get('remaining_expected_range')} | Regular objective "
                     f"{environment.get('regular_move_target_points')} points | Entry extension max "
                     f"{environment.get('max_entry_extension_atr')} ATR"
+                )
+            scalp = ((result.get("attempt") or {}).get("chart") or {}).get("regular_scalp_validation") or {}
+            if scalp:
+                room = scalp.get("level_room_points")
+                self.regular_scalp_status.setText(
+                    f"{scalp.get('status')} | {scalp.get('candidate') or '-'} | "
+                    f"{scalp.get('passed', 0)}/{scalp.get('total', 0)} confirmations | "
+                    f"score {scalp.get('score', 0)}/100 | room "
+                    f"{format(room, '.1f') if room is not None else 'unavailable'} index points\n"
+                    f"Index objective {scalp.get('underlying_target_points')} points is separate from "
+                    f"Rs {scalp.get('option_premium_target_points')} option-premium objective. "
+                    f"{'Blockers: ' + '; '.join(scalp.get('blockers') or []) if scalp.get('blockers') else scalp.get('safety_note', '')}"
                 )
         self.auto_paper_progress.setText(f"{details}\nForward-test progress: {progress['days']}/20 trading days | {progress['trades']} paper trades | {progress['target_hits']} targets | {progress['stoploss_hits']} stop losses.")
 

@@ -150,6 +150,7 @@ class DashboardScreen(QWidget):
         self.optionsPage.auto_attempt_saved.connect(self.autoAttemptReportPage.refresh)
         self.optionsPage.open_chart_capture.connect(lambda: self.show_page(3))
         self.settingsPage.live_connected.connect(self.start_default_nifty)
+        self.settingsPage.live_connected.connect(self.optionsPage.prepare_live_workspace)
         self.settingsPage.live_connected.connect(lambda: self.autoOpportunityPage.scan(force=True))
         self.settingsPage.live_connected.connect(self.scalperPage.start_monitoring)
         self.scalperPage.scalp_alert.connect(self.notify_scalp_watch)

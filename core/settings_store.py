@@ -21,6 +21,17 @@ DEFAULT_SETTINGS = {
     "recovery_lock_hours": 48,
     "recovery_min_paper_sessions": 30,
     "trade_plan_min_score": 95,
+    # Separate, opt-in research mode.  It can label a candle READY/WATCH but
+    # cannot place or capture a trade and never weakens the strict TPS engine.
+    "regular_scalp_validation_enabled": False,
+    "regular_scalp_underlying_target_points": 20.0,
+    "regular_scalp_premium_target_points": 20.0,
+    "regular_scalp_min_score": 55,
+    "regular_scalp_min_confirmations": 3,
+    # User opt-in for the completed-candle audit loop.  This persists so an
+    # approved forward test can resume after an application update/restart,
+    # but it still requires a live read-only broker session and safety checks.
+    "auto_paper_monitor_enabled": False,
     "tps_required_matches": 5,
     "tps_match_mode": "adaptive",
     "tps_enabled_conditions": [
@@ -142,6 +153,12 @@ class SettingsStore:
             "recovery_lock_hours": int(settings.get("recovery_lock_hours", current["recovery_lock_hours"])),
             "recovery_min_paper_sessions": int(settings.get("recovery_min_paper_sessions", current["recovery_min_paper_sessions"])),
             "trade_plan_min_score": int(settings.get("trade_plan_min_score", current["trade_plan_min_score"])),
+            "regular_scalp_validation_enabled": bool(settings.get("regular_scalp_validation_enabled", current["regular_scalp_validation_enabled"])),
+            "regular_scalp_underlying_target_points": float(settings.get("regular_scalp_underlying_target_points", current["regular_scalp_underlying_target_points"])),
+            "regular_scalp_premium_target_points": float(settings.get("regular_scalp_premium_target_points", current["regular_scalp_premium_target_points"])),
+            "regular_scalp_min_score": int(settings.get("regular_scalp_min_score", current["regular_scalp_min_score"])),
+            "regular_scalp_min_confirmations": int(settings.get("regular_scalp_min_confirmations", current["regular_scalp_min_confirmations"])),
+            "auto_paper_monitor_enabled": bool(settings.get("auto_paper_monitor_enabled", current["auto_paper_monitor_enabled"])),
             "tps_required_matches": int(settings.get("tps_required_matches", current["tps_required_matches"])),
             "tps_match_mode": str(settings.get("tps_match_mode", current["tps_match_mode"])),
             "tps_enabled_conditions": list(settings.get("tps_enabled_conditions", current["tps_enabled_conditions"])),
@@ -184,6 +201,14 @@ class SettingsStore:
             raise ValueError("Recovery paper-session target must be between 1 and 250.")
         if not 0 <= values["trade_plan_min_score"] <= 100:
             raise ValueError("Trade-plan minimum score must be between 0 and 100.")
+        if not 1 <= values["regular_scalp_underlying_target_points"] <= 500:
+            raise ValueError("Regular scalp underlying target must be between 1 and 500 points.")
+        if not 1 <= values["regular_scalp_premium_target_points"] <= 500:
+            raise ValueError("Regular scalp option-premium target must be between 1 and 500 rupees.")
+        if not 0 <= values["regular_scalp_min_score"] <= 100:
+            raise ValueError("Regular scalp minimum score must be between 0 and 100.")
+        if not 1 <= values["regular_scalp_min_confirmations"] <= 8:
+            raise ValueError("Regular scalp confirmations must be between 1 and 8.")
         allowed_conditions = {
             "Market structure", "Price vs VWAP", "EMA 5/20/50 alignment",
             "SuperTrend confirmation", "Pullback and reversal", "Directional volume", "OI/PCR context",
