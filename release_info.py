@@ -9,9 +9,11 @@ PUBLISHER = "Tapas Kumar Pahar"
 # Development-build metadata is separate from the published Release 1.0
 # identity. Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.3.1"
-LAST_UPDATED_AT = "14-08-2026 15:12:55 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.3.1 - 14-08-2026 15:12 IST"
+LAST_UPDATED_AT = "14-08-2026 15:38:37 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.3.1 - 14-08-2026 15:38 IST"
 RELEASE_NOTES = (
+    "Moved the testing trade-plan score and all news/event safety controls from contract selection into one Session Checklist section with a complete save receipt.",
+    "Protected Required Matches, Match Rule, event window and testing score from accidental mouse-wheel changes while the Options Workspace page scrolls.",
     "Removed the disconnected manual Decision Engine V1 / AI Analysis workspace; verified Chart Capture values now evaluate directly and continue to Options Workspace without an extra duplicate form.",
     "Added an immediate inline save confirmation with date, time, selected-evidence count, match rule and required matches to the Options Workspace session checklist.",
     "Added an opt-in Regular 20-Point Scalp paper-validation mode to Options Workspace with separate index-point and option-premium objectives, configurable evidence thresholds, READY/WATCH/NO TRADE classification and permanent five-minute attempt audit.",

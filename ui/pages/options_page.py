@@ -2,6 +2,7 @@ from datetime import date, datetime, timedelta
 from threading import Thread
 
 from PySide6.QtCore import QTimer, Signal
+from PySide6.QtGui import QWheelEvent
 from PySide6.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QFormLayout, QGroupBox, QLabel, QMessageBox, QPushButton, QScrollArea, QSizePolicy, QSpinBox, QVBoxLayout, QWidget
 
 from core.settings_store import SettingsStore
@@ -14,6 +15,20 @@ from services.auto_paper_trader import run_auto_paper_cycle
 from core.overtrading_guard import OvertradingGuard
 from services.live_session import LiveSession
 from services.option_contract_service import UNDERLYING_QUOTES, OptionContractService, buying_risk, contracts_near_spot
+
+
+class SessionSpinBox(QSpinBox):
+    """Prevent page scrolling from accidentally changing safety settings."""
+
+    def wheelEvent(self, event: QWheelEvent):
+        event.ignore()
+
+
+class SessionComboBox(QComboBox):
+    """Keep session selections stable while the Options page scrolls."""
+
+    def wheelEvent(self, event: QWheelEvent):
+        event.ignore()
 
 
 class OptionsPage(QWidget):
@@ -65,6 +80,7 @@ class OptionsPage(QWidget):
         layout.addWidget(QLabel("Options Decision Workspace — verify every condition before placing a manual broker order."))
 
         selection = QGroupBox("1. Choose a contract")
+        self.contract_group = selection
         form = QFormLayout(selection)
         form.setVerticalSpacing(8)
         self.underlying = QComboBox(); self.underlying.addItems(("NIFTY", "BANKNIFTY", "SENSEX"))
@@ -74,11 +90,11 @@ class OptionsPage(QWidget):
         self.strike = QComboBox(); self.strike.currentIndexChanged.connect(self.schedule_auto_refresh)
         self.strike.currentIndexChanged.connect(self.update_lot_quantity)
         self.lots = QSpinBox(); self.lots.setRange(1, 100); self.lots.setValue(1); self.lots.valueChanged.connect(self.update_lot_quantity)
-        self.event_check = QComboBox()
+        self.event_check = SessionComboBox()
         self.event_check.addItems(("Review news / event risk", "No known high-impact event", "High-impact event or expiry-day risk"))
         self.event_check.setCurrentText("No known high-impact event")
-        self.event_check.currentIndexChanged.connect(self.update_plan_readiness)
-        self.minimum_score = QSpinBox(); self.minimum_score.setRange(0, 100)
+        self.event_check.currentIndexChanged.connect(self.save_event_check_state)
+        self.minimum_score = SessionSpinBox(); self.minimum_score.setRange(0, 100)
         saved_settings = SettingsStore().load()
         self.auto_paper_resume_requested = bool(saved_settings.get("auto_paper_monitor_enabled", False))
         self.news_pause = QCheckBox("Emergency News Risk Pause - block all new paper entries")
@@ -87,14 +103,14 @@ class OptionsPage(QWidget):
         self.event_override = QCheckBox("Override automatic event block for this paper-test session")
         self.event_override.setChecked(bool(saved_settings.get("event_risk_override", False)))
         self.event_override.toggled.connect(self.save_news_risk_controls)
-        self.event_window = QComboBox(); self.event_window.addItems(("15 minutes", "30 minutes", "60 minutes"))
+        self.event_window = SessionComboBox(); self.event_window.addItems(("15 minutes", "30 minutes", "60 minutes"))
         self.event_window.setCurrentText(f"{saved_settings.get('event_no_trade_minutes', 30)} minutes")
         self.event_window.currentIndexChanged.connect(self.save_news_risk_controls)
         self.minimum_score.setValue(int(saved_settings["trade_plan_min_score"]))
         self.minimum_score.setSuffix(" / 100")
         self.minimum_score.setToolTip("0-100 testing threshold for manual review and paper plans. Strict auto paper trading keeps TPS v2 confirmations and hard safety filters.")
         self.minimum_score.valueChanged.connect(self.save_trade_plan_minimum)
-        for control in (self.underlying, self.expiry, self.option_type, self.strike, self.lots, self.event_check):
+        for control in (self.underlying, self.expiry, self.option_type, self.strike, self.lots):
             control.setMinimumHeight(32)
         self.quantity_preview = QLabel("Quantity: load a contract")
         self.auto_refresh_timer = QTimer(self)
@@ -113,16 +129,12 @@ class OptionsPage(QWidget):
         form.addRow("Strike", self.strike)
         form.addRow("Lots (1–100)", self.lots)
         form.addRow("Auto quantity", self.quantity_preview)
-        form.addRow("News / event check", self.event_check)
-        form.addRow(self.news_pause)
-        form.addRow(self.event_override)
-        form.addRow("Event no-trade window", self.event_window)
-        form.addRow("Testing trade-plan score (0-100)", self.minimum_score)
         form.addRow(refresh)
         form.addRow(analyze_chain)
         layout.addWidget(selection)
 
-        checklist_box = QGroupBox("2. Session checklist - only ticked evidence is scored")
+        checklist_box = QGroupBox("2. Session checklist, testing threshold & event safety")
+        self.session_checklist_group = checklist_box
         checklist_form = QFormLayout(checklist_box)
         self.condition_checks = {}
         enabled_conditions = set(saved_settings["tps_enabled_conditions"])
@@ -130,12 +142,17 @@ class OptionsPage(QWidget):
             check = QCheckBox(name); check.setChecked(name in enabled_conditions)
             check.toggled.connect(self.save_tps_checklist)
             self.condition_checks[name] = check; checklist_form.addRow(check)
-        self.match_mode = QComboBox(); self.match_mode.addItem("Adaptive by market regime (recommended)", "adaptive"); self.match_mode.addItem("Selected count", "count"); self.match_mode.addItem("All selected", "all")
+        self.match_mode = SessionComboBox(); self.match_mode.addItem("Adaptive by market regime (recommended)", "adaptive"); self.match_mode.addItem("Selected count", "count"); self.match_mode.addItem("All selected", "all")
         self.match_mode.setCurrentIndex(max(0, self.match_mode.findData(saved_settings["tps_match_mode"])))
         self.match_mode.currentIndexChanged.connect(self.save_tps_checklist)
-        self.required_matches = QSpinBox(); self.required_matches.setRange(1, len(CONDITION_WEIGHTS)); self.required_matches.setValue(saved_settings["tps_required_matches"])
+        self.required_matches = SessionSpinBox(); self.required_matches.setRange(1, len(CONDITION_WEIGHTS)); self.required_matches.setValue(saved_settings["tps_required_matches"])
         self.required_matches.valueChanged.connect(self.save_tps_checklist)
         checklist_form.addRow("Match rule", self.match_mode); checklist_form.addRow("Required matches", self.required_matches)
+        checklist_form.addRow("News / event check", self.event_check)
+        checklist_form.addRow(self.news_pause)
+        checklist_form.addRow(self.event_override)
+        checklist_form.addRow("Event no-trade window", self.event_window)
+        checklist_form.addRow("Testing trade-plan score (0-100)", self.minimum_score)
         self.checklist_save_status = QLabel(
             "Checklist changes save automatically. Saved values are restored after restart and software updates."
         )
@@ -482,6 +499,7 @@ class OptionsPage(QWidget):
         SettingsStore().save(settings)
         self.current_plan = None
         self.send_plan_button.setEnabled(False)
+        self.show_session_save_confirmation()
         self.update_plan_readiness()
 
     def save_regular_scalp_settings(self, *_args):
@@ -516,13 +534,26 @@ class OptionsPage(QWidget):
             "tps_required_matches": self.required_matches.value(),
         })
         SettingsStore().save(settings)
-        saved_at = datetime.now().astimezone().strftime("%d-%m-%Y %H:%M:%S")
-        mode_text = self.match_mode.currentText()
-        self.checklist_save_status.setText(
-            f"✓ Checklist settings saved at {saved_at} | Selected evidence: {len(enabled)} | "
-            f"Match rule: {mode_text} | Required matches: {self.required_matches.value()}"
-        )
+        self.show_session_save_confirmation()
         self.update_plan_readiness()
+
+    def save_event_check_state(self, *_args):
+        """Confirm the current paper-session event classification."""
+        self.show_session_save_confirmation()
+        self.update_plan_readiness()
+
+    def show_session_save_confirmation(self):
+        """Show one complete receipt for checklist and event-safety controls."""
+        enabled = [name for name, check in self.condition_checks.items() if check.isChecked()]
+        saved_at = datetime.now().astimezone().strftime("%d-%m-%Y %H:%M:%S")
+        pause = "ON" if self.news_pause.isChecked() else "OFF"
+        override = "ON" if self.event_override.isChecked() else "OFF"
+        self.checklist_save_status.setText(
+            f"✓ Session settings saved at {saved_at} | Evidence: {len(enabled)} | "
+            f"Rule: {self.match_mode.currentText()} | Required: {self.required_matches.value()} | "
+            f"Testing score: {self.minimum_score.value()}/100 | Event: {self.event_check.currentText()} | "
+            f"Window: {self.event_window.currentText()} | Pause: {pause} | Override: {override}"
+        )
 
     def save_news_risk_controls(self, *_args):
         settings = SettingsStore().load()
@@ -532,6 +563,7 @@ class OptionsPage(QWidget):
         SettingsStore().save(settings)
         if self.news_pause.isChecked() and self.auto_paper_enabled.isChecked():
             self.auto_paper_enabled.setChecked(False)
+        self.show_session_save_confirmation()
         self.update_plan_readiness()
 
     def prepare_live_workspace(self):
