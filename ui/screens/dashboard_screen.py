@@ -10,7 +10,6 @@ from ui.pages.options_page import OptionsPage
 from ui.pages.chart_capture_page import ChartCapturePage
 from ui.pages.journal_page import JournalPage
 from ui.pages.checklist_page import ChecklistPage
-from ui.pages.ai_page import AIPage
 from ui.pages.risk_page import RiskPage
 from ui.pages.reports_page import ReportsPage
 from ui.pages.backtest_page import BacktestPage
@@ -44,6 +43,7 @@ from services.self_development_decision import ensure_completed_self_development
 from services.notification_service import NotificationService
 from services.live_session import LiveSession
 from services.trend_memory_service import ensure_completed_trend_memories, get_live_trend_analogs
+from engine.decision_engine import decision_context_from_capture
 
 
 class ResponsiveStackedWidget(QStackedWidget):
@@ -86,7 +86,9 @@ class DashboardScreen(QWidget):
         self.chartCapturePage = ChartCapturePage()
         self.journalPage = JournalPage()
         self.checklistPage = ChecklistPage()
-        self.aiPage = AIPage()
+        # Index 6 is intentionally reserved so every established workspace
+        # keeps its public route after the retired manual AI form is removed.
+        self.retiredAiPageSlot = QWidget()
         self.riskPage = RiskPage()
         self.reportsPage = ReportsPage()
         self.backtestPage = BacktestPage()
@@ -115,7 +117,7 @@ class DashboardScreen(QWidget):
         self.recoveryCenterPage = RecoveryCenterPage()
         self.volatilityIntelligencePage = VolatilityIntelligencePage()
         for page in (self.dashboardPage, self.liveMarketPage, self.optionsPage, self.chartCapturePage, self.journalPage,
-                     self.checklistPage, self.aiPage, self.riskPage, self.reportsPage, self.settingsPage,
+                     self.checklistPage, self.retiredAiPageSlot, self.riskPage, self.reportsPage, self.settingsPage,
                      self.backtestPage, self.postMarketPage, self.replayPage, self.equityPage,
                      self.autoAttemptReportPage, self.aboutPage, self.helpPage, self.nextDayBiasPage,
                      self.smartMoneyPage, self.casAnalysisPage, self.stockOptionsWatchPage, self.optionStrategiesPage,
@@ -128,8 +130,7 @@ class DashboardScreen(QWidget):
         self.journalPage.trade_saved.connect(self.reportsPage.refresh)
         self.journalPage.trade_saved.connect(self.optionsPage.update_plan_readiness)
         self.chartCapturePage.symbol_ready.connect(self.journalPage.set_symbol_from_capture)
-        self.chartCapturePage.analysis_ready.connect(self.aiPage.load_chart_capture)
-        self.aiPage.decision_ready.connect(self.handle_ai_decision)
+        self.chartCapturePage.analysis_ready.connect(self.handle_chart_capture)
         self.optionsPage.trade_plan_ready.connect(self.journalPage.load_trade_plan)
         self.optionsPage.trade_plan_ready.connect(self.riskPage.load_trade_plan)
         self.optionsPage.trade_plan_ready.connect(lambda _plan: self.show_page(4))
@@ -159,7 +160,7 @@ class DashboardScreen(QWidget):
         for button, index in ((self.sidebar.dashboardButton, 0), (self.sidebar.liveMarketButton, 1),
                               (self.sidebar.optionsButton, 2), (self.sidebar.chartCaptureButton, 3),
                               (self.sidebar.journalButton, 4), (self.sidebar.checklistButton, 5),
-                              (self.sidebar.aiButton, 6), (self.sidebar.riskButton, 7),
+                              (self.sidebar.riskButton, 7),
                               (self.sidebar.reportButton, 8), (self.sidebar.settingsButton, 9),
                               (self.sidebar.backtestButton, 10), (self.sidebar.postMarketButton, 11), (self.sidebar.replayButton, 12),
                               (self.sidebar.equityButton, 13), (self.sidebar.autoAttemptReportButton, 14),
@@ -372,7 +373,12 @@ class DashboardScreen(QWidget):
             self.volatilityIntelligencePage.analyze()
         self.stack.setCurrentIndex(index)
 
-    def handle_ai_decision(self, context):
+    def handle_chart_capture(self, capture):
+        """Evaluate verified chart data directly and continue to Options."""
+        try:
+            context = decision_context_from_capture(capture)
+        except (TypeError, ValueError):
+            return
         self.optionsPage.set_chart_context(context)
         self.show_page(2)
 

@@ -114,3 +114,46 @@ class DecisionEngine:
             "reasons": reasons, "warnings": warnings,
             "volume_confirmed": volume_confirmed, "trade_ready": trade_ready,
         }
+
+
+def decision_context_from_capture(capture: dict, psychology: str = "Calm") -> dict:
+    """Convert verified Chart Capture values into Options Workspace context."""
+    def number(key: str, *, required: bool = False):
+        value = capture.get(key)
+        if value in (None, ""):
+            if required:
+                raise ValueError(f"Missing required chart value: {key}")
+            return None
+        return float(value)
+
+    snapshot = ChartSnapshot(
+        price=number("close", required=True),
+        ema_5=number("ema_5", required=True),
+        ema_20=number("ema_20", required=True),
+        ema_50=number("ema_50", required=True),
+        vwap=number("vwap"),
+        supertrend=number("supertrend", required=True),
+        volume=number("volume"),
+        volume_ema=number("volume_ema"),
+        rsi_14=number("rsi_14"),
+        atr_14=number("atr_14"),
+        volume_ratio=number("volume_ratio"),
+        candle_direction=capture.get("candle_direction"),
+        fake_breakout_risk=bool(capture.get("fake_breakout_risk", False)),
+        previous_day_high=number("previous_day_high"),
+        previous_day_low=number("previous_day_low"),
+        opening_range_high=number("opening_range_high"),
+        opening_range_low=number("opening_range_low"),
+    )
+    candidate = "CE" if snapshot.price > snapshot.supertrend else "PE"
+    result = DecisionEngine().evaluate(snapshot, candidate, psychology)
+    return {
+        "symbol": str(capture.get("symbol") or "").upper(),
+        "score": result["score"],
+        "direction": result["direction"],
+        "decision": result["decision"],
+        "reasons": result["reasons"],
+        "warnings": result["warnings"],
+        "volume_confirmed": result["volume_confirmed"],
+        "trade_ready": result["trade_ready"],
+    }

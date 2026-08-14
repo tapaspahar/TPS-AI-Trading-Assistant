@@ -136,7 +136,7 @@ def analyse_volume_candle(candles, period=20, heavy_ratio=1.5):
 
 
 def build_live_capture(symbol, timeframe, candles, analysis_source="Angel One candle data"):
-    """Return fields compatible with Chart Capture and Decision Engine V1."""
+    """Return fields compatible with Chart Capture and Options Workspace."""
     if len(candles) < 51:
         raise ValueError("At least 51 candles are needed for EMA 50 live capture.")
     latest = candles[-1]

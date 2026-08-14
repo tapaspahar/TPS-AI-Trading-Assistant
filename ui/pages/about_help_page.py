@@ -142,8 +142,8 @@ class AboutPage(QWidget):
           <li>Use <b>Market Snapshot</b> to select NIFTY, BANKNIFTY or SENSEX and confirm the 5-minute structure,
           support, resistance and breakout/breakdown levels.</li>
           <li>Use <b>Chart Capture</b> or live capture to load EMA 5/20/50, VWAP, SuperTrend, RSI, ATR and volume.</li>
-          <li>Review the result in <b>AI Analysis</b>. A bullish candle alone is not a bullish structure; the core
-          trend inputs must agree.</li>
+          <li>Verified Chart Capture values now flow directly into <b>Options Workspace</b>. A bullish candle alone
+          is not a bullish structure; the core trend inputs must agree.</li>
           <li>In <b>Options Workspace</b>, keep the recommended Adaptive match rule when you want the required
           checklist count, entry extension and regular-move objective to respond to the live VIX/market regime.</li>
           <li>Open <b>Options Workspace</b>, load the expiry and contract, then analyse OI/PCR. CE is considered
@@ -201,8 +201,8 @@ class AboutPage(QWidget):
           <li><b>Market Snapshot</b> me NIFTY, BANKNIFTY ya SENSEX select karke 5-minute market structure,
           support, resistance aur breakout/breakdown level check kijiye.</li>
           <li><b>Chart Capture</b> se EMA 5/20/50, VWAP, SuperTrend, RSI, ATR aur volume values load kijiye.</li>
-          <li><b>AI Analysis</b> me result verify kijiye. Sirf ek bullish candle ka matlab bullish market nahi hota;
-          main trend conditions ka same direction me hona zaroori hai.</li>
+          <li>Verified Chart Capture values ab seedha <b>Options Workspace</b> me evaluate hoti hain. Sirf ek bullish
+          candle ka matlab bullish market nahi hota; main trend conditions ka same direction me hona zaroori hai.</li>
           <li><b>Options Workspace</b> me recommended Adaptive match rule rakhiye. Is mode me required checklist
           count, entry extension aur regular-move objective live VIX/market regime ke hisaab se badlenge.</li>
           <li><b>Options Workspace</b> me expiry aur contract load karke OI/PCR analyse kijiye. Confirmed bullish

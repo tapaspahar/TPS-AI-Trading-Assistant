@@ -31,7 +31,6 @@ class Sidebar(QFrame):
         self.liveMarketButton = nav("Market Snapshot")
         self.volatilityIntelligenceButton = nav("Volatility Intelligence")
         self.chartCaptureButton = nav("Chart Capture")
-        self.aiButton = nav("AI Analysis")
         self.optionsButton = nav("Options Workspace")
         self.journalButton = nav("Trade Journal")
         self.checklistButton = nav("Checklist")
@@ -62,11 +61,11 @@ class Sidebar(QFrame):
         self.trendMemoryButton = nav("Trend Memory Monitor")
         self.scalperButton = nav("Options Scalper")
         # Keep the visual journey in the same order a trader uses the app:
-        # market context -> chart confirmation -> AI evaluation -> option plan -> journal.
+        # market context -> chart confirmation -> option plan -> journal.
         self.buttons = (
             self.dashboardButton, self.liveMarketButton, self.volatilityIntelligenceButton,
             self.equityButton, self.chartCaptureButton,
-            self.aiButton, self.optionsButton, self.autoOpportunityButton, self.autoAttemptReportButton,
+            self.optionsButton, self.autoOpportunityButton, self.autoAttemptReportButton,
             self.notificationCenterButton, self.recoveryCenterButton, self.journalButton,
             self.checklistButton, self.riskButton, self.reportButton, self.backtestButton, self.replayButton,
             self.postMarketButton, self.postMarketTpsAnalysisButton, self.selfDevelopmentButton, self.nextDayBiasButton, self.casAnalysisButton, self.stockOptionsWatchButton,
@@ -83,7 +82,6 @@ class Sidebar(QFrame):
             3: self.chartCaptureButton,
             4: self.journalButton,
             5: self.checklistButton,
-            6: self.aiButton,
             7: self.riskButton,
             8: self.reportButton,
             9: self.settingsButton,

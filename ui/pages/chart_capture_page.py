@@ -65,8 +65,7 @@ class ChartCapturePage(QWidget):
             QMessageBox.warning(self, "Chart capture unavailable", str(error))
             return
         self.apply_capture(capture)
-        # Send every extracted value to Decision Engine V1 immediately. Fields
-        # remain editable there because OCR can be uncertain.
+        # Verified values are evaluated directly for Options Workspace.
 
     def capture_live_setup(self):
         if not LiveSession.connected():

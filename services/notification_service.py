@@ -26,7 +26,6 @@ NOTIFICATION_LABELS = {
     "early_watch": "Early Watch (paper observation only)",
     "equity_research": "Equity Research",
     "chart_capture": "Chart Capture",
-    "ai_analysis": "AI Analysis",
     "trade_journal": "Trade Journal",
     "risk_manager": "Risk Manager / Open Trade Guard",
     "reports": "Reports",
