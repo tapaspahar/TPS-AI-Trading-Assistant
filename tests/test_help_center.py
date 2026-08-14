@@ -1,5 +1,6 @@
 import os
 import unittest
+from html import escape
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -22,7 +23,7 @@ class HelpCenterTests(unittest.TestCase):
         for language in ("en", "roman", "hi"):
             rendered = help_html(language)
             for page_index, title, *_rest in PAGES:
-                self.assertIn(title, rendered)
+                self.assertIn(escape(title), rendered)
                 self.assertIn(f"tps://page/{page_index}", rendered)
 
     def test_workspace_link_emits_target_page(self):

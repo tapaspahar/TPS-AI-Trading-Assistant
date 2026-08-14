@@ -238,6 +238,24 @@ PAGES = (
      "इंडेक्स चुनकर लाइव तुलना लोड करें। Expected move, actual range, utilization, VIX trend/percentile, ATR, realised volatility, दिशा-वॉल्यूम शक्ति, OI स्तर और defined-risk strategy context देखें। Expected move लक्ष्य या गारंटी नहीं है।"),
 )
 
+# Release 1.4 keeps these specialist tools but presents them as tabs inside
+# their primary workflow.  Their historical route numbers intentionally stay
+# valid so saved links continue to open the correct consolidated tab.
+_CONSOLIDATED_TITLES = {
+    5: "Session Checklist (Options Workspace)",
+    11: "Raw Market Timeline (Post Market Analysis)",
+    17: "Closing Bias / Snapshot Fallback (Gap Probability)",
+    18: "Smart Money Evidence (Powerful Engine)",
+    20: "Pinned F&O Watchlist (Auto Opportunity Radar)",
+    23: "Candle DNA (Powerful Engine)",
+    25: "OI / PCR Intelligence (Options Workspace)",
+    33: "VIX / ATR Intelligence (Option Strategies)",
+}
+PAGES = tuple(
+    (row[0], _CONSOLIDATED_TITLES.get(row[0], row[1]), *row[2:])
+    for row in PAGES
+)
+
 
 def help_html(language: str) -> str:
     """Render one complete manual; language is en, roman or hi."""

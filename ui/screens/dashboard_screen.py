@@ -9,7 +9,6 @@ from ui.pages.live_market_page import LiveMarketPage
 from ui.pages.options_page import OptionsPage
 from ui.pages.chart_capture_page import ChartCapturePage
 from ui.pages.journal_page import JournalPage
-from ui.pages.checklist_page import ChecklistPage
 from ui.pages.risk_page import RiskPage
 from ui.pages.reports_page import ReportsPage
 from ui.pages.backtest_page import BacktestPage
@@ -38,6 +37,7 @@ from ui.pages.recovery_center_page import RecoveryCenterPage
 from ui.pages.volatility_intelligence_page import VolatilityIntelligencePage
 from ui.widgets.glass_effects import add_glass_shadow
 from ui.widgets.accessible_scroll import configure_scroll_area
+from ui.widgets.consolidated_workspace import ConsolidatedWorkspace
 from services.post_market_tps_analysis import ensure_completed_post_market_reports
 from services.self_development_decision import ensure_completed_self_development_reviews
 from services.notification_service import NotificationService
@@ -85,7 +85,6 @@ class DashboardScreen(QWidget):
         self.optionsPage = OptionsPage()
         self.chartCapturePage = ChartCapturePage()
         self.journalPage = JournalPage()
-        self.checklistPage = ChecklistPage()
         # Index 6 is intentionally reserved so every established workspace
         # keeps its public route after the retired manual AI form is removed.
         self.retiredAiPageSlot = QWidget()
@@ -116,15 +115,42 @@ class DashboardScreen(QWidget):
         self.selfDevelopmentPage = SelfDevelopmentPage()
         self.recoveryCenterPage = RecoveryCenterPage()
         self.volatilityIntelligencePage = VolatilityIntelligencePage()
-        for page in (self.dashboardPage, self.liveMarketPage, self.optionsPage, self.chartCapturePage, self.journalPage,
-                     self.checklistPage, self.retiredAiPageSlot, self.riskPage, self.reportsPage, self.settingsPage,
-                     self.backtestPage, self.postMarketPage, self.replayPage, self.equityPage,
-                     self.autoAttemptReportPage, self.aboutPage, self.helpPage, self.nextDayBiasPage,
-                     self.smartMoneyPage, self.casAnalysisPage, self.stockOptionsWatchPage, self.optionStrategiesPage,
-                     self.postMarketTpsAnalysisPage, self.preCandlePage, self.powerfulEnginePage, self.putCallRatioPage,
-                     self.gapProbabilityPage, self.autoOpportunityPage, self.trendMemoryPage, self.scalperPage,
-                     self.notificationCenterPage, self.selfDevelopmentPage, self.recoveryCenterPage,
-                     self.volatilityIntelligencePage):
+        self.optionsHub = ConsolidatedWorkspace((
+            (self.optionsPage, "Trade Plan & Auto Paper"),
+            (self.putCallRatioPage, "OI / PCR Intelligence"),
+        ))
+        self.strategyHub = ConsolidatedWorkspace((
+            (self.optionStrategiesPage, "Defined-Risk Strategies"),
+            (self.volatilityIntelligencePage, "VIX / ATR Intelligence"),
+        ))
+        self.postMarketHub = ConsolidatedWorkspace((
+            (self.postMarketTpsAnalysisPage, "Daily TPS Analysis"),
+            (self.postMarketPage, "Raw Market Timeline"),
+        ))
+        self.gapHub = ConsolidatedWorkspace((
+            (self.gapProbabilityPage, "3:20 + 3:40 Probability"),
+            (self.nextDayBiasPage, "Closing Bias / Snapshot Fallback"),
+        ))
+        self.powerfulHub = ConsolidatedWorkspace((
+            (self.powerfulEnginePage, "Combined Signal"),
+            (self.smartMoneyPage, "Smart Money Evidence"),
+            (self.preCandlePage, "Candle DNA"),
+        ))
+        self.autoOpportunityHub = ConsolidatedWorkspace((
+            (self.autoOpportunityPage, "Automatic Opportunities"),
+            (self.stockOptionsWatchPage, "Pinned F&O Watchlist"),
+        ))
+        retired = lambda: QWidget()
+        pages = (
+            self.dashboardPage, self.liveMarketPage, self.optionsHub, self.chartCapturePage, self.journalPage,
+            retired(), self.retiredAiPageSlot, self.riskPage, self.reportsPage, self.settingsPage,
+            self.backtestPage, retired(), self.replayPage, self.equityPage,
+            self.autoAttemptReportPage, self.aboutPage, self.helpPage, retired(), retired(),
+            self.casAnalysisPage, retired(), self.strategyHub, self.postMarketHub, retired(),
+            self.powerfulHub, retired(), self.gapHub, self.autoOpportunityHub, self.trendMemoryPage,
+            self.scalperPage, self.notificationCenterPage, self.selfDevelopmentPage, self.recoveryCenterPage, retired(),
+        )
+        for page in pages:
             self.stack.addWidget(page)
         self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
         self.journalPage.trade_saved.connect(self.reportsPage.refresh)
@@ -159,21 +185,18 @@ class DashboardScreen(QWidget):
         self.notificationCenterPage.unread_count_changed.connect(self.sidebar.set_notification_count)
         for button, index in ((self.sidebar.dashboardButton, 0), (self.sidebar.liveMarketButton, 1),
                               (self.sidebar.optionsButton, 2), (self.sidebar.chartCaptureButton, 3),
-                              (self.sidebar.journalButton, 4), (self.sidebar.checklistButton, 5),
+                              (self.sidebar.journalButton, 4),
                               (self.sidebar.riskButton, 7),
                               (self.sidebar.reportButton, 8), (self.sidebar.settingsButton, 9),
-                              (self.sidebar.backtestButton, 10), (self.sidebar.postMarketButton, 11), (self.sidebar.replayButton, 12),
+                              (self.sidebar.backtestButton, 10), (self.sidebar.replayButton, 12),
                               (self.sidebar.equityButton, 13), (self.sidebar.autoAttemptReportButton, 14),
-                              (self.sidebar.aboutButton, 15), (self.sidebar.helpButton, 16),
-                              (self.sidebar.nextDayBiasButton, 17), (self.sidebar.smartMoneyButton, 18)):
+                              (self.sidebar.aboutButton, 15), (self.sidebar.helpButton, 16)):
             button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
-        for button, index in ((self.sidebar.casAnalysisButton, 19), (self.sidebar.stockOptionsWatchButton, 20)):
+        for button, index in ((self.sidebar.casAnalysisButton, 19),):
             button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
         self.sidebar.optionStrategiesButton.clicked.connect(lambda _checked=False: self.show_page(21))
         self.sidebar.postMarketTpsAnalysisButton.clicked.connect(lambda _checked=False: self.show_page(22))
-        self.sidebar.preCandleButton.clicked.connect(lambda _checked=False: self.show_page(23))
         self.sidebar.powerfulEngineButton.clicked.connect(lambda _checked=False: self.show_page(24))
-        self.sidebar.putCallRatioButton.clicked.connect(lambda _checked=False: self.show_page(25))
         self.sidebar.gapProbabilityButton.clicked.connect(lambda _checked=False: self.show_page(26))
         self.sidebar.autoOpportunityButton.clicked.connect(lambda _checked=False: self.show_page(27))
         self.sidebar.trendMemoryButton.clicked.connect(lambda _checked=False: self.show_page(28))
@@ -181,7 +204,6 @@ class DashboardScreen(QWidget):
         self.sidebar.notificationCenterButton.clicked.connect(lambda _checked=False: self.show_page(30))
         self.sidebar.selfDevelopmentButton.clicked.connect(lambda _checked=False: self.show_page(31))
         self.sidebar.recoveryCenterButton.clicked.connect(lambda _checked=False: self.show_page(32))
-        self.sidebar.volatilityIntelligenceButton.clicked.connect(lambda _checked=False: self.show_page(33))
         body_layout.addWidget(self.stack)
         main_layout.addLayout(body_layout, 1)
         self.informationPanel = InformationPanel()
@@ -337,6 +359,32 @@ class DashboardScreen(QWidget):
         )
 
     def show_page(self, index: int):
+        requested_index = index
+        aliases = {
+            5: (2, self.optionsHub, 0),
+            11: (22, self.postMarketHub, 1),
+            17: (26, self.gapHub, 1),
+            18: (24, self.powerfulHub, 1),
+            20: (27, self.autoOpportunityHub, 1),
+            23: (24, self.powerfulHub, 2),
+            25: (2, self.optionsHub, 1),
+            33: (21, self.strategyHub, 1),
+        }
+        if requested_index in aliases:
+            index, hub, tab = aliases[requested_index]
+            hub.select_tab(tab)
+        else:
+            primary_tabs = {
+                2: self.optionsHub,
+                21: self.strategyHub,
+                22: self.postMarketHub,
+                24: self.powerfulHub,
+                26: self.gapHub,
+                27: self.autoOpportunityHub,
+            }
+            hub = primary_tabs.get(requested_index)
+            if hub is not None:
+                hub.select_tab(0)
         self.sidebar.set_active(index)
         if index == 0:
             self.dashboardPage.refresh()
@@ -347,7 +395,7 @@ class DashboardScreen(QWidget):
             self.liveMarketPage.start_market_overview()
         elif index == 2:
             self.optionsPage.prepare_live_workspace()
-        elif index == 11:
+        elif requested_index == 11:
             self.postMarketPage.refresh()
         elif index == 14:
             self.autoAttemptReportPage.refresh()
@@ -355,7 +403,7 @@ class DashboardScreen(QWidget):
             self.riskPage.refresh()
         elif index == 22:
             self.postMarketTpsAnalysisPage.refresh(auto_generate=True)
-        elif index == 25:
+        elif requested_index == 25:
             self.putCallRatioPage.refresh()
         elif index == 26:
             self.gapProbabilityPage.refresh_history()
@@ -369,7 +417,7 @@ class DashboardScreen(QWidget):
             self.notificationCenterPage.refresh()
         elif index == 31:
             self.selfDevelopmentPage.refresh(auto_generate=True)
-        elif index == 33 and LiveSession.connected():
+        elif requested_index == 33 and LiveSession.connected():
             self.volatilityIntelligencePage.analyze()
         self.stack.setCurrentIndex(index)
 

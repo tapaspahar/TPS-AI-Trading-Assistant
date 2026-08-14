@@ -1,17 +1,24 @@
 """Application release metadata kept in one place."""
 
 APP_NAME = "TPS AI Trading Assistant"
-VERSION = "1.3.1"
-DISPLAY_VERSION = "Release 1.3.1"
-RELEASE_DATE = "13-08-2026"
+VERSION = "1.4"
+DISPLAY_VERSION = "Release 1.4"
+RELEASE_DATE = "14-08-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
-# Development-build metadata is separate from the published Release 1.0
-# identity. Update this block whenever a reviewed application update is made.
-SOFTWARE_UPDATE_VERSION = "v1.3.1"
-LAST_UPDATED_AT = "14-08-2026 15:38:37 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.3.1 - 14-08-2026 15:38 IST"
+# Update this block whenever a reviewed application update is made.
+SOFTWARE_UPDATE_VERSION = "v1.4"
+LAST_UPDATED_AT = "14-08-2026 15:54:39 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.4 - 14-08-2026 15:54 IST"
 RELEASE_NOTES = (
+    "Consolidated eight overlapping standalone workspaces into six primary tabbed hubs while preserving their calculations, saved data and legacy Help routes.",
+    "Options Workspace now contains Trade Plan & Auto Paper plus OI / PCR Intelligence tabs; the standalone Checklist route now opens its persistent Session Checklist.",
+    "Powerful Engine now groups Combined Signal, Smart Money Evidence and Candle DNA so the combined decision and its specialist evidence can be reviewed together.",
+    "Auto Opportunity Radar now includes Automatic Opportunities and an optional Pinned F&O Watchlist tab without requiring a separate watchlist page.",
+    "Post Market Analysis of TPS now includes the automatic daily Roman-Hindi analysis and the raw saved market timeline in one workspace.",
+    "3:20 + 3:40 Gap Probability now includes the Closing Bias / Snapshot Fallback workflow as a second tab.",
+    "Option Strategies now includes a VIX / ATR Intelligence tab for expected-move, realised-range and volatility-regime evidence.",
+    "Removed duplicate sidebar entries without deleting their specialist tools; old Help links safely redirect to the matching consolidated tab.",
     "Moved the testing trade-plan score and all news/event safety controls from contract selection into one Session Checklist section with a complete save receipt.",
     "Protected Required Matches, Match Rule, event window and testing score from accidental mouse-wheel changes while the Options Workspace page scrolls.",
     "Removed the disconnected manual Decision Engine V1 / AI Analysis workspace; verified Chart Capture values now evaluate directly and continue to Options Workspace without an extra duplicate form.",

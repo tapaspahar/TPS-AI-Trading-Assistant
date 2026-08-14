@@ -155,7 +155,7 @@ class AboutPage(QWidget):
           <li>Use <b>CAS Analysis</b> after market close to compare an F&amp;O stock's 3:00-3:15 reference VWAP,
           final cash close and front-month futures close. TPS labels this as an estimate when exchange auction
           imbalance data is unavailable through the broker feed.</li>
-          <li>Use <b>Stock Options Watch</b> to maintain up to 8 active NSE F&amp;O shares. The completed-candle
+          <li>Use the <b>Pinned F&amp;O Watchlist</b> tab inside Auto Opportunity Radar to maintain up to 8 active NSE F&amp;O shares. The completed-candle
           scan shows CE/PE side, score, entry timing and a one-lot paper plan with entry, stop, target and quantity.</li>
           <li>Use <b>Option Strategies</b> to review a VIX/regime-aware limited-risk structure. TPS may suggest a
           Bull Call Debit Spread, Bear Put Debit Spread or Defined-Risk Iron Condor, and shows every leg plus
@@ -169,11 +169,11 @@ class AboutPage(QWidget):
         <p><b>Dashboard:</b> daily activity and journal summary.<br>
         <b>Equity Research:</b> search NSE shares, analyse historical candles and maintain a watchlist.<br>
         <b>Auto Attempt Report:</b> permanent 5-minute audit showing captured, rejected and skipped evaluations.<br>
-        <b>Checklist:</b> manual discipline and confirmation checks.<br>
+        <b>Options Session Checklist:</b> persistent manual discipline and scored confirmation checks inside Options Workspace.<br>
         <b>Reports:</b> performance summaries from journal records.<br>
         <b>Backtesting:</b> test rules on historical candles before trusting them live.<br>
         <b>Candle Replay:</b> review decisions candle by candle without future information.<br>
-        <b>Post-Market Report:</b> inspect the raw saved candle and option-chain timeline.<br>
+        <b>Raw Market Timeline:</b> inspect saved candle and option-chain evidence inside Post Market Analysis of TPS.<br>
         <b>Post Market Analysis of TPS:</b> keep a permanent date-wise Roman Hindi journal explaining why
         automatic paper trades were captured or rejected, including coverage gaps and the best near-setups.
         TPS generates it automatically after 3:31 PM and backfills a missed completed date after restart.</p>
@@ -214,7 +214,7 @@ class AboutPage(QWidget):
           <li>Market close ke baad <b>CAS Analysis</b> me F&amp;O stock ka 3:00-3:15 reference VWAP, final cash close
           aur front-month future close compare kijiye. Broker feed me exchange auction imbalance na milne par
           TPS result ko estimate ke roop me clearly dikhayega.</li>
-          <li><b>Stock Options Watch</b> me maximum 8 active NSE F&amp;O shares rakhiye. Completed 5-minute candle
+          <li>Auto Opportunity Radar ke <b>Pinned F&amp;O Watchlist</b> tab me maximum 8 active NSE F&amp;O shares rakhiye. Completed 5-minute candle
           scan CE/PE side, score, entry timing aur one-lot paper plan ka entry, stop, target aur quantity dikhayega.</li>
           <li><b>Option Strategies</b> me VIX aur market regime ke hisaab se limited-risk structure review kijiye.
           TPS Bull Call Debit Spread, Bear Put Debit Spread ya Defined-Risk Iron Condor suggest kar sakta hai aur
@@ -227,11 +227,11 @@ class AboutPage(QWidget):
         <p><b>Dashboard:</b> aaj ki activity aur journal summary.<br>
         <b>Equity Research:</b> NSE share search, historical analysis aur watchlist.<br>
         <b>Auto Attempt Report:</b> har 5-minute candle par capture, rejection ya skip hone ka permanent record.<br>
-        <b>Checklist:</b> manual discipline aur confirmation checks.<br>
+        <b>Options Session Checklist:</b> Options Workspace ke andar persistent discipline aur scored confirmation checks.<br>
         <b>Reports:</b> journal data se performance summary.<br>
         <b>Backtesting:</b> live use se pehle historical candles par rules test karna.<br>
         <b>Candle Replay:</b> future data dekhe bina candle-by-candle practice.<br>
-        <b>Post-Market Report:</b> saved candle aur option-chain ka raw timeline.<br>
+        <b>Raw Market Timeline:</b> Post Market Analysis of TPS ke andar saved candle aur option-chain evidence.<br>
         <b>Post Market Analysis of TPS:</b> date-wise permanent Roman Hindi journal jisme trade capture/reject
         hone ka reason, monitoring gap aur best near-setup baad me kabhi bhi padha ja sakta hai. TPS is report ko
         3:31 PM ke baad khud generate karta hai; app band ho to agle restart par missed date backfill hoti hai.</p>
@@ -262,9 +262,9 @@ class AboutPage(QWidget):
         <h3>What was built today</h3>
         <ul>{notes}</ul>
         <h3>Roman Hindi summary</h3>
-        <p>Aaj ke development update me CAS Analysis, Stock Options Watch, adaptive market rules,
-        limited-risk Option Strategies, Market Snapshot layout improvements, reliable scrolling,
-        default event status aur visible update history add ki gayi hai.</p>
+        <p>Release 1.4 me overlapping manual aur automatic workspaces ko clear tabs me consolidate kiya gaya hai.
+        Useful specialist tools aur saved reports remove nahi hue; sidebar ab sirf primary trading workflow dikhata hai
+        aur purane Help links matching consolidated tab kholte hain.</p>
         <p>Ye notes sirf completed application changes dikhate hain. Kisi diagnostic suggestion ko
         tab tak completed nahi maana jayega jab tak uska code update aur testing finish na ho.</p>
         """

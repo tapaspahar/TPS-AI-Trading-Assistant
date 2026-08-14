@@ -29,17 +29,14 @@ class Sidebar(QFrame):
         nav = lambda label: QPushButton(f"{self.NAV_BULLET}  {label}")
         self.dashboardButton = nav("Dashboard")
         self.liveMarketButton = nav("Market Snapshot")
-        self.volatilityIntelligenceButton = nav("Volatility Intelligence")
         self.chartCaptureButton = nav("Chart Capture")
         self.optionsButton = nav("Options Workspace")
         self.journalButton = nav("Trade Journal")
-        self.checklistButton = nav("Checklist")
         self.riskButton = nav("Risk Manager")
         self.reportButton = nav("Reports")
         self.settingsButton = nav("Settings")
         self.backtestButton = nav("Backtesting")
         self.replayButton = nav("Candle Replay")
-        self.postMarketButton = nav("Post-Market Report")
         self.postMarketTpsAnalysisButton = nav("Post Market Analysis of TPS")
         self.selfDevelopmentButton = nav("AI Development Center")
         self.equityButton = nav("Equity Research")
@@ -48,14 +45,9 @@ class Sidebar(QFrame):
         self.recoveryCenterButton = nav("Overtrading Protection")
         self.aboutButton = nav("About")
         self.helpButton = nav("Help")
-        self.nextDayBiasButton = nav("Next-Day Bias")
-        self.smartMoneyButton = nav("Smart Money Lab")
-        self.preCandleButton = nav("Pre-Candle Probability")
         self.powerfulEngineButton = nav("Powerful Engine")
         self.casAnalysisButton = nav("CAS Analysis")
-        self.stockOptionsWatchButton = nav("Stock Options Watch")
         self.optionStrategiesButton = nav("Option Strategies")
-        self.putCallRatioButton = nav("Options Intelligence")
         self.gapProbabilityButton = nav("3:20 + 3:40 Gap Probability")
         self.autoOpportunityButton = nav("Auto Opportunity Radar")
         self.trendMemoryButton = nav("Trend Memory Monitor")
@@ -63,14 +55,14 @@ class Sidebar(QFrame):
         # Keep the visual journey in the same order a trader uses the app:
         # market context -> chart confirmation -> option plan -> journal.
         self.buttons = (
-            self.dashboardButton, self.liveMarketButton, self.volatilityIntelligenceButton,
+            self.dashboardButton, self.liveMarketButton,
             self.equityButton, self.chartCaptureButton,
             self.optionsButton, self.autoOpportunityButton, self.autoAttemptReportButton,
             self.notificationCenterButton, self.recoveryCenterButton, self.journalButton,
-            self.checklistButton, self.riskButton, self.reportButton, self.backtestButton, self.replayButton,
-            self.postMarketButton, self.postMarketTpsAnalysisButton, self.selfDevelopmentButton, self.nextDayBiasButton, self.casAnalysisButton, self.stockOptionsWatchButton,
-            self.optionStrategiesButton, self.putCallRatioButton, self.gapProbabilityButton, self.scalperButton, self.trendMemoryButton,
-            self.smartMoneyButton, self.preCandleButton, self.powerfulEngineButton, self.settingsButton, self.aboutButton, self.helpButton,
+            self.riskButton, self.reportButton, self.backtestButton, self.replayButton,
+            self.postMarketTpsAnalysisButton, self.selfDevelopmentButton, self.casAnalysisButton,
+            self.optionStrategiesButton, self.gapProbabilityButton, self.scalperButton, self.trendMemoryButton,
+            self.powerfulEngineButton, self.settingsButton, self.aboutButton, self.helpButton,
         )
         # Stack page numbers intentionally remain stable even when the visual
         # menu order changes.  This prevents the wrong sidebar item being
@@ -81,26 +73,19 @@ class Sidebar(QFrame):
             2: self.optionsButton,
             3: self.chartCaptureButton,
             4: self.journalButton,
-            5: self.checklistButton,
             7: self.riskButton,
             8: self.reportButton,
             9: self.settingsButton,
             10: self.backtestButton,
-            11: self.postMarketButton,
             12: self.replayButton,
             13: self.equityButton,
             14: self.autoAttemptReportButton,
             15: self.aboutButton,
             16: self.helpButton,
-            17: self.nextDayBiasButton,
-            18: self.smartMoneyButton,
             19: self.casAnalysisButton,
-            20: self.stockOptionsWatchButton,
             21: self.optionStrategiesButton,
             22: self.postMarketTpsAnalysisButton,
-            23: self.preCandleButton,
             24: self.powerfulEngineButton,
-            25: self.putCallRatioButton,
             26: self.gapProbabilityButton,
             27: self.autoOpportunityButton,
             28: self.trendMemoryButton,
@@ -108,7 +93,6 @@ class Sidebar(QFrame):
             30: self.notificationCenterButton,
             31: self.selfDevelopmentButton,
             32: self.recoveryCenterButton,
-            33: self.volatilityIntelligenceButton,
         }
         self.menu_group = QButtonGroup(self)
         self.menu_group.setExclusive(True)
