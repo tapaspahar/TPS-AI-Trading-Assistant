@@ -66,6 +66,12 @@ class WorkspaceConsolidationTests(unittest.TestCase):
                 self.screen.show_page(route)
                 self.assertEqual(hub.tabs.currentIndex(), 0)
 
+    def test_header_settings_shortcut_opens_settings_page(self):
+        self.screen.show_page(0)
+        self.screen.header.settingsButton.click()
+        self.assertEqual(self.screen.stack.currentIndex(), 9)
+        self.assertTrue(self.screen.sidebar.settingsButton.isChecked())
+
 
 if __name__ == "__main__":
     unittest.main()

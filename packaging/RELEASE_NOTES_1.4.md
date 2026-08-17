@@ -1,5 +1,7 @@
 # TPS AI Trading Assistant — Release 1.4
 
+- Added a compact Settings gear beside the header clock for direct access from every workspace.
+
 Release date: 14-08-2026
 
 ## Workspace consolidation

@@ -8,9 +8,10 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.4"
-LAST_UPDATED_AT = "14-08-2026 15:54:39 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.4 - 14-08-2026 15:54 IST"
+LAST_UPDATED_AT = "17-08-2026 08:45:34 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.4 - 17-08-2026 08:45 IST"
 RELEASE_NOTES = (
+    "Added a compact gear shortcut beside the live header clock so Settings opens directly while the sidebar selection remains synchronized.",
     "Consolidated eight overlapping standalone workspaces into six primary tabbed hubs while preserving their calculations, saved data and legacy Help routes.",
     "Options Workspace now contains Trade Plan & Auto Paper plus OI / PCR Intelligence tabs; the standalone Checklist route now opens its persistent Session Checklist.",
     "Powerful Engine now groups Combined Signal, Smart Money Evidence and Candle DNA so the combined decision and its specialist evidence can be reviewed together.",

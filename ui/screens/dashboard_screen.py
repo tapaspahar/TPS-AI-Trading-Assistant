@@ -66,6 +66,7 @@ class DashboardScreen(QWidget):
         main_layout.setContentsMargins(14, 12, 14, 10)
         main_layout.setSpacing(10)
         self.header = Header()
+        self.header.settings_requested.connect(lambda: self.show_page(9))
         self.notifier = NotificationService.instance(self)
         self._market_states = {}
         self._trend_memory_alerts = set()

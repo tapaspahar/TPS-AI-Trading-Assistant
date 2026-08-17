@@ -48,6 +48,10 @@ QLabel#status {{
 }}
 QLabel#clock {{ color: {p['clock']}; font-weight: 700; }}
 QLabel#user {{ color: {p['user']}; font-weight: 600; }}
+QPushButton#headerSettingsButton {{
+    min-width: 34px; max-width: 34px; min-height: 34px; max-height: 34px;
+    padding: 0; border-radius: 10px; font-size: 16px; font-weight: 700;
+}}
 QPushButton {{
     background: {p['control']}; color: {p['text']}; border: 1px solid {p['border']};
     border-radius: 11px; padding: 9px 14px; min-height: 18px; font-weight: 600;

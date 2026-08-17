@@ -1,12 +1,14 @@
 from datetime import datetime
 
-from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
+from PySide6.QtCore import QTimer, Signal
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
 from core.market_session import IST, format_remaining, market_session
 
 
 class Header(QFrame):
+    settings_requested = Signal()
+
     def __init__(self):
         super().__init__()
         self.setObjectName("header")
@@ -39,10 +41,21 @@ class Header(QFrame):
 
         self.clock = QLabel()
         self.clock.setObjectName("clock")
+        self.settingsButton = QPushButton("⚙")
+        self.settingsButton.setObjectName("headerSettingsButton")
+        self.settingsButton.setFixedSize(36, 36)
+        self.settingsButton.setToolTip("Open Settings")
+        self.settingsButton.setAccessibleName("Open Settings")
+        self.settingsButton.clicked.connect(self.settings_requested.emit)
         self.user = QLabel("Tapas")
         self.user.setObjectName("user")
+        clock_row = QHBoxLayout()
+        clock_row.setContentsMargins(0, 0, 0, 0)
+        clock_row.setSpacing(8)
+        clock_row.addWidget(self.clock)
+        clock_row.addWidget(self.settingsButton)
         right = QVBoxLayout()
-        right.addWidget(self.clock)
+        right.addLayout(clock_row)
         right.addWidget(self.user)
 
         layout = QHBoxLayout(self)
