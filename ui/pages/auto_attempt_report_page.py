@@ -37,10 +37,10 @@ class AutoAttemptReportPage(QWidget):
 
         self.summary = QLabel()
         layout.addWidget(self.summary)
-        self.table = QTableWidget(0, 9)
+        self.table = QTableWidget(0, 11)
         self.table.setHorizontalHeaderLabels((
-            "Candle time", "Checked at", "Symbol", "Outcome", "Timing stage", "Delay", "Decision",
-            "Confirmations", "Score",
+            "Candle time", "Checked at", "Symbol", "Outcome", "Primary blocker", "Evidence coverage",
+            "Timing stage", "Delay", "Decision", "Confirmations", "Score",
         ))
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -63,14 +63,22 @@ class AutoAttemptReportPage(QWidget):
         trade_date = datetime.now().strftime("%d-%m-%Y") if self.today_only else None
         self.rows = self.db.get_auto_trade_attempts(trade_date)
         self.table.setRowCount(len(self.rows))
-        captured = sum(row["outcome"] == "TRADE CAPTURED" for row in self.rows)
+        captured = sum(row["outcome"] in ("CAPTURED", "TRADE CAPTURED") for row in self.rows)
         early_watches = sum((row["timing_stage"] or "") == "EARLY WATCH" for row in self.rows)
         first_valid = sum((row["timing_stage"] or "") == "FIRST VALID" for row in self.rows)
         measured_delays = [row["timing_delay_seconds"] for row in self.rows if row["timing_delay_seconds"] is not None]
         for index, row in enumerate(self.rows):
             confirmations = "-" if row["confirmations_passed"] is None else f"{row['confirmations_passed']}/{row['confirmations_total']}"
+            try:
+                completeness = json.loads(row["source_completeness_json"] or "{}")
+            except (TypeError, ValueError, json.JSONDecodeError):
+                completeness = {}
+            known = completeness.get("known")
+            total = completeness.get("total")
+            coverage = "-" if known is None or total is None else f"{known}/{total}"
             values = (
                 row["candle_time"] or "Not evaluated", row["checked_at"], row["symbol"], row["outcome"],
+                row["primary_blocker"] or "-", coverage,
                 row["timing_stage"] or "NONE",
                 "-" if row["timing_delay_seconds"] is None else f"{row['timing_delay_seconds']} sec",
                 row["decision"] or row["status_text"], confirmations,

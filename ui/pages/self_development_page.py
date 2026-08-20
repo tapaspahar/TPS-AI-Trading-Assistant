@@ -66,6 +66,9 @@ class SelfDevelopmentPage(QWidget):
         refresh = QPushButton("Refresh Saved Reviews")
         refresh.clicked.connect(self.refresh)
         controls.addWidget(refresh)
+        finalize = QPushButton("Finalize Selected Review")
+        finalize.clicked.connect(self.finalize_selected)
+        controls.addWidget(finalize)
         excel = QPushButton("Export Excel by Date / Period")
         excel.clicked.connect(lambda: open_excel_export(self, self.db, "self_development"))
         controls.addWidget(excel)
@@ -274,7 +277,8 @@ class SelfDevelopmentPage(QWidget):
                 self.table.setItem(row_index, column, item)
         generated = str(row["generated_at"]).replace("T", " ")
         self.status.setText(
-            f"Saved date: {trade_date} | Generated: {generated} | Suggestions: {len(self.suggestions)} | Open: {open_items}"
+            f"Saved date: {trade_date} | {row['review_state']} revision {row['revision']} | "
+            f"Build {row['build_id'] or '-'} | Generated: {generated} | Suggestions: {len(self.suggestions)} | Open: {open_items}"
         )
         self.refresh_validation_evidence(trade_date)
         if self.suggestions:
@@ -354,9 +358,19 @@ class SelfDevelopmentPage(QWidget):
             f"Proposed rule candidates: {review['proposed_candidate_count']}\n"
             f"Additional review-only candidates: {review['additional_candidate_count']}\n"
             f"Hard-blocked candidates remain blocked: {review['hard_blocked_count']}\n\n"
+            f"One-blocker trials: {len(review['one_blocker_trials'])} | Outcomes: {review['outcome_summary']}\n\n"
             "This comparison does not alter production settings. Forward outcomes and false-entry rate "
             "must validate any future threshold change."
         )
+
+    def finalize_selected(self):
+        item = self.date_list.currentItem()
+        if item is None:
+            return
+        trade_date = str(item.data(Qt.UserRole))
+        if self.db.finalize_self_development_review(trade_date):
+            self.status.setText(f"{trade_date} review FINAL mark ho gaya. Source evidence badalne par naya DRAFT revision banega.")
+            self.refresh(auto_generate=False)
 
     def set_selected_status(self, status: str):
         date_item = self.date_list.currentItem()

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from math import ceil
 
+from engine.evidence_model import EvidenceState, evidence_state, unique_messages
+
 from engine.live_setup_capture import ema, supertrend
 from engine.market_structure import analyze_candles
 
@@ -33,10 +35,12 @@ DEFAULT_PE_MIN_RSI = 25.0
 
 
 def _side_condition(name, passed, detail, applicable=True):
-    """Build one candle-local checklist result; non-applicable is never a pass."""
+    """Build one candle-local checklist result; unavailable evidence is UNKNOWN."""
     return {
         "name": name, "passed": bool(passed) if applicable else False,
-        "applicable": bool(applicable), "status": "PASS" if applicable and passed else "FAIL" if applicable else "N/A",
+        "applicable": bool(applicable),
+        "evidence_state": EvidenceState.TRUE.value if applicable and passed else EvidenceState.FALSE.value if applicable else EvidenceState.UNKNOWN.value,
+        "status": "PASS" if applicable and passed else "FAIL" if applicable else "UNKNOWN",
         "detail": detail,
     }
 
@@ -112,7 +116,9 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
         f"risk multiplier {environment.get('risk_multiplier', 1)}"
     )
     volume_threshold = float(environment.get("volume_threshold", 1.5))
-    strong_quality = volume_ratio >= volume_threshold and not capture.get("fake_breakout_risk", True)
+    fake_breakout_state = evidence_state(capture.get("fake_breakout_risk"))
+    fake_breakout_clear = fake_breakout_state is EvidenceState.FALSE
+    strong_quality = volume_ratio >= volume_threshold and fake_breakout_clear
     ce_recent_impulse = _recent_impulse_volume(candles, volume_ema, volume_threshold, "CE")
     pe_recent_impulse = _recent_impulse_volume(candles, volume_ema, volume_threshold, "PE")
     # SENSEX (and occasionally another thin current-month future) can return
@@ -131,10 +137,10 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
             or pe_recent_impulse
         )
     )
-    ce_volume_ok = not capture.get("fake_breakout_risk", True) and (
+    ce_volume_ok = fake_breakout_clear and (
         (strong_quality and candle_direction == "BULLISH") or (recent_bullish_touch and ce_recent_impulse)
     )
-    pe_volume_ok = not capture.get("fake_breakout_risk", True) and (
+    pe_volume_ok = fake_breakout_clear and (
         (strong_quality and candle_direction == "BEARISH") or (recent_bearish_touch and pe_recent_impulse)
     )
     ce_volume_detail = (
@@ -151,7 +157,7 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
     common = {
         "CE": [
             _side_condition("Market structure", structure_state.startswith("Bullish"), structure_state),
-            _side_condition("Price vs VWAP", vwap is not None and close > vwap, f"Close {close:.2f} > VWAP {vwap:.2f}" if vwap is not None else "VWAP unavailable"),
+            _side_condition("Price vs VWAP", vwap is not None and close > vwap, f"Close {close:.2f} > VWAP {vwap:.2f}" if vwap is not None else "VWAP unavailable", vwap is not None),
             _side_condition("EMA 5/20/50 alignment", ema_5 > ema_20 > ema_50, f"EMA5 {ema_5:.2f} > EMA20 {ema_20:.2f} > EMA50 {ema_50:.2f}"),
             _side_condition("SuperTrend confirmation", close > trend_line, f"Close {close:.2f} > SuperTrend {trend_line:.2f}"),
             _side_condition("Pullback and reversal", recent_bullish_touch and close > opening, f"EMA/VWAP touch within {tolerance:.2f}; candle {candle_direction}"),
@@ -161,7 +167,7 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
         ],
         "PE": [
             _side_condition("Market structure", structure_state.startswith("Bearish"), structure_state),
-            _side_condition("Price vs VWAP", vwap is not None and close < vwap, f"Close {close:.2f} < VWAP {vwap:.2f}" if vwap is not None else "VWAP unavailable"),
+            _side_condition("Price vs VWAP", vwap is not None and close < vwap, f"Close {close:.2f} < VWAP {vwap:.2f}" if vwap is not None else "VWAP unavailable", vwap is not None),
             _side_condition("EMA 5/20/50 alignment", ema_5 < ema_20 < ema_50, f"EMA5 {ema_5:.2f} < EMA20 {ema_20:.2f} < EMA50 {ema_50:.2f}"),
             _side_condition("SuperTrend confirmation", close < trend_line, f"Close {close:.2f} < SuperTrend {trend_line:.2f}"),
             _side_condition("Pullback and reversal", recent_bearish_touch and close < opening, f"EMA/VWAP touch within {tolerance:.2f}; candle {candle_direction}"),
@@ -206,8 +212,12 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
         quality_warnings = []
         if not applicable_count:
             blockers.append("No selected checklist condition is applicable to the current candle")
-        if capture.get("fake_breakout_risk", True):
+        unknown_selected = [item for item in common[side] if item["name"] in enabled and not item.get("applicable", True)]
+        data_gaps = [f"{item['name']} evidence unavailable: {item['detail']}" for item in unknown_selected]
+        if fake_breakout_state is EvidenceState.TRUE:
             blockers.append("Rejection-wick / fake-breakout risk is active")
+        elif fake_breakout_state is EvidenceState.UNKNOWN:
+            data_gaps.append("Fake-breakout evidence unavailable")
         if side == "CE":
             trigger_ok = recent_bullish_touch and close > opening and candle_direction == "BULLISH"
             timing_reference = max(level for level in (ema_20, vwap) if level is not None)
@@ -260,13 +270,19 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
                 quality_warnings.append("No fresh bearish EMA/VWAP pullback-and-reversal trigger; checklist/score must qualify without it")
         checklist_matched = applicable_count > 0 and passed >= required
         score_matched = score >= minimum_score
-        ready = checklist_matched and score_matched and not blockers
+        blockers = unique_messages(blockers)
+        quality_warnings = unique_messages(quality_warnings)
+        ready = checklist_matched and score_matched and not blockers and not data_gaps
         side_results[side] = {
             "candidate": side, "confirmations": common[side], "selected_confirmations": selected,
             "not_applicable_confirmations": [item for item in common[side] if item["name"] in enabled and not item.get("applicable", True)],
             "passed": passed, "total": len(selected), "required": required, "score": score,
             "checklist_matched": checklist_matched, "score_matched": score_matched,
             "hard_blockers": blockers, "quality_warnings": quality_warnings, "trade_ready": ready,
+            "data_gaps": data_gaps,
+            "evidence_states": {item["name"]: item["evidence_state"] for item in common[side] if item["name"] in enabled},
+            "primary_blocker": blockers[0] if blockers else data_gaps[0] if data_gaps else None,
+            "secondary_warnings": unique_messages(blockers[1:] + data_gaps[1:] + quality_warnings),
             "required_reason": required_reason,
             "entry_quality": {
                 "reference": timing_reference, "extension_points": round(extension_points, 2),
@@ -280,7 +296,7 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
                     rsi is None or (rsi < ce_max_rsi if side == "CE" else rsi > pe_min_rsi)
                 ) and trigger_ok,
             },
-            "state": "EXECUTE" if ready else "REJECTED" if blockers else "WATCH",
+            "state": "EXECUTE" if ready else "DATA GAP" if data_gaps else "REJECTED" if blockers else "WATCH",
         }
 
     ce, pe = side_results["CE"], side_results["PE"]
@@ -305,6 +321,10 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
         "decision": f"TPS V3 {selected['candidate']} PAPER ENTRY CONFIRMED" if selected["trade_ready"] else f"{selected['candidate']} {selected['state']}",
         "blockers": selected["hard_blockers"], "hard_blockers": selected["hard_blockers"],
         "quality_warnings": selected.get("quality_warnings", []),
+        "data_gaps": selected.get("data_gaps", []),
+        "primary_blocker": selected.get("primary_blocker"),
+        "secondary_warnings": selected.get("secondary_warnings", []),
+        "evidence_states": {**selected.get("evidence_states", {}), "Fake-breakout risk": fake_breakout_state.value},
         "pcr_oi": pcr_oi, "pcr_volume": pcr_volume, "structure_state": structure_state,
         "market_environment": environment,
         "zones": {"chart_support": chart_support, "chart_resistance": chart_resistance,

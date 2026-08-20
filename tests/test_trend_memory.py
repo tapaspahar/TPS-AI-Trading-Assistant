@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
@@ -32,8 +33,9 @@ class TrendMemoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             db = Database(Path(folder) / "memory.db")
             try:
-                for i in range(4):
-                    db.save_market_snapshot(candle(f"2026-08-12T09:{15 + i * 5:02d}:00", 24500 + i * 10))
+                for i in range(24):
+                    hour, minute = divmod(9 * 60 + 15 + i * 5, 60)
+                    db.save_market_snapshot(candle(f"2026-08-12T{hour:02d}:{minute:02d}:00", 24500 + i * 10))
                 updated = ensure_completed_trend_memories(db, datetime(2026, 8, 13, 9, 0))
                 self.assertEqual(len(updated), 1)
                 self.assertEqual(len(db.get_daily_trend_memories("NIFTY")), 1)

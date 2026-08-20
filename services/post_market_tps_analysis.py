@@ -73,9 +73,9 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
     trades = database.get_trades_for_date(trade_date)
     snapshots = database.get_market_snapshots(trade_date)
 
-    evaluated = [row for row in attempts if row["outcome"] in ("NO TRADE", "TRADE CAPTURED")]
-    captured = [row for row in attempts if row["outcome"] == "TRADE CAPTURED"]
-    retry_rows = [row for row in attempts if row["outcome"] in ("RETRY PENDING", "SKIPPED")]
+    evaluated = [row for row in attempts if row["outcome"] in ("STRATEGY REJECT", "SAFETY BLOCK", "CANDIDATE", "CAPTURED", "NO TRADE", "TRADE CAPTURED")]
+    captured = [row for row in attempts if row["outcome"] in ("CAPTURED", "TRADE CAPTURED")]
+    retry_rows = [row for row in attempts if row["outcome"] in ("DATA GAP", "RETRY PENDING", "SKIPPED")]
     candidate_counts = Counter(str(row["candidate"] or "MIXED") for row in evaluated)
     failed_conditions: Counter[str] = Counter()
     hard_blockers: Counter[str] = Counter()
@@ -132,7 +132,7 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
         passed_names = [str(value.get("name") or "condition") for value in selected if value.get("passed")]
         failed_names = [str(value.get("name") or "condition") for value in selected if not value.get("passed")]
         normalized_blockers = sorted({_normalise_blocker(str(value)) for value in blockers})
-        if row["outcome"] == "TRADE CAPTURED":
+        if row["outcome"] in ("CAPTURED", "TRADE CAPTURED"):
             why = "trade liya kyunki " + (", ".join(passed_names) or "strategy aur safety gates pass hue")
         else:
             reasons = failed_names + normalized_blockers

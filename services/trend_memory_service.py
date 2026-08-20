@@ -8,6 +8,9 @@ from datetime import datetime, time
 from core.database_manager import Database
 from engine.trend_memory_engine import build_daily_fingerprint, find_best_analogs
 
+MIN_COMPLETED_SESSION_SNAPSHOTS = 24
+MIN_LIVE_ANALOG_SNAPSHOTS = 12
+
 
 def _date(value: str):
     for fmt in ("%d-%m-%Y", "%Y-%m-%d"):
@@ -36,7 +39,7 @@ def ensure_completed_trend_memories(database: Database, now: datetime | None = N
         trade_date, symbol = str(source["trade_date"]), str(source["symbol"])
         day = _date(trade_date)
         completed = day < current.date() or (day == current.date() and current.time() >= time(15, 31))
-        if not completed or int(source["snapshot_count"] or 0) < 3:
+        if not completed or int(source["snapshot_count"] or 0) < MIN_COMPLETED_SESSION_SNAPSHOTS:
             continue
         key = (trade_date, symbol)
         if existing.get(key) == int(source["snapshot_count"]):
@@ -49,7 +52,7 @@ def ensure_completed_trend_memories(database: Database, now: datetime | None = N
     return updated
 
 
-def get_live_trend_analogs(database: Database, now: datetime | None = None, minimum_snapshots: int = 6) -> list[dict]:
+def get_live_trend_analogs(database: Database, now: datetime | None = None, minimum_snapshots: int = MIN_LIVE_ANALOG_SNAPSHOTS) -> list[dict]:
     """Compare today's developing fingerprint with completed historical days."""
     current = now or datetime.now()
     dates = {current.strftime("%d-%m-%Y"), current.strftime("%Y-%m-%d")}
@@ -64,7 +67,8 @@ def get_live_trend_analogs(database: Database, now: datetime | None = None, mini
             fingerprint = build_daily_fingerprint(rows, symbol, trade_date)
             matches = find_best_analogs(fingerprint, historical, limit=3)
             if matches:
-                results.append({"current": fingerprint, "matches": matches})
+                results.append({"current": fingerprint, "matches": matches, "context_only": True,
+                                "permission_effect": "NONE — analog similarity never permits or blocks an entry"})
     return results
 
 

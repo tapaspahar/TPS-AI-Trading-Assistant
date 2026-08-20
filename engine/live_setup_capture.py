@@ -99,12 +99,12 @@ def analyse_volume_candle(candles, period=20, heavy_ratio=1.5):
     reliable buying/selling confirmation.
     """
     if len(candles) < period:
-        return {"volume_ratio": None, "volume_signal": "Volume history unavailable", "candle_direction": "NEUTRAL", "fake_breakout_risk": True}
+        return {"volume_ratio": None, "volume_signal": "Volume history unavailable", "candle_direction": "NEUTRAL", "fake_breakout_risk": None}
     latest = candles[-1]
     volume = float(latest.get("volume", 0) or 0)
     volume_ema = ema([float(candle.get("volume", 0) or 0) for candle in candles[-period:]], period)
     if volume_ema <= 0:
-        return {"volume_ratio": None, "volume_signal": "Traded volume unavailable", "candle_direction": "NEUTRAL", "fake_breakout_risk": True}
+        return {"volume_ratio": None, "volume_signal": "Traded volume unavailable", "candle_direction": "NEUTRAL", "fake_breakout_risk": None}
     high, low = float(latest["high"]), float(latest["low"])
     opening, close = float(latest["open"]), float(latest["close"])
     candle_range = max(high - low, 0.000001)
@@ -176,7 +176,9 @@ def build_live_capture(symbol, timeframe, candles, analysis_source="Angel One ca
         "candle_direction": volume_analysis.get("candle_direction", "NEUTRAL"),
         "candle_body_ratio": number(volume_analysis.get("candle_body_ratio")),
         "candle_close_position": number(volume_analysis.get("candle_close_position")),
-        "fake_breakout_risk": bool(volume_analysis.get("fake_breakout_risk", True)),
+        # Preserve UNKNOWN.  bool(None) previously turned missing provider
+        # evidence into an observed fake breakout and rejected valid analysis.
+        "fake_breakout_risk": volume_analysis.get("fake_breakout_risk"),
         "previous_day_high": number(levels.get("previous_day_high")),
         "previous_day_low": number(levels.get("previous_day_low")),
         "opening_range_high": number(levels.get("opening_range_high")),

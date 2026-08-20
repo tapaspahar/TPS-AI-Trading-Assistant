@@ -12,6 +12,8 @@ from collections import Counter
 from datetime import datetime
 
 from core.database_manager import Database
+from release_info import VERSION
+from services.development_lifecycle import BUILD_ID, sync_feature_lifecycle
 
 
 def _json(value: str | None, fallback):
@@ -62,25 +64,13 @@ def build_self_development_review(database: Database, trade_date: str, now: date
     stop_hits = sum("STOP" in str(row["outcome"]).upper() for row in trades)
     suggestions: list[dict] = []
 
-    implementation = {
-        "evaluation_pipeline": "IMPLEMENTED — LIVE COVERAGE PROOF PENDING",
-        "coverage_gap": "IMPLEMENTED — 3-SESSION PROOF PENDING",
-        "broker_reliability": "IMPLEMENTED — LIVE TELEMETRY ACCUMULATING",
-        "zero_capture_calibration": "IMPLEMENTED — OUTCOME APPROVAL PENDING",
-        "entry_timing": "IMPLEMENTED — NO-LOOK-AHEAD VALIDATION PENDING",
-        "volume_evidence": "IMPLEMENTED — WALK-FORWARD EVIDENCE PENDING",
-        "level_context": "IMPLEMENTED — REPLAY EVIDENCE PENDING",
-        "outcome_quality": "IMPLEMENTED — 30-SAMPLE APPROVAL PENDING",
-        "sample_size": "TRACKING ACTIVE — EVIDENCE PENDING",
-        "overtrading_guard": "IMPLEMENTED — MONITORING ACTIVE",
-        "healthy_monitor": "MONITORING ACTIVE",
-    }
+    lifecycle = sync_feature_lifecycle(database)
 
     def add(key: str, priority: str, area: str, observation: str, evidence: str, suggestion: str, validation: str):
         suggestions.append({
             "key": key, "priority": priority, "area": area, "observation": observation,
             "evidence": evidence, "suggestion": suggestion, "validation": validation, "status": "OPEN",
-            "implementation_status": implementation.get(key, "PLANNED"),
+            "implementation_status": str(lifecycle[key]["lifecycle_state"]) if key in lifecycle else "SUGGESTED",
         })
 
     if attempts == 0 or evaluated == 0:
@@ -219,6 +209,8 @@ def build_self_development_review(database: Database, trade_date: str, now: date
         "verdict": verdict,
         "summary_text": "\n".join(lines),
         "suggestions": suggestions,
+        "feature_version": VERSION,
+        "build_id": BUILD_ID,
     }
 
 

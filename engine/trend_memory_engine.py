@@ -87,6 +87,7 @@ def build_daily_fingerprint(rows: list[dict], symbol: str, trade_date: str) -> d
         "atr_pct": round((_number(latest.get("atr_14")) / close * 100.0) if close else 0.0, 4),
         "oi_pcr": round(_number(latest.get("oi_pcr"), 1.0), 4),
         "volume_pcr": round(_number(latest.get("volume_pcr"), 1.0), 4),
+        "snapshot_quality": round(min(1.0, len(candles) / 72.0), 4),
     }
     return {
         "trade_date": trade_date, "symbol": symbol.upper(), "trend": trend, "chart_pattern": pattern,
@@ -121,6 +122,13 @@ def find_best_analogs(current: dict, historical: list[dict], limit: int = 5) -> 
         if record.get("symbol") != current.get("symbol") or record.get("trade_date") == current.get("trade_date"):
             continue
         item = dict(record)
-        item["similarity"] = similarity_score(current, item)
+        raw_similarity = similarity_score(current, item)
+        item["quality_weight"] = min(
+            _number(current.get("features", current).get("snapshot_quality")),
+            _number(item.get("features", item).get("snapshot_quality")),
+        )
+        item["raw_similarity"] = raw_similarity
+        item["similarity"] = round(raw_similarity * max(0.35, item["quality_weight"]), 1)
+        item["context_only"] = True
         matches.append(item)
     return sorted(matches, key=lambda item: item["similarity"], reverse=True)[:limit]

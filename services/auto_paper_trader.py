@@ -14,12 +14,14 @@ from engine.option_chain_engine import analyze_option_chain
 from engine.trade_plan_engine import create_review_plan
 from engine.tps_entry_confirmation import evaluate_tps_entry_v2
 from engine.regular_scalp_validation import evaluate_regular_scalp_validation
+from engine.evidence_model import classify_attempt, unique_messages
 from services.option_contract_service import UNDERLYING_QUOTES, OptionContractService, contracts_near_spot
 from services.economic_calendar_service import EconomicCalendarService
 from services.provider_telemetry import record_request, start_request
 
 
-def _attempt(status, checked_at, *, capture=None, chart=None, candidate=None, future=None, blockers=None, chain=None, timing=None):
+def _attempt(status, checked_at, *, capture=None, chart=None, candidate=None, future=None, blockers=None, chain=None, timing=None,
+             outcome=None, data_gaps=None, safety_blockers=None, warnings=None):
     """Return a transparent audit record for every automatic decision."""
     return {
         "status": status,
@@ -32,8 +34,16 @@ def _attempt(status, checked_at, *, capture=None, chart=None, candidate=None, fu
             "chart": chart or {},
             "chain": chain or {},
             "timing": timing or {},
-            "blockers": list(blockers or []),
+            "blockers": unique_messages(blockers),
+            "data_gaps": unique_messages(data_gaps),
+            "safety_blockers": unique_messages(safety_blockers),
+            "warnings": unique_messages(warnings),
+            "primary_blocker": (unique_messages(safety_blockers) + unique_messages(data_gaps) + unique_messages(blockers) or [None])[0],
+            "secondary_warnings": unique_messages(
+                (unique_messages(safety_blockers) + unique_messages(data_gaps) + unique_messages(blockers))[1:] + unique_messages(warnings)
+            ),
         },
+        "attempt_outcome": outcome,
     }
 
 
@@ -122,7 +132,7 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             volume=float(capture["volume"]) if capture["volume"] else None, volume_ema=float(capture["volume_ema"]) if capture["volume_ema"] else None,
             rsi_14=float(capture["rsi_14"]) if capture["rsi_14"] else None, atr_14=float(capture["atr_14"]) if capture["atr_14"] else None,
             volume_ratio=float(capture["volume_ratio"]) if capture["volume_ratio"] else None, candle_direction=capture.get("candle_direction"),
-            fake_breakout_risk=bool(capture.get("fake_breakout_risk", True)),
+            fake_breakout_risk=bool(capture.get("fake_breakout_risk")) if capture.get("fake_breakout_risk") is not None else False,
         )
         legacy_candidate = "CE" if snapshot.price > snapshot.supertrend else "PE"
         legacy_chart = DecisionEngine().evaluate(snapshot, legacy_candidate, "Calm")
@@ -130,7 +140,10 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
         spot = float(client.get_option_quote(spot_config["exchange"], spot_config["token"]).get("ltp", 0) or 0)
         if spot <= 0:
             reason = "Usable underlying spot quote is unavailable"
-            result = _attempt(f"No paper trade: {reason.lower()}.", checked_at, capture=capture, chart=legacy_chart, candidate=None, future=future, blockers=[reason])
+            result = _attempt(
+                f"No paper trade: {reason.lower()}.", checked_at, capture=capture, chart=legacy_chart,
+                candidate=None, future=future, outcome="DATA GAP", data_gaps=[reason],
+            )
             return _record(database, symbol, result)
         contracts = contracts_near_spot(service.get_contracts(symbol), spot, wings=5)
         expiry = min(contract["expiry"] for contract in contracts)
@@ -180,6 +193,9 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             "provider": provider,
             "final_confidence": max(0, round(strategy["score"] * float(environment.get("risk_multiplier", 1)))),
         }
+        chart["data_gaps"] = unique_messages(strategy.get("data_gaps"))
+        chart["primary_blocker"] = strategy.get("primary_blocker")
+        chart["secondary_warnings"] = unique_messages(strategy.get("secondary_warnings"))
         # This is deliberately an audit-only companion to strict TPS.  A READY
         # scalp verdict cannot enter the capture path below unless the normal
         # TPS strategy itself is also trade-ready.
@@ -212,15 +228,23 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
                 "No new paper trade: TPS v2 candle evaluation completed but an operational safety limit blocked capture.",
                 checked_at, capture=capture, chart=chart, candidate=candidate, future=future,
                 blockers=chart["warnings"], chain=chain, timing=timing,
+                outcome="SAFETY BLOCK", safety_blockers=operational_blockers,
+                data_gaps=strategy.get("data_gaps"), warnings=strategy.get("quality_warnings"),
             )
             return _record(database, symbol, result)
         if not strategy["trade_ready"]:
+            data_gaps = unique_messages(strategy.get("data_gaps"))
             result = _attempt(
                 f"No paper trade: {candidate} checklist {strategy['passed']}/{strategy.get('total', 7)} "
                 f"(required {strategy.get('required', settings.get('tps_required_matches', 5))}) and score {strategy['score']}/100 "
                 f"(required {strategy.get('minimum_score', settings.get('trade_plan_min_score', 95))}).",
                 checked_at, capture=capture, chart=chart, candidate=candidate, future=future,
-                blockers=chart["warnings"], chain=chain, timing=timing,
+                blockers=strategy.get("hard_blockers"), chain=chain, timing=timing,
+                outcome=classify_attempt(
+                    candidate=bool(candidate and not strategy.get("hard_blockers") and not data_gaps),
+                    data_gaps=data_gaps,
+                ),
+                data_gaps=data_gaps, warnings=strategy.get("quality_warnings"),
             )
             return _record(database, symbol, result)
         plan = create_review_plan(
@@ -259,7 +283,8 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             result = _attempt(
                 "No new paper trade: evidence passed, but operational hard-risk validation blocked execution.",
                 checked_at, capture=capture, chart=chart, candidate=candidate, future=future,
-                blockers=safety["blockers"] + safety["warnings"], chain=chain, timing=timing,
+                blockers=safety["blockers"], chain=chain, timing=timing,
+                outcome="SAFETY BLOCK", safety_blockers=safety["blockers"], warnings=safety["warnings"],
             )
             result["proposed_plan"] = plan
             return _record(database, symbol, result)
@@ -282,6 +307,7 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
                 "No new paper trade: candle/scenario changed before final capture; checklist will be recalculated.",
                 datetime.now(), capture=capture, chart=chart, candidate=candidate, future=future,
                 blockers=[reason], chain=chain, timing=timing,
+                outcome="SAFETY BLOCK", safety_blockers=[reason],
             )
             result["proposed_plan"] = plan
             return _record(database, symbol, result)
@@ -296,7 +322,7 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
         plan["signal_timing"] = dict(timing)
         trade_id = database.save_paper_trade(plan)
         chart["signal_timing"] = timing
-        result = _attempt("Paper trade captured", checked_at, capture=capture, chart=chart, candidate=candidate, future=future, chain=chain, timing=timing)
+        result = _attempt("Paper trade captured", checked_at, capture=capture, chart=chart, candidate=candidate, future=future, chain=chain, timing=timing, outcome="CAPTURED")
         result.update({"trade_id": trade_id, "plan": plan, "capture": capture})
         return _record(database, symbol, result)
     finally:

@@ -1,16 +1,25 @@
 """Application release metadata kept in one place."""
 
 APP_NAME = "TPS AI Trading Assistant"
-VERSION = "1.4"
-DISPLAY_VERSION = "Release 1.4"
-RELEASE_DATE = "14-08-2026"
+VERSION = "1.4.1"
+DISPLAY_VERSION = "Release 1.4.1"
+RELEASE_DATE = "20-08-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
-SOFTWARE_UPDATE_VERSION = "v1.4"
-LAST_UPDATED_AT = "17-08-2026 08:45:34 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.4 - 17-08-2026 08:45 IST"
+SOFTWARE_UPDATE_VERSION = "v1.4.1"
+LAST_UPDATED_AT = "20-08-2026 11:00:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.4.1 - 20-08-2026 11:00 IST"
 RELEASE_NOTES = (
+    "Added Release 1.4.1 evidence integrity: every strategy fact is TRUE, FALSE or UNKNOWN, and UNKNOWN is reported as a DATA GAP instead of silently becoming a pass or rejection.",
+    "Standardized Auto Attempt outcomes as DATA GAP, SAFETY BLOCK, STRATEGY REJECT, CANDIDATE and CAPTURED with primary blocker, deduplicated secondary warnings and source-completeness evidence.",
+    "Upgraded counterfactual validation to relax exactly one strategy blocker at a time while retaining every news, broker, stale-data, daily-loss, cooldown and recovery safety lock.",
+    "Counterfactual replay now measures MFE, MAE, target-before-stop, stop-before-target, false-entry outcome and maximum drawdown from later saved candles without look-ahead.",
+    "Replaced hard-coded AI Development implementation labels with persisted feature version, build ID and evidence-backed Suggested/Implemented/Replay/Paper Forward/Approved lifecycle states.",
+    "Added DRAFT/FINAL AI reviews, revision history, source fingerprinting and automatic new DRAFT revisions when post-market evidence changes.",
+    "Added explicit evaluation coverage numerator/denominator and COMPLETE/PARTIAL/NO EVIDENCE watermark.",
+    "Strengthened Trend Memory with minimum completed-session coverage, snapshot-quality-weighted similarity and a permanent context-only rule that cannot permit or block a trade.",
+    "Preserved no-look-ahead signal discovery, first-valid-trigger, final-capture and timing-delay evidence for late-entry and MFE studies.",
     "Added a compact gear shortcut beside the live header clock so Settings opens directly while the sidebar selection remains synchronized.",
     "Consolidated eight overlapping standalone workspaces into six primary tabbed hubs while preserving their calculations, saved data and legacy Help routes.",
     "Options Workspace now contains Trade Plan & Auto Paper plus OI / PCR Intelligence tabs; the standalone Checklist route now opens its persistent Session Checklist.",

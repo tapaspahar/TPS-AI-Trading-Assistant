@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 import csv
+import hashlib
 import json
 import os
 import shutil
@@ -223,6 +224,10 @@ class Database:
             "level_age_seconds": "INTEGER",
             "provider": "TEXT",
             "provider_data_age_seconds": "INTEGER",
+            "primary_blocker": "TEXT",
+            "secondary_warnings_json": "TEXT NOT NULL DEFAULT '[]'",
+            "evidence_states_json": "TEXT NOT NULL DEFAULT '{}'",
+            "source_completeness_json": "TEXT NOT NULL DEFAULT '{}'",
         }.items():
             if column not in attempt_columns:
                 self.cursor.execute(f"ALTER TABLE auto_trade_attempts ADD COLUMN {column} {definition}")
@@ -358,6 +363,49 @@ class Database:
             )
             """
         )
+        review_columns = {
+            row["name"] for row in self.cursor.execute("PRAGMA table_info(self_development_reviews)")
+        }
+        for column, definition in {
+            "review_state": "TEXT NOT NULL DEFAULT 'DRAFT'",
+            "revision": "INTEGER NOT NULL DEFAULT 1",
+            "feature_version": "TEXT",
+            "build_id": "TEXT",
+            "source_fingerprint": "TEXT",
+            "finalized_at": "TEXT",
+        }.items():
+            if column not in review_columns:
+                self.cursor.execute(f"ALTER TABLE self_development_reviews ADD COLUMN {column} {definition}")
+        self.cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS self_development_review_revisions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                review_id INTEGER NOT NULL,
+                trade_date TEXT NOT NULL,
+                revision INTEGER NOT NULL,
+                saved_at TEXT NOT NULL,
+                review_state TEXT NOT NULL,
+                source_fingerprint TEXT,
+                snapshot_json TEXT NOT NULL,
+                UNIQUE(review_id, revision)
+            )
+            """
+        )
+        self.cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS development_feature_evidence (
+                feature_key TEXT PRIMARY KEY,
+                feature_version TEXT NOT NULL,
+                build_id TEXT NOT NULL,
+                lifecycle_state TEXT NOT NULL,
+                replay_passed_at TEXT,
+                paper_forward_passed_at TEXT,
+                approved_at TEXT,
+                evidence_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
         self.cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS evaluation_slots (
@@ -414,6 +462,14 @@ class Database:
             )
             """
         )
+        self.cursor.execute(
+            """UPDATE auto_trade_attempts SET outcome = CASE outcome
+                   WHEN 'TRADE CAPTURED' THEN 'CAPTURED'
+                   WHEN 'NO TRADE' THEN 'STRATEGY REJECT'
+                   WHEN 'RETRY PENDING' THEN 'DATA GAP'
+                   WHEN 'SKIPPED' THEN 'DATA GAP'
+                   ELSE outcome END"""
+        )
         self.connection.commit()
 
     def save_self_development_review(self, review: dict) -> int:
@@ -433,28 +489,90 @@ class Database:
             value = dict(item)
             value["status"] = previous_states.get(str(value.get("key")), str(value.get("status") or "OPEN"))
             suggestions.append(value)
+        # The post-market report generation timestamp is the immutable source
+        # revision. Human review statuses and lifecycle labels must never create
+        # a false market-evidence revision on refresh.
+        source_fingerprint = str(review.get("source_fingerprint") or hashlib.sha256(
+            str(review.get("source_generated_at")).encode("utf-8")
+        ).hexdigest())
+        source_changed = existing is None or str(existing["source_fingerprint"] or "") != source_fingerprint
+        next_revision = (int(existing["revision"] or 1) + 1) if existing and source_changed else (int(existing["revision"] or 1) if existing else 1)
+        review_state = "DRAFT" if source_changed else str(existing["review_state"] or "DRAFT")
         self.cursor.execute(
             """
             INSERT INTO self_development_reviews
-                (trade_date, generated_at, source_generated_at, health_score, verdict, summary_text, suggestions_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (trade_date, generated_at, source_generated_at, health_score, verdict, summary_text,
+                 suggestions_json, review_state, revision, feature_version, build_id, source_fingerprint, finalized_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(trade_date) DO UPDATE SET
                 generated_at=excluded.generated_at,
                 source_generated_at=excluded.source_generated_at,
                 health_score=excluded.health_score,
                 verdict=excluded.verdict,
                 summary_text=excluded.summary_text,
-                suggestions_json=excluded.suggestions_json
+                suggestions_json=excluded.suggestions_json,
+                review_state=excluded.review_state,
+                revision=excluded.revision,
+                feature_version=excluded.feature_version,
+                build_id=excluded.build_id,
+                source_fingerprint=excluded.source_fingerprint,
+                finalized_at=CASE WHEN excluded.review_state = 'FINAL' THEN self_development_reviews.finalized_at ELSE NULL END
             """,
             (
                 review["trade_date"], review["generated_at"], review["source_generated_at"],
                 int(review["health_score"]), review["verdict"], review["summary_text"],
                 json.dumps(suggestions, ensure_ascii=False, default=str),
+                review_state, next_revision, review.get("feature_version"), review.get("build_id"),
+                source_fingerprint, existing["finalized_at"] if existing and review_state == "FINAL" else None,
             ),
         )
-        self.connection.commit()
         row = self.get_self_development_review(str(review["trade_date"]))
+        snapshot = dict(review)
+        snapshot.update({"suggestions": suggestions, "review_state": review_state, "revision": next_revision})
+        self.cursor.execute(
+            """INSERT OR REPLACE INTO self_development_review_revisions
+               (review_id, trade_date, revision, saved_at, review_state, source_fingerprint, snapshot_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (int(row["id"]), review["trade_date"], next_revision, datetime.now().astimezone().isoformat(timespec="seconds"),
+             review_state, source_fingerprint, json.dumps(snapshot, ensure_ascii=False, default=str)),
+        )
+        self.connection.commit()
         return int(row["id"])
+
+    def finalize_self_development_review(self, trade_date: str) -> bool:
+        finalized_at = datetime.now().astimezone().isoformat(timespec="seconds")
+        result = self.cursor.execute(
+            "UPDATE self_development_reviews SET review_state = 'FINAL', finalized_at = ? WHERE trade_date = ?",
+            (finalized_at, trade_date),
+        )
+        self.connection.commit()
+        return result.rowcount == 1
+
+    def get_self_development_review_revisions(self, trade_date: str) -> list[sqlite3.Row]:
+        return self.cursor.execute(
+            "SELECT * FROM self_development_review_revisions WHERE trade_date = ? ORDER BY revision DESC", (trade_date,)
+        ).fetchall()
+
+    def save_development_feature_evidence(self, feature: dict) -> None:
+        now = datetime.now().astimezone().isoformat(timespec="seconds")
+        self.cursor.execute(
+            """INSERT INTO development_feature_evidence
+               (feature_key, feature_version, build_id, lifecycle_state, replay_passed_at,
+                paper_forward_passed_at, approved_at, evidence_json, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(feature_key) DO UPDATE SET
+                 feature_version=excluded.feature_version, build_id=excluded.build_id,
+                 lifecycle_state=excluded.lifecycle_state, replay_passed_at=excluded.replay_passed_at,
+                 paper_forward_passed_at=excluded.paper_forward_passed_at, approved_at=excluded.approved_at,
+                 evidence_json=excluded.evidence_json, updated_at=excluded.updated_at""",
+            (feature["feature_key"], feature["feature_version"], feature["build_id"], feature["lifecycle_state"],
+             feature.get("replay_passed_at"), feature.get("paper_forward_passed_at"), feature.get("approved_at"),
+             json.dumps(feature.get("evidence") or {}, ensure_ascii=False, default=str), now),
+        )
+        self.connection.commit()
+
+    def get_development_feature_evidence(self) -> dict[str, sqlite3.Row]:
+        return {str(row["feature_key"]): row for row in self.cursor.execute("SELECT * FROM development_feature_evidence").fetchall()}
 
     def get_self_development_review(self, trade_date: str) -> sqlite3.Row | None:
         return self.cursor.execute(
@@ -1375,7 +1493,17 @@ class Database:
         environment = chart.get("market_environment") or {}
         checked_at = str(attempt.get("checked_at") or datetime.now().isoformat(timespec="seconds"))
         candle_time = attempt.get("candle_time")
-        outcome = "TRADE CAPTURED" if result.get("plan") else "NO TRADE" if chart else "RETRY PENDING" if result.get("retry_pending") else "SKIPPED"
+        data_gaps = list(attempt.get("data_gaps") or chart.get("data_gaps") or [])
+        safety_blockers = list(attempt.get("safety_blockers") or [])
+        secondary_warnings = list(attempt.get("secondary_warnings") or chart.get("secondary_warnings") or [])
+        primary_blocker = attempt.get("primary_blocker") or chart.get("primary_blocker")
+        outcome = str(attempt.get("outcome") or result.get("attempt_outcome") or "").upper()
+        if outcome not in {"DATA GAP", "SAFETY BLOCK", "STRATEGY REJECT", "CANDIDATE", "CAPTURED"}:
+            outcome = (
+                "CAPTURED" if result.get("plan") else "DATA GAP" if data_gaps or result.get("retry_pending") or not chart
+                else "SAFETY BLOCK" if safety_blockers else "CANDIDATE" if chart.get("decision") in {"CE WATCH", "PE WATCH", "WATCH"}
+                else "STRATEGY REJECT"
+            )
         volume = capture.get("volume")
         volume_ratio = capture.get("volume_ratio")
         threshold = float(environment.get("volume_threshold") or 1.5)
@@ -1411,6 +1539,14 @@ class Database:
             zones.get("oi_support"), zones.get("oi_resistance"), confluence,
             level_distance_atr, level_age_seconds, chart.get("provider") or capture.get("provider"),
             capture.get("provider_data_age_seconds"),
+            primary_blocker,
+            json.dumps(secondary_warnings, ensure_ascii=False, default=str),
+            json.dumps(chart.get("evidence_states") or attempt.get("evidence_states") or {}, ensure_ascii=False, default=str),
+            json.dumps({
+                "complete": not bool(data_gaps), "data_gaps": data_gaps,
+                "total": len(chart.get("evidence_states") or {}),
+                "known": sum(str(value).upper() != "UNKNOWN" for value in (chart.get("evidence_states") or {}).values()),
+            }, ensure_ascii=False, default=str),
             json.dumps(result, ensure_ascii=False, default=str),
         )
         serialized = values[-1]
@@ -1430,7 +1566,8 @@ class Database:
                           final_capture_at = ?, timing_delay_seconds = ?, timing_stage = ?, volume_reason_code = ?,
                           chart_support = ?, chart_resistance = ?, oi_support = ?, oi_resistance = ?,
                           level_confluence = ?, level_distance_atr = ?, level_age_seconds = ?, provider = ?,
-                          provider_data_age_seconds = ?, details_json = ? WHERE id = ?""",
+                          provider_data_age_seconds = ?, primary_blocker = ?, secondary_warnings_json = ?,
+                          evidence_states_json = ?, source_completeness_json = ?, details_json = ? WHERE id = ?""",
                 (values[0], values[2], values[4], values[5], values[6], values[7], values[8], values[9], values[10],
                  values[11], values[12], *values[13:], existing["id"]),
             )
@@ -1453,8 +1590,9 @@ class Database:
                    signal_discovered_at, first_valid_trigger_at, final_capture_at, timing_delay_seconds,
                    timing_stage, volume_reason_code, chart_support, chart_resistance, oi_support, oi_resistance,
                    level_confluence, level_distance_atr, level_age_seconds, provider,
-                   provider_data_age_seconds, details_json
-               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   provider_data_age_seconds, primary_blocker, secondary_warnings_json,
+                   evidence_states_json, source_completeness_json, details_json
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             values,
         )
         inserted = result_row.rowcount == 1
@@ -1676,7 +1814,13 @@ class Database:
 
     def export_auto_trade_attempts(self, destination: str | Path, trade_date: str | None = None) -> int:
         rows = self.get_auto_trade_attempts(trade_date, limit=5000)
-        headers = ("checked_at", "candle_time", "trade_date", "symbol", "future_symbol", "outcome", "decision", "candidate", "confirmations_passed", "confirmations_total", "score", "trade_id", "status_text", "signal_discovered_at", "first_valid_trigger_at", "final_capture_at", "timing_delay_seconds", "timing_stage", "details_json")
+        headers = (
+            "checked_at", "candle_time", "trade_date", "symbol", "future_symbol", "outcome", "decision",
+            "candidate", "confirmations_passed", "confirmations_total", "score", "trade_id", "status_text",
+            "primary_blocker", "secondary_warnings_json", "evidence_states_json", "source_completeness_json",
+            "signal_discovered_at", "first_valid_trigger_at", "final_capture_at", "timing_delay_seconds",
+            "timing_stage", "details_json",
+        )
         with Path(destination).open("w", newline="", encoding="utf-8-sig") as file:
             writer = csv.writer(file)
             writer.writerow(headers)

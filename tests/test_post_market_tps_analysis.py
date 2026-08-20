@@ -63,7 +63,7 @@ class PostMarketTpsAnalysisTests(unittest.TestCase):
             result["status"] = "Paper trade captured"
             self.assertTrue(database.save_auto_trade_attempt("NIFTY", result))
             analysis = generate_and_save_post_market_analysis(database, "10-08-2026")
-            self.assertIn("12:25 CE | TRADE CAPTURED", analysis["summary_text"])
+            self.assertIn("12:25 CE | CAPTURED", analysis["summary_text"])
             self.assertIn("trade liya kyunki EMA 5/20/50 alignment, Directional volume", analysis["summary_text"])
             self.assertEqual(analysis["metrics"]["attempt_audit_count"], 1)
             database.close()

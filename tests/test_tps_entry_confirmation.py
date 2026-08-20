@@ -152,7 +152,7 @@ class TpsEntryConfirmationTests(unittest.TestCase):
         result = evaluate_tps_entry_v2(self.candles, self.capture, {}, self.settings, environment)
         ce = result["side_evaluations"]["CE"]
         not_applicable = {item["name"]: item["status"] for item in ce["not_applicable_confirmations"]}
-        self.assertEqual(not_applicable["OI/PCR context"], "N/A")
+        self.assertEqual(not_applicable["OI/PCR context"], "UNKNOWN")
         self.assertNotIn("EMA 5/20/50 alignment", not_applicable)
         self.assertNotIn("SuperTrend confirmation", not_applicable)
         self.assertEqual(ce["total"], 7)
@@ -189,10 +189,11 @@ class TpsEntryConfirmationTests(unittest.TestCase):
         result = evaluate_tps_entry_v2(candles, capture, chain, settings, environment)
         ce = result["side_evaluations"]["CE"]
         volume = next(item for item in ce["confirmations"] if item["name"] == "Directional volume")
-        self.assertEqual(volume["status"], "N/A")
+        self.assertEqual(volume["status"], "UNKNOWN")
         self.assertIn("Sparse futures-volume", volume["detail"])
         self.assertEqual((ce["passed"], ce["required"], ce["total"]), (4, 4, 4))
-        self.assertTrue(ce["trade_ready"])
+        self.assertFalse(ce["trade_ready"])
+        self.assertTrue(any("Directional volume evidence unavailable" in item for item in ce["data_gaps"]))
         self.assertTrue(ce["entry_quality"]["timely"])
         self.assertFalse(ce["hard_blockers"])
         self.assertTrue(any("grace band" in item for item in ce["quality_warnings"]))
