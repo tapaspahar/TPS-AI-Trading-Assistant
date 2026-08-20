@@ -1,4 +1,4 @@
-"""Shared evidence and attempt-outcome vocabulary for Release 1.4.1.
+"""Shared evidence and attempt-outcome vocabulary for Release 1.4.2.
 
 The trading engine must distinguish an observed false condition from evidence
 that was never supplied.  Missing evidence is never silently converted to a

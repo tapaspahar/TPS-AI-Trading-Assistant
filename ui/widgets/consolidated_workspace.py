@@ -12,6 +12,7 @@ class ConsolidatedWorkspace(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         self.tabs = QTabWidget()
+        self.tabs.setObjectName("workspaceTabs")
         self.tabs.setDocumentMode(True)
         for page, title in pages:
             self.tabs.addTab(page, title)

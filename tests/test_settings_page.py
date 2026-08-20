@@ -27,11 +27,14 @@ class SettingsPageTests(unittest.TestCase):
         page = SettingsPage()
         self.assertEqual(page.tps_match_mode.currentData(), "adaptive")
         self.assertIn("Adaptive", page.tps_match_mode.currentText())
+        self.assertEqual(page.market_pre_open.time().toString("HH:mm"), "09:00")
 
         page.tps_match_mode.setCurrentIndex(page.tps_match_mode.findData("all"))
+        page.market_close.setTime(page.market_close.time().fromString("16:00", "HH:mm"))
         with patch("ui.pages.settings_page.QMessageBox.information"), patch("ui.pages.settings_page.apply_theme"):
             page.save()
         self.assertEqual(store.save.call_args.args[0]["tps_match_mode"], "all")
+        self.assertEqual(store.save.call_args.args[0]["market_close_time"], "16:00")
         page.close()
 
 

@@ -658,8 +658,11 @@ class Database:
         """Backfill today's missing slot audit with explicit non-signal reason codes."""
         if now.weekday() >= 5:
             return 0
-        market_start = now.replace(hour=9, minute=20, second=0, microsecond=0)
-        market_end = now.replace(hour=15, minute=30, second=0, microsecond=0)
+        from core.market_session import parse_session_times
+        _pre_open, market_open, market_close = parse_session_times()
+        first_completed = (datetime.combine(now.date(), market_open) + timedelta(minutes=5)).time()
+        market_start = now.replace(hour=first_completed.hour, minute=first_completed.minute, second=0, microsecond=0)
+        market_end = now.replace(hour=market_close.hour, minute=market_close.minute, second=0, microsecond=0)
         end = min(now.replace(second=0, microsecond=0), market_end)
         if end < market_start:
             return 0
@@ -960,6 +963,10 @@ class Database:
 
     def resolve_gap_probability_outcomes(self, threshold_percent: float = 0.15) -> int:
         """Attach the first saved target-session open to unresolved forecasts."""
+        from core.market_session import parse_session_times
+        _, session_open, _ = parse_session_times()
+        opening_start = session_open.strftime("%H:%M")
+        opening_end = (datetime.combine(datetime.today(), session_open) + timedelta(minutes=10)).time().strftime("%H:%M")
         unresolved = self.cursor.execute(
             "SELECT * FROM gap_probability_forecasts WHERE actual_class IS NULL"
         ).fetchall()
@@ -972,9 +979,9 @@ class Database:
             candidates = self.cursor.execute(
                 """SELECT trade_date, captured_at, open FROM market_snapshots
                    WHERE symbol=? AND timeframe='5m'
-                   AND substr(captured_at, 12, 5) BETWEEN '09:15' AND '09:25'
+                   AND substr(captured_at, 12, 5) BETWEEN ? AND ?
                    ORDER BY captured_at ASC, id ASC""",
-                (row["symbol"],),
+                (row["symbol"], opening_start, opening_end),
             ).fetchall()
             opening = None
             for candidate in candidates:
@@ -1153,7 +1160,7 @@ class Database:
 
     def monitor_paper_trades(self, client, settings=None, now=None) -> list[dict]:
         """Close simulated trades on a verified option quote only; no order API is used."""
-        from core.market_session import IST, MARKET_CLOSE
+        from core.market_session import IST, parse_session_times
         from datetime import timedelta
 
         settings = settings or {}
@@ -1201,7 +1208,7 @@ class Database:
                      f"{row['contract_symbol']} LTP {ltp:.2f}; active stop {active_stop:.2f}; "
                      f"{max(0, loss_progress) * 100:.0f}% of entry-to-stop risk used."),
                 )
-            close_at = datetime.combine(now.date(), MARKET_CLOSE, IST)
+            close_at = datetime.combine(now.date(), parse_session_times(settings)[2], IST)
             exit_window = settings.get("time_exit_minutes_before_close")
             time_exit = exit_window is not None and now >= close_at - timedelta(minutes=int(exit_window))
             stop_outcome = "TRAILING STOP HIT" if active_stop > initial_stop else "STOP LOSS HIT"

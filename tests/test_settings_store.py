@@ -50,6 +50,20 @@ class SettingsStoreTests(unittest.TestCase):
             self.assertEqual(store.load()["theme"], "light")
             self.assertEqual(store.load()["capital"], 250000.0)
 
+    def test_custom_market_times_persist_and_invalid_order_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = SettingsStore(Path(directory) / "settings.json")
+            settings = store.load()
+            settings.update({
+                "market_pre_open_time": "08:45", "market_open_time": "09:00",
+                "market_close_time": "16:00",
+            })
+            saved = store.save(settings)
+            self.assertEqual(saved["market_close_time"], "16:00")
+            settings["market_open_time"] = "16:15"
+            with self.assertRaisesRegex(ValueError, "pre-open"):
+                store.save(settings)
+
     def test_auto_paper_monitor_opt_in_persists(self):
         with tempfile.TemporaryDirectory() as directory:
             store = SettingsStore(Path(directory) / "settings.json")

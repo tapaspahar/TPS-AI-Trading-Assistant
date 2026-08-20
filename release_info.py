@@ -1,16 +1,21 @@
 """Application release metadata kept in one place."""
 
 APP_NAME = "TPS AI Trading Assistant"
-VERSION = "1.4.1"
-DISPLAY_VERSION = "Release 1.4.1"
+VERSION = "1.4.2"
+DISPLAY_VERSION = "Release 1.4.2"
 RELEASE_DATE = "20-08-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
-SOFTWARE_UPDATE_VERSION = "v1.4.1"
-LAST_UPDATED_AT = "20-08-2026 11:00:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.4.1 - 20-08-2026 11:00 IST"
+SOFTWARE_UPDATE_VERSION = "v1.4.2"
+LAST_UPDATED_AT = "20-08-2026 11:40:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.4.2 - 20-08-2026 11:40 IST"
 RELEASE_NOTES = (
+    "Added editable Pre-open, Regular Trading Start and Market Close times in Settings; countdowns, candle monitoring, daily evaluation coverage and fresh-entry safety now use the saved session.",
+    "Explained Early Watch in Settings and Help as an optional near-qualified completed-candle study alert, never a trade or entry approval.",
+    "Made all tab bars theme-aware with readable selected, unselected and hover colours across every TPS colour and UI-style combination.",
+    "Rebuilt Market Snapshot support/resistance as clustered completed-candle swing zones and retained a valid zone until invalidation or a replacement repeats across three analyses.",
+    "Stopped Market Snapshot index cross-talk and flashing by discarding stale analysis responses and live ticks that do not belong to the currently selected NIFTY, BANKNIFTY or SENSEX token.",
     "Added Release 1.4.1 evidence integrity: every strategy fact is TRUE, FALSE or UNKNOWN, and UNKNOWN is reported as a DATA GAP instead of silently becoming a pass or rejection.",
     "Standardized Auto Attempt outcomes as DATA GAP, SAFETY BLOCK, STRATEGY REJECT, CANDIDATE and CAPTURED with primary blocker, deduplicated secondary warnings and source-completeness evidence.",
     "Upgraded counterfactual validation to relax exactly one strategy blocker at a time while retaining every news, broker, stale-data, daily-loss, cooldown and recovery safety lock.",

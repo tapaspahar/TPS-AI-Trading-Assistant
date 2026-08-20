@@ -1,10 +1,10 @@
 from threading import Thread
 
-from PySide6.QtCore import QUrl, Qt, Signal
+from PySide6.QtCore import QTime, QUrl, Qt, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QFormLayout, QFrame, QGroupBox, QHBoxLayout, QLabel, QLayout,
-    QLineEdit, QMessageBox, QPushButton, QScrollArea, QVBoxLayout, QWidget, QGridLayout,
+    QLineEdit, QMessageBox, QPushButton, QScrollArea, QTimeEdit, QVBoxLayout, QWidget, QGridLayout,
 )
 
 from core.settings_store import SettingsStore
@@ -95,6 +95,26 @@ class SettingsPage(QWidget):
         self.theme_hint = QLabel("Choose any colour theme plus one of 10 UI design systems. The combination previews instantly; press Save Settings to keep it for the next launch.")
         self.theme_hint.setWordWrap(True)
         layout.addWidget(self.theme_hint)
+        timing_box = QGroupBox("Market Timing")
+        timing_form = QFormLayout(timing_box)
+        timing_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        self.market_pre_open = QTimeEdit(QTime.fromString(values["market_pre_open_time"], "HH:mm"))
+        self.market_open = QTimeEdit(QTime.fromString(values["market_open_time"], "HH:mm"))
+        self.market_close = QTimeEdit(QTime.fromString(values["market_close_time"], "HH:mm"))
+        for field in (self.market_pre_open, self.market_open, self.market_close):
+            field.setDisplayFormat("HH:mm")
+            field.setMinimumHeight(36)
+            field.setAccelerated(False)
+        timing_form.addRow("Pre-open starts", self.market_pre_open)
+        timing_form.addRow("Regular trading starts", self.market_open)
+        timing_form.addRow("Market closes", self.market_close)
+        timing_note = QLabel(
+            "These times control TPS countdowns, completed-candle monitoring and fresh-entry safety windows. "
+            "They do not change the broker or exchange clock. Update them only after an official market-timing change."
+        )
+        timing_note.setWordWrap(True)
+        timing_form.addRow(timing_note)
+        layout.addWidget(timing_box)
         save = QPushButton("Save Settings")
         save.clicked.connect(self.save)
         layout.addWidget(save)
@@ -130,6 +150,11 @@ class SettingsPage(QWidget):
         preferences = values["notification_preferences"]
         for index, (key, label) in enumerate(NOTIFICATION_LABELS.items()):
             check = QCheckBox(label)
+            if key == "early_watch":
+                check.setToolTip(
+                    "Early Watch is a near-qualified completed-candle observation, not a trade signal. "
+                    "It alerts before FIRST VALID so timing can be studied; all final strategy and safety checks still apply."
+                )
             check.setChecked(bool(preferences.get(key, False)))
             self.notification_checks[key] = check
             notification_grid.addWidget(check, index // 3, index % 3)
@@ -217,6 +242,9 @@ class SettingsPage(QWidget):
             self.store.save({
                 "capital": self.capital.text(), "risk_percent": self.risk_percent.text(),
                 "daily_loss_percent": self.daily_loss_percent.text(), "max_trades_per_day": self.max_trades.text(),
+                "market_pre_open_time": self.market_pre_open.time().toString("HH:mm"),
+                "market_open_time": self.market_open.time().toString("HH:mm"),
+                "market_close_time": self.market_close.time().toString("HH:mm"),
                 "paper_trade_cooldown_minutes": self.cooldown.text(), "minimum_rr_ratio": self.minimum_rr.text(),
                 "maximum_option_spread_percent": self.max_spread.text(), "minimum_option_volume": self.minimum_volume.text(),
                 "tps_match_mode": self.tps_match_mode.currentData(),

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from core.market_session import IST, MARKET_CLOSE, market_session
+from core.market_session import IST, market_session, parse_session_times
 
 
 def _quote_number(quote, *names):
@@ -21,10 +21,10 @@ def assess_execution_safety(*, now, candle_time, quote, plan, settings, progress
                             event_risk=None, expiry_day=False, recovery_assessment=None):
     now = now.astimezone(IST) if now.tzinfo else now.replace(tzinfo=IST)
     blockers, warnings = [], []
-    session = market_session(now)
+    session = market_session(now, settings)
     if session["state"] != "OPEN":
         blockers.append(f"Trading window is {session['state'].lower()}")
-    close_at = datetime.combine(now.date(), MARKET_CLOSE, IST)
+    close_at = datetime.combine(now.date(), parse_session_times(settings)[2], IST)
     minutes_to_close = (close_at - now).total_seconds() / 60
     if minutes_to_close <= int(settings.get("time_exit_minutes_before_close", 10)):
         blockers.append(f"Fresh entry blocked {max(0, round(minutes_to_close))} minutes before market close")

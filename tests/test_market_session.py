@@ -19,3 +19,20 @@ class MarketSessionTests(unittest.TestCase):
         result = market_session(datetime(2026, 8, 2, 12, 0, tzinfo=IST))
         self.assertEqual(result["state"], "WEEKEND")
         self.assertEqual(result["deadline"].weekday(), 0)
+
+    def test_saved_custom_market_timing_controls_session(self):
+        settings = {
+            "market_pre_open_time": "08:45", "market_open_time": "09:00",
+            "market_close_time": "16:00",
+        }
+        result = market_session(datetime(2026, 8, 3, 15, 45, tzinfo=IST), settings)
+        self.assertEqual(result["state"], "OPEN")
+        self.assertEqual(format_remaining(result["deadline"] - datetime(2026, 8, 3, 15, 45, tzinfo=IST)), "00:15:00")
+
+    def test_invalid_custom_market_timing_is_rejected(self):
+        settings = {
+            "market_pre_open_time": "09:00", "market_open_time": "15:30",
+            "market_close_time": "09:15",
+        }
+        with self.assertRaisesRegex(ValueError, "pre-open"):
+            market_session(datetime(2026, 8, 3, 10, 0, tzinfo=IST), settings)

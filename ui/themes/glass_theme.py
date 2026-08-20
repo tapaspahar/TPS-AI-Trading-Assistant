@@ -79,6 +79,17 @@ QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QPlainTextEdit:focus, QTextEdi
 QComboBox::drop-down {{ border: none; width: 28px; }}
 QSpinBox::up-button, QSpinBox::down-button {{ width: 21px; border: none; }}
 QComboBox QAbstractItemView {{ background: {p['popup']}; color: {p['text_strong']}; border: 1px solid {p['border']}; selection-background-color: {p['accent']}; }}
+QTabWidget::pane {{
+    background: transparent; border: 1px solid {p['border_soft']}; border-radius: 10px; top: -1px;
+}}
+QTabBar::tab {{
+    background: {p['control']}; color: {p['text']}; border: 1px solid {p['border_soft']};
+    border-bottom: none; padding: 9px 16px; margin-right: 4px; min-width: 92px;
+    border-top-left-radius: 9px; border-top-right-radius: 9px; font-weight: 650;
+}}
+QTabBar::tab:hover {{ background: {p['control_hover']}; color: {p['text_strong']}; border-color: {p['accent_bright']}; }}
+QTabBar::tab:selected {{ background: {p['accent_deep']}; color: white; border-color: {p['accent_bright']}; font-weight: 800; }}
+QTabBar::tab:disabled {{ background: {p['disabled']}; color: {p['disabled_text']}; }}
 QGroupBox {{
     background: {p['glass']}; border: 1px solid {p['border_soft']}; border-radius: 16px;
     margin-top: 13px; padding: 17px 12px 11px 12px; color: {p['text']}; font-weight: 700;

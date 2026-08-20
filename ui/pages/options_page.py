@@ -740,9 +740,14 @@ class OptionsPage(QWidget):
             return
         connected = LiveSession.connected()
         now = datetime.now().astimezone()
-        market_open = now.weekday() < 5 and ((now.hour == 9 and now.minute >= 15) or 10 <= now.hour < 15 or (now.hour == 15 and now.minute <= 30))
+        from core.market_session import market_session, parse_session_times
+        session_settings = SettingsStore().load()
+        market_open = market_session(now, session_settings)["state"] == "OPEN"
         if not market_open:
-            self.auto_paper_status.emit("Auto paper mode is waiting for NSE market hours (09:15-15:30).")
+            _pre_open, opens, closes = parse_session_times(session_settings)
+            self.auto_paper_status.emit(
+                f"Auto paper mode is waiting for configured market hours ({opens.strftime('%H:%M')}-{closes.strftime('%H:%M')})."
+            )
             return
         bucket_start = now.replace(minute=(now.minute // 5) * 5, second=0, microsecond=0)
         bucket = bucket_start.isoformat()

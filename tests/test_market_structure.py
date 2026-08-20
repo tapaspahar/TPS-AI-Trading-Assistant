@@ -19,6 +19,9 @@ class MarketStructureTests(unittest.TestCase):
         self.assertGreater(result["resistance"], result["support"])
         self.assertGreater(result["breakout_level"], result["resistance"])
         self.assertLess(result["breakdown_level"], result["support"])
+        self.assertLess(result["support_zone"]["low"], result["support_zone"]["high"])
+        self.assertLess(result["resistance_zone"]["low"], result["resistance_zone"]["high"])
+        self.assertEqual(result["level_method"], "clustered completed-candle swing zones")
         self.assertIn("structure", result["state"])
 
     def test_rejects_too_few_candles(self):

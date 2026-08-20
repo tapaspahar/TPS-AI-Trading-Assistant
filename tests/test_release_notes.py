@@ -35,17 +35,17 @@ class ReleaseNotesTests(unittest.TestCase):
         for note in RELEASE_NOTES:
             self.assertIn(note, html)
 
-    def test_release_1_4_1_metadata_and_packaging_are_aligned(self):
-        self.assertEqual(VERSION, "1.4.1")
-        self.assertEqual(DISPLAY_VERSION, "Release 1.4.1")
+    def test_release_1_4_2_metadata_and_packaging_are_aligned(self):
+        self.assertEqual(VERSION, "1.4.2")
+        self.assertEqual(DISPLAY_VERSION, "Release 1.4.2")
         self.assertEqual(RELEASE_DATE, "20-08-2026")
         with open("packaging/installer.iss", encoding="utf-8") as file:
             installer = file.read()
         with open("packaging/windows_version_info.txt", encoding="utf-8") as file:
             windows_info = file.read()
-        self.assertIn('#define MyAppVersion "1.4.1"', installer)
-        self.assertIn("TPS-AI-Trading-Assistant-Setup-1.4.1", installer)
-        self.assertIn("ProductVersion', '1.4.1'", windows_info)
+        self.assertIn('#define MyAppVersion "1.4.2"', installer)
+        self.assertIn("TPS-AI-Trading-Assistant-Setup-1.4.2", installer)
+        self.assertIn("ProductVersion', '1.4.2'", windows_info)
 
 
 if __name__ == "__main__":

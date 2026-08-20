@@ -13,6 +13,11 @@ DEFAULT_SETTINGS = {
     "risk_percent": 1.0,
     "daily_loss_percent": 3.0,
     "max_trades_per_day": 5,
+    # Exchange-session clock is configurable so a future NSE/BSE timing
+    # change does not require a software release. Values are stored as HH:MM.
+    "market_pre_open_time": "09:00",
+    "market_open_time": "09:15",
+    "market_close_time": "15:30",
     # Release 1.3 capital-protection defaults. Recovery mode governs paper
     # captures only; TPS remains unable to place a broker order.
     "recovery_mode_enabled": True,
@@ -147,6 +152,9 @@ class SettingsStore:
             "risk_percent": float(settings["risk_percent"]),
             "daily_loss_percent": float(settings["daily_loss_percent"]),
             "max_trades_per_day": int(settings["max_trades_per_day"]),
+            "market_pre_open_time": str(settings.get("market_pre_open_time", current["market_pre_open_time"])).strip(),
+            "market_open_time": str(settings.get("market_open_time", current["market_open_time"])).strip(),
+            "market_close_time": str(settings.get("market_close_time", current["market_close_time"])).strip(),
             "recovery_mode_enabled": bool(settings.get("recovery_mode_enabled", current["recovery_mode_enabled"])),
             "recovery_daily_trade_limit": int(settings.get("recovery_daily_trade_limit", current["recovery_daily_trade_limit"])),
             "recovery_loss_streak_limit": int(settings.get("recovery_loss_streak_limit", current["recovery_loss_streak_limit"])),
@@ -191,6 +199,8 @@ class SettingsStore:
             raise ValueError("Capital must be positive and risk percentage must be between 0 and 100.")
         if not 0 < values["daily_loss_percent"] <= 100 or values["max_trades_per_day"] < 1:
             raise ValueError("Daily-loss percentage must be between 0 and 100, and trade limit must be at least 1.")
+        from core.market_session import parse_session_times
+        parse_session_times(values)
         if not 1 <= values["recovery_daily_trade_limit"] <= values["max_trades_per_day"]:
             raise ValueError("Recovery daily limit must be between 1 and the normal maximum-trades limit.")
         if not 1 <= values["recovery_loss_streak_limit"] <= 10:

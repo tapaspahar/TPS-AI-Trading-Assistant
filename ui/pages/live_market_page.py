@@ -17,6 +17,7 @@ from engine.market_structure import analyze_candles
 from engine.market_environment import classify_vix_percentile
 from engine.multi_timeframe_engine import analyze_multi_timeframe
 from engine.level_proximity import classify_level_proximity
+from core.market_session import market_session
 from ui.widgets.cards.dashboard_card import DashboardCard
 
 
@@ -25,7 +26,7 @@ class LiveMarketPage(QWidget):
     tick_received = Signal(dict)
     feed_status = Signal(str)
     structure_received = Signal(dict)
-    structure_error = Signal(str)
+    structure_error = Signal(dict)
     multi_timeframe_received = Signal(dict)
     multi_timeframe_error = Signal(str)
     overview_received = Signal(dict)
@@ -129,6 +130,9 @@ class LiveMarketPage(QWidget):
         self.snapshot_error.connect(self.show_snapshot_error)
         self.guard_alert.connect(self.show_guard_alert)
         self.selected_symbol = None
+        self.selection_request = 0
+        self.structure_cache = {}
+        self.pending_level_candidates = {}
         self.current_levels = None
         self.last_level_state = None
         self.overview_loading = False
@@ -177,6 +181,8 @@ class LiveMarketPage(QWidget):
         if LiveSession.stream:
             LiveSession.stream.stop()
         exchange_type, token = self.INSTRUMENTS[symbol]
+        self.selection_request += 1
+        request_id = self.selection_request
         self.selected_symbol = (symbol, exchange_type, token)
         self.current_levels = None
         self.last_level_state = None
@@ -197,7 +203,7 @@ class LiveMarketPage(QWidget):
         self.cards["resistance"].set_value("Waiting for candles")
         self.cards["breakout"].set_value("Selected-TF close + volume")
         self.cards["breakdown"].set_value("Selected-TF close + volume")
-        Thread(target=self.load_market_structure, args=(symbol, exchange_type, token), daemon=True).start()
+        Thread(target=self.load_market_structure, args=(symbol, exchange_type, token, request_id), daemon=True).start()
         self.load_selected_timeframe()
 
     def capture_scheduled_snapshot(self):
@@ -205,7 +211,7 @@ class LiveMarketPage(QWidget):
         if not LiveSession.connected() or not self.selected_symbol:
             return
         now = datetime.now()
-        if now.weekday() >= 5 or not ((now.hour == 9 and now.minute >= 15) or 10 <= now.hour < 15 or (now.hour == 15 and now.minute <= 30)):
+        if market_session(now)["state"] != "OPEN":
             return
         if now.minute % 5:
             return
@@ -260,36 +266,51 @@ class LiveMarketPage(QWidget):
             self.load_multi_timeframe()
             return
         symbol, exchange_type, token = self.selected_symbol
+        request_id = self.selection_request
         self.multi_timeframe_detail.setText(f"Loading {symbol} {self.timeframe.currentText()} chart analysis...")
-        Thread(target=self._load_single_timeframe, args=(symbol, exchange_type, token, self.timeframe.currentText()), daemon=True).start()
+        Thread(target=self._load_single_timeframe, args=(symbol, exchange_type, token, self.timeframe.currentText(), request_id), daemon=True).start()
 
-    def _load_single_timeframe(self, symbol, exchange_type, token, label):
+    def _load_single_timeframe(self, symbol, exchange_type, token, label, request_id):
         exchange = "BSE" if exchange_type == 3 else "NSE"
         requests = {"5m": ("FIVE_MINUTE", 5), "15m": ("FIFTEEN_MINUTE", 15), "1h": ("ONE_HOUR", 60), "1D": ("ONE_DAY", 365)}
         try:
             interval, days = requests[label]
             result = analyze_candles(LiveSession.client.get_recent_candles(exchange, token, interval, days))
-            result.update({"symbol": symbol, "timeframe": label})
+            result.update({"symbol": symbol, "timeframe": label, "request_id": request_id})
+            if request_id != self.selection_request:
+                return
             self.structure_received.emit(result)
         except (RuntimeError, ValueError) as error:
-            self.multi_timeframe_error.emit(str(error))
+            if request_id == self.selection_request:
+                self.multi_timeframe_error.emit(str(error))
 
-    def load_market_structure(self, symbol, exchange_type, token):
+    def load_market_structure(self, symbol, exchange_type, token, request_id=None):
+        request_id = self.selection_request if request_id is None else request_id
         exchange = "BSE" if exchange_type == 3 else "NSE"
         try:
             candles = LiveSession.client.get_recent_candles(exchange, token)
             result = analyze_candles(candles)
-            result.update({"symbol": symbol, "timeframe": "5m"})
+            result.update({"symbol": symbol, "timeframe": "5m", "request_id": request_id})
         except (RuntimeError, ValueError) as error:
-            self.structure_error.emit(str(error))
+            if request_id == self.selection_request:
+                self.structure_error.emit({"symbol": symbol, "request_id": request_id, "message": str(error)})
+            return
+        if request_id != self.selection_request:
             return
         self.structure_received.emit(result)
 
     def show_structure(self, result):
+        if not self.selected_symbol or result.get("symbol") != self.selected_symbol[0]:
+            return
+        if result.get("request_id", self.selection_request) != self.selection_request:
+            return
+        result = self._stabilize_structure(result)
         timeframe = result.get("timeframe", "5m")
         self.cards["trend"].set_value(result["state"])
-        self.cards["support"].set_value(f"{result['support']:,.2f}")
-        self.cards["resistance"].set_value(f"{result['resistance']:,.2f}")
+        support_zone = result.get("support_zone") or {"low": result["support"], "high": result["support"]}
+        resistance_zone = result.get("resistance_zone") or {"low": result["resistance"], "high": result["resistance"]}
+        self.cards["support"].set_value(f"{support_zone['low']:,.2f} – {support_zone['high']:,.2f}")
+        self.cards["resistance"].set_value(f"{resistance_zone['low']:,.2f} – {resistance_zone['high']:,.2f}")
         self.cards["breakout"].set_value(
             f"{timeframe} close > {result['breakout_level']:,.2f}\n{result['volume_condition']}"
         )
@@ -301,7 +322,8 @@ class LiveMarketPage(QWidget):
         if result.get("timeframe"):
             self.multi_timeframe_detail.setText(
                 f"{result['symbol']} {result['timeframe']} analysis: {result['state']}. "
-                f"Support {result['support']:,.2f} | Resistance {result['resistance']:,.2f}."
+                f"Support zone {support_zone['low']:,.2f}–{support_zone['high']:,.2f} | "
+                f"Resistance zone {resistance_zone['low']:,.2f}–{resistance_zone['high']:,.2f}."
             )
         if timeframe == "5m":
             self.current_levels = {
@@ -310,7 +332,40 @@ class LiveMarketPage(QWidget):
             }
             self._check_level_proximity(result.get("price"))
 
-    def show_structure_error(self, message):
+    def _stabilize_structure(self, result):
+        """Keep a valid clustered zone until a replacement repeats three times."""
+        key = (result.get("symbol"), result.get("timeframe", "5m"))
+        previous = self.structure_cache.get(key)
+        if previous is None:
+            self.structure_cache[key] = dict(result)
+            return result
+        tolerance = max(float(result.get("zone_tolerance", 0) or 0), 0.05)
+        signature = (
+            round(float(result["support"]) / tolerance),
+            round(float(result["resistance"]) / tolerance),
+        )
+        pending_signature, count = self.pending_level_candidates.get(key, (None, 0))
+        count = count + 1 if pending_signature == signature else 1
+        self.pending_level_candidates[key] = (signature, count)
+        price = float(result.get("price", 0) or 0)
+        old_support = previous.get("support_zone") or {"low": previous["support"]}
+        old_resistance = previous.get("resistance_zone") or {"high": previous["resistance"]}
+        invalidated = price < float(old_support["low"]) - tolerance or price > float(old_resistance["high"]) + tolerance
+        if count >= 3 or invalidated:
+            self.structure_cache[key] = dict(result)
+            self.pending_level_candidates.pop(key, None)
+            return result
+        stable = dict(result)
+        for name in ("support", "resistance", "support_zone", "resistance_zone", "breakout_level", "breakdown_level"):
+            if name in previous:
+                stable[name] = previous[name]
+        stable["levels_stabilized"] = True
+        return stable
+
+    def show_structure_error(self, payload):
+        if payload.get("request_id") != self.selection_request or not self.selected_symbol or payload.get("symbol") != self.selected_symbol[0]:
+            return
+        message = payload.get("message", "Unknown candle error")
         self.cards["trend"].set_value("Structure unavailable")
         self.cards["support"].set_value("No reliable level")
         self.cards["resistance"].set_value("No reliable level")
@@ -322,10 +377,11 @@ class LiveMarketPage(QWidget):
             self.multi_timeframe_detail.setText("Select NIFTY, BANKNIFTY, or SENSEX after the broker connects first.")
             return
         symbol, exchange_type, token = self.selected_symbol
+        request_id = self.selection_request
         self.multi_timeframe_detail.setText(f"Loading {symbol} 5m, 15m, 1h and 1D chart history…")
-        Thread(target=self._load_multi_timeframe, args=(symbol, exchange_type, token), daemon=True).start()
+        Thread(target=self._load_multi_timeframe, args=(symbol, exchange_type, token, request_id), daemon=True).start()
 
-    def _load_multi_timeframe(self, symbol, exchange_type, token):
+    def _load_multi_timeframe(self, symbol, exchange_type, token, request_id):
         exchange = "BSE" if exchange_type == 3 else "NSE"
         requests = {"5m": ("FIVE_MINUTE", 5), "15m": ("FIFTEEN_MINUTE", 15), "1h": ("ONE_HOUR", 60), "1D": ("ONE_DAY", 365)}
         try:
@@ -335,12 +391,18 @@ class LiveMarketPage(QWidget):
             }
             result = analyze_multi_timeframe(candles)
             result["symbol"] = symbol
+            result["request_id"] = request_id
         except (RuntimeError, ValueError) as error:
-            self.multi_timeframe_error.emit(str(error))
+            if request_id == self.selection_request:
+                self.multi_timeframe_error.emit(str(error))
+            return
+        if request_id != self.selection_request:
             return
         self.multi_timeframe_received.emit(result)
 
     def show_multi_timeframe(self, result):
+        if not self.selected_symbol or result.get("symbol") != self.selected_symbol[0] or result.get("request_id") != self.selection_request:
+            return
         patterns = " | ".join(f"{name}: {data['state'].replace(' structure', '')}, {data['pattern']}" for name, data in result["timeframes"].items())
         short_state = result["context"].replace(" multi-timeframe alignment", "").replace(" multi-timeframe structure — wait for confirmation", " / Wait")
         self.cards["trend"].set_value(f"{short_state}\nAlignment: {result['alignment_score']}/100")
@@ -457,6 +519,11 @@ class LiveMarketPage(QWidget):
         self.status.setText(f"{broker}: {status}")
 
     def show_tick(self, tick):
+        if not self.selected_symbol:
+            return
+        tick_token = tick.get("token") or tick.get("symbol_token") or tick.get("symbolToken")
+        if tick_token is not None and str(tick_token) != str(self.selected_symbol[2]):
+            return
         value = tick.get("last_traded_price") or tick.get("ltp") or tick.get("last_traded_price")
         if value is None:
             return

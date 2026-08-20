@@ -67,6 +67,9 @@ def _missing_ranges(observed: set[datetime], day: datetime) -> tuple[int, list[s
 
 def build_post_market_analysis(database: Database, trade_date: str, now: datetime | None = None) -> dict:
     """Build one reproducible Roman Hindi note from persisted TPS evidence."""
+    from core.market_session import parse_session_times
+    _, session_open, session_close = parse_session_times()
+    last_candle_start = (datetime.combine(datetime.today(), session_close) - timedelta(minutes=5)).time()
     day = datetime.strptime(trade_date, "%d-%m-%Y")
     generated = now or datetime.now()
     attempts = database.get_auto_trade_attempts(trade_date, limit=5000)
@@ -87,7 +90,7 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
     for row in attempts:
         try:
             candle = datetime.fromisoformat(str(row["candle_time"])).replace(tzinfo=None)
-            if candle.date() == day.date() and time(9, 15) <= candle.time() <= time(15, 25):
+            if candle.date() == day.date() and session_open <= candle.time() <= last_candle_start:
                 observed.add(candle.replace(second=0, microsecond=0))
         except (TypeError, ValueError):
             pass
@@ -294,21 +297,24 @@ def ensure_completed_post_market_reports(
 ) -> list[str]:
     """Generate missing/stale reports after close and backfill past dates.
 
-    The one-minute close buffer lets the 15:25-15:30 candle audit finish first.
+    The one-minute close buffer lets the configured final candle audit finish first.
     A later attempt/trade/snapshot changes the source signature, so the report
     is refreshed automatically on the next scheduler tick.
     """
+    from core.market_session import parse_session_times
+    _, _, session_close = parse_session_times()
+    report_time = (datetime.combine(datetime.today(), session_close) + timedelta(minutes=1)).time()
     current = now or datetime.now()
     updated_dates: list[str] = []
     source_dates = database.get_post_market_source_dates()
     current_trade_date = current.strftime("%d-%m-%Y")
-    if current.weekday() < 5 and current.time() >= time(15, 31) and current_trade_date not in source_dates:
+    if current.weekday() < 5 and current.time() >= report_time and current_trade_date not in source_dates:
         # If TPS stayed open but no attempt was made, that zero-activity fact is
         # itself important and must be recorded instead of silently vanishing.
         source_dates.insert(0, current_trade_date)
     for trade_date in source_dates[: max(1, int(limit))]:
         day = datetime.strptime(trade_date, "%d-%m-%Y").date()
-        if day > current.date() or (day == current.date() and current.time() < time(15, 31)):
+        if day > current.date() or (day == current.date() and current.time() < report_time):
             continue
         signature = _source_signature(database, trade_date)
         if not any(signature[:3]) and trade_date != current_trade_date:

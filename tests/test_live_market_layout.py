@@ -45,6 +45,20 @@ class LiveMarketLayoutTests(unittest.TestCase):
         self.assertNotIn("Live feed values will auto-fill", visible_text)
         page.close()
 
+    def test_wrong_index_tick_and_stale_structure_do_not_overwrite_selection(self):
+        page = LiveMarketPage()
+        page.selected_symbol = ("BANKNIFTY", 1, "99926009")
+        page.selection_request = 7
+        page.cards["ltp"].set_value("WAIT")
+        page.show_tick({"token": "99926000", "ltp": 24500})
+        self.assertEqual(page.cards["ltp"].value_label.text(), "WAIT")
+        page.show_tick({"token": "99926009", "ltp": 57650})
+        self.assertEqual(page.cards["ltp"].value_label.text(), "57,650.00")
+        page.cards["trend"].set_value("BANK WAIT")
+        page.show_structure({"symbol": "NIFTY", "request_id": 6})
+        self.assertEqual(page.cards["trend"].value_label.text(), "BANK WAIT")
+        page.close()
+
 
 if __name__ == "__main__":
     unittest.main()

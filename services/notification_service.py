@@ -23,7 +23,7 @@ NOTIFICATION_LABELS = {
     "support_resistance": "Support / resistance zone",
     "put_call_ratio": "Put-Call Ratio sentiment",
     "auto_attempt_report": "Auto Attempt Report results",
-    "early_watch": "Early Watch (paper observation only)",
+    "early_watch": "Early Watch — near-qualified study alert, NOT entry approval",
     "equity_research": "Equity Research",
     "chart_capture": "Chart Capture",
     "trade_journal": "Trade Journal",

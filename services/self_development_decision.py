@@ -74,12 +74,14 @@ def build_self_development_review(database: Database, trade_date: str, now: date
         })
 
     if attempts == 0 or evaluated == 0:
+        from core.market_session import parse_session_times
+        _, configured_open, configured_close = parse_session_times()
         add(
             "evaluation_pipeline", "CRITICAL", "Auto-evaluation pipeline",
             "Complete candle evaluation evidence missing hai.",
             f"Saved attempts {attempts}; complete evaluations {evaluated}; coverage {coverage:.1f}%.",
             "Scheduler heartbeat, broker connection, completed-candle trigger aur exception audit ko ek health panel me jodein.",
-            "Next 3 trading sessions me 09:15–15:30 expected slots aur saved evaluations reconcile karein.",
+            f"Next 3 trading sessions me {configured_open.strftime('%H:%M')}–{configured_close.strftime('%H:%M')} expected slots aur saved evaluations reconcile karein.",
         )
     if coverage < 85:
         priority = "CRITICAL" if coverage < 50 else "HIGH"

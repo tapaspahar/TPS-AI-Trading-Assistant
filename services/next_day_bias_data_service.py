@@ -2,6 +2,7 @@
 
 from datetime import date, datetime, timedelta
 
+from core.market_session import parse_session_times
 from engine.live_setup_capture import INSTRUMENTS, build_live_capture
 from engine.option_chain_engine import analyze_option_chain
 from services.option_contract_service import OptionContractService, contracts_near_spot
@@ -52,7 +53,7 @@ class NextDayBiasDataService:
             "quoted_contracts": chain.get("quoted_contracts", 0),
             "spot_candle_time": str(spot_candles[-1].get("time", "")),
             "future_candle_time": str(future_candles[-1].get("time", "")),
-            "session_final": datetime.now().time() >= datetime.strptime("15:30", "%H:%M").time(),
+            "session_final": datetime.now().time() >= parse_session_times()[2],
         }
 
     @staticmethod
