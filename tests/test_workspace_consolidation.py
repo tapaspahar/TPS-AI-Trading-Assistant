@@ -1,8 +1,10 @@
 import os
+import tempfile
 import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 
 from ui.screens.dashboard_screen import DashboardScreen
@@ -11,13 +13,29 @@ from ui.screens.dashboard_screen import DashboardScreen
 class WorkspaceConsolidationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.temp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        cls.old_localappdata = os.environ.get("LOCALAPPDATA")
+        cls.old_appdata = os.environ.get("APPDATA")
+        os.environ["LOCALAPPDATA"] = cls.temp.name
+        os.environ["APPDATA"] = cls.temp.name
         cls.app = QApplication.instance() or QApplication([])
         cls.screen = DashboardScreen()
 
     @classmethod
     def tearDownClass(cls):
+        for timer in cls.screen.findChildren(QTimer):
+            timer.stop()
         cls.screen.close()
         cls.screen.deleteLater()
+        if cls.old_localappdata is None:
+            os.environ.pop("LOCALAPPDATA", None)
+        else:
+            os.environ["LOCALAPPDATA"] = cls.old_localappdata
+        if cls.old_appdata is None:
+            os.environ.pop("APPDATA", None)
+        else:
+            os.environ["APPDATA"] = cls.old_appdata
+        cls.temp.cleanup()
 
     def test_sidebar_contains_only_primary_workspaces(self):
         labels = "\n".join(button.text() for button in self.screen.sidebar.buttons)

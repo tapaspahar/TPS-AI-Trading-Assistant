@@ -85,6 +85,9 @@ class AutoPaperTraderTests(unittest.TestCase):
                 {"name": "Directional volume", "passed": False, "detail": "1.11x Volume EMA 20"},
             ],
             "blockers": ["Strong directional volume confirmation is missing"],
+            "hard_blockers": ["Strong directional volume confirmation is missing"],
+            "quality_warnings": [],
+            "data_gaps": [],
         }
         candles = [{"time": "2026-08-04T11:10:00+05:30"}] * 51
         client = unittest.mock.Mock()
