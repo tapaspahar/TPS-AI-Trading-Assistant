@@ -72,6 +72,35 @@ def _recent_impulse_volume(candles, volume_ema, threshold, side):
     return False
 
 
+def _level_evidence(structure, side):
+    """Return chart-level quality without upgrading a moving fallback into a wall."""
+    zone = structure.get(f"{side}_zone") or {}
+    # Older/mocked structure providers did not expose quality. Preserve their
+    # previous conservative behaviour; the live clustered engine is explicit.
+    if not zone:
+        return {"source": "legacy", "touches": None, "reliable": True}
+    source = str(zone.get("source") or "legacy")
+    touches = int(zone.get("touches") or 0)
+    reliable = bool(zone.get("reliable", source != "fallback" and touches >= 2))
+    return {"source": source, "touches": touches, "reliable": reliable}
+
+
+def _nearby_unbroken_level(close, chart_level, oi_level, required_room, side, chart_quality):
+    """Separate repeated/OI walls from one-candle fallback micro-levels."""
+    candidates = []
+    if chart_level is not None:
+        distance = chart_level - close if side == "CE" else close - chart_level
+        candidates.append(("chart", chart_level, distance, bool(chart_quality.get("reliable"))))
+    if oi_level is not None:
+        distance = oi_level - close if side == "CE" else close - oi_level
+        candidates.append(("OI", oi_level, distance, True))
+    ahead = [item for item in candidates if item[2] >= 0]
+    nearest = min(ahead, key=lambda item: item[2]) if ahead else None
+    hard = nearest if nearest and nearest[2] < required_room and nearest[3] else None
+    soft = nearest if nearest and nearest[2] < required_room and not nearest[3] else None
+    return nearest, hard, soft
+
+
 def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environment=None):
     """Return independent CE/PE evidence, checklist result and hard blockers."""
     chain, settings = chain or {}, settings or {}
@@ -94,6 +123,8 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
     structure = analyze_candles(candles)
     structure_state = structure["state"]
     chart_support, chart_resistance = float(structure["support"]), float(structure["resistance"])
+    support_quality = _level_evidence(structure, "support")
+    resistance_quality = _level_evidence(structure, "resistance")
     oi_support = float(chain["put_support"]) if chain.get("put_support") not in (None, "") else None
     oi_resistance = float(chain["call_resistance"]) if chain.get("call_resistance") not in (None, "") else None
     pcr_oi, pcr_volume = chain.get("pcr_oi"), chain.get("pcr_volume")
@@ -121,6 +152,27 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
     strong_quality = volume_ratio >= volume_threshold and fake_breakout_clear
     ce_recent_impulse = _recent_impulse_volume(candles, volume_ema, volume_threshold, "CE")
     pe_recent_impulse = _recent_impulse_volume(candles, volume_ema, volume_threshold, "PE")
+    # A mature directional move often continues on normal participation after
+    # its opening impulse. Requiring 1.5x volume on every later candle made the
+    # paper engine systematically miss clean trend continuation. This bounded
+    # path is available only when structure, VWAP and the full EMA stack agree.
+    continuation_threshold = max(.90, min(1.10, float(environment.get("continuation_volume_threshold", 1.0))))
+    ce_trend_context = bool(
+        regime == "TRENDING" and structure_state.startswith("Bullish")
+        and vwap is not None and close > vwap and ema_5 > ema_20 > ema_50
+    )
+    pe_trend_context = bool(
+        regime == "TRENDING" and structure_state.startswith("Bearish")
+        and vwap is not None and close < vwap and ema_5 < ema_20 < ema_50
+    )
+    ce_continuation_volume = bool(
+        fake_breakout_clear and ce_trend_context and candle_direction == "BULLISH"
+        and volume_ratio >= continuation_threshold
+    )
+    pe_continuation_volume = bool(
+        fake_breakout_clear and pe_trend_context and candle_direction == "BEARISH"
+        and volume_ratio >= continuation_threshold
+    )
     # SENSEX (and occasionally another thin current-month future) can return
     # only a handful of traded units in a completed five-minute candle.  That
     # is not evidence against an otherwise clean move; it is an unusable
@@ -139,17 +191,23 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
     )
     ce_volume_ok = fake_breakout_clear and (
         (strong_quality and candle_direction == "BULLISH") or (recent_bullish_touch and ce_recent_impulse)
+        or ce_continuation_volume
     )
     pe_volume_ok = fake_breakout_clear and (
         (strong_quality and candle_direction == "BEARISH") or (recent_bearish_touch and pe_recent_impulse)
+        or pe_continuation_volume
     )
     ce_volume_detail = (
         f"{volume_ratio:.2f}x current Volume EMA20" if strong_quality and candle_direction == "BULLISH"
+        else f"{volume_ratio:.2f}x Volume EMA20; regime-aware bullish continuation >= {continuation_threshold:.2f}x"
+        if ce_continuation_volume
         else f"recent bullish impulse >= {volume_threshold:.2f}x Volume EMA20 before pullback"
         if ce_recent_impulse else f"{volume_ratio:.2f}x Volume EMA20; no qualifying recent bullish impulse"
     )
     pe_volume_detail = (
         f"{volume_ratio:.2f}x current Volume EMA20" if strong_quality and candle_direction == "BEARISH"
+        else f"{volume_ratio:.2f}x Volume EMA20; regime-aware bearish continuation >= {continuation_threshold:.2f}x"
+        if pe_continuation_volume
         else f"recent bearish impulse >= {volume_threshold:.2f}x Volume EMA20 before pullback"
         if pe_recent_impulse else f"{volume_ratio:.2f}x Volume EMA20; no qualifying recent bearish impulse"
     )
@@ -223,14 +281,19 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
             timing_reference = max(level for level in (ema_20, vwap) if level is not None)
             extension_points = max(0.0, close - timing_reference)
             extension_atr = extension_points / atr
-            resistance_levels = [level for level in (chart_resistance, oi_resistance) if level is not None]
-            nearest = min(resistance_levels) if resistance_levels else None
-            room = nearest - close if nearest is not None else None
-            breakout = resistance_levels and close > max(resistance_levels)
-            if nearest is None:
+            nearest_evidence, hard_level, soft_level = _nearby_unbroken_level(
+                close, chart_resistance, oi_resistance, required_room, side, resistance_quality,
+            )
+            nearest = nearest_evidence[1] if nearest_evidence else None
+            room = nearest_evidence[2] if nearest_evidence else None
+            if nearest is None and chart_resistance is None and oi_resistance is None:
                 blockers.append("Resistance level is unavailable")
-            elif 0 <= room < required_room and not breakout:
-                blockers.append(f"CE entry is too close to resistance ({room:.2f} < {required_room:.2f} points room)")
+            elif nearest is None:
+                quality_warnings.append("Known resistance levels are already broken; no nearby unbroken resistance wall")
+            elif hard_level:
+                blockers.append(f"CE entry is too close to reliable {hard_level[0]} resistance ({room:.2f} < {required_room:.2f} points room)")
+            elif soft_level:
+                quality_warnings.append(f"Nearby single-touch/fallback chart resistance ({room:.2f} points) is observation only, not a hard wall")
             extension_hard_limit = min(2.0, max_extension_atr * 1.25)
             if extension_atr > extension_hard_limit:
                 blockers.append(f"Late CE entry: price is {extension_atr:.2f} ATR above VWAP/EMA20 (hard limit {extension_hard_limit:.2f})")
@@ -248,14 +311,19 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
             timing_reference = min(level for level in (ema_20, vwap) if level is not None)
             extension_points = max(0.0, timing_reference - close)
             extension_atr = extension_points / atr
-            support_levels = [level for level in (chart_support, oi_support) if level is not None]
-            nearest = max(support_levels) if support_levels else None
-            room = close - nearest if nearest is not None else None
-            breakdown = support_levels and close < min(support_levels)
-            if nearest is None:
+            nearest_evidence, hard_level, soft_level = _nearby_unbroken_level(
+                close, chart_support, oi_support, required_room, side, support_quality,
+            )
+            nearest = nearest_evidence[1] if nearest_evidence else None
+            room = nearest_evidence[2] if nearest_evidence else None
+            if nearest is None and chart_support is None and oi_support is None:
                 blockers.append("Support level is unavailable")
-            elif 0 <= room < required_room and not breakdown:
-                blockers.append(f"PE entry is too close to support ({room:.2f} < {required_room:.2f} points room)")
+            elif nearest is None:
+                quality_warnings.append("Known support levels are already broken; no nearby unbroken support wall")
+            elif hard_level:
+                blockers.append(f"PE entry is too close to reliable {hard_level[0]} support ({room:.2f} < {required_room:.2f} points room)")
+            elif soft_level:
+                quality_warnings.append(f"Nearby single-touch/fallback chart support ({room:.2f} points) is observation only, not a hard wall")
             extension_hard_limit = min(2.0, max_extension_atr * 1.25)
             if extension_atr > extension_hard_limit:
                 blockers.append(f"Late PE entry: price is {extension_atr:.2f} ATR below VWAP/EMA20 (hard limit {extension_hard_limit:.2f})")
@@ -291,6 +359,8 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
                 "fresh_pullback_reversal": trigger_ok,
                 "required_room_points": round(required_room, 2),
                 "regular_move_target_points": round(regular_target, 2) if regular_target else None,
+                "nearest_level": nearest, "room_to_level": round(room, 2) if room is not None else None,
+                "chart_level_quality": resistance_quality if side == "CE" else support_quality,
                 "environment_regime": environment.get("regime", "unavailable"),
                 "timely": extension_atr <= extension_hard_limit and (
                     rsi is None or (rsi < ce_max_rsi if side == "CE" else rsi > pe_min_rsi)
@@ -331,5 +401,6 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
                   "oi_support": oi_support, "oi_resistance": oi_resistance,
                   "support_gap": support_gap, "resistance_gap": resistance_gap,
                   "tolerance": zone_tolerance, "support_confluence": support_confluence,
-                  "resistance_confluence": resistance_confluence},
+                  "resistance_confluence": resistance_confluence,
+                  "support_quality": support_quality, "resistance_quality": resistance_quality},
     }

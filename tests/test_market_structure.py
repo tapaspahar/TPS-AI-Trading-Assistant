@@ -22,6 +22,8 @@ class MarketStructureTests(unittest.TestCase):
         self.assertLess(result["support_zone"]["low"], result["support_zone"]["high"])
         self.assertLess(result["resistance_zone"]["low"], result["resistance_zone"]["high"])
         self.assertEqual(result["level_method"], "clustered completed-candle swing zones")
+        self.assertIn(result["support_zone"]["source"], {"cluster", "fallback"})
+        self.assertEqual(result["support_zone"]["reliable"], result["support_zone"]["source"] == "cluster" and result["support_zone"]["touches"] >= 2)
         self.assertIn("structure", result["state"])
 
     def test_rejects_too_few_candles(self):

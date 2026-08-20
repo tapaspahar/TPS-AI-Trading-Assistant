@@ -51,13 +51,17 @@ def _best_zone(clusters, current_price, side, fallback, half_width):
         best = max(eligible, key=lambda item: (item["touches"], item["recency"], -abs(current_price - item["center"])))
         center = float(best["center"])
         touches = best["touches"]
+        source = "cluster"
     else:
         center, touches = float(fallback), 1
+        source = "fallback"
     return {
         "low": center - half_width,
         "high": center + half_width,
         "center": center,
         "touches": touches,
+        "source": source,
+        "reliable": source == "cluster" and touches >= 2,
     }
 
 

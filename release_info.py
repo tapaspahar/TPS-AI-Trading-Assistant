@@ -1,16 +1,21 @@
 """Application release metadata kept in one place."""
 
 APP_NAME = "TPS AI Trading Assistant"
-VERSION = "1.4.2"
-DISPLAY_VERSION = "Release 1.4.2"
+VERSION = "1.4.3"
+DISPLAY_VERSION = "Release 1.4.3"
 RELEASE_DATE = "20-08-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
-SOFTWARE_UPDATE_VERSION = "v1.4.2"
-LAST_UPDATED_AT = "20-08-2026 11:40:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.4.2 - 20-08-2026 11:40 IST"
+SOFTWARE_UPDATE_VERSION = "v1.4.3"
+LAST_UPDATED_AT = "20-08-2026 12:23:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.4.3 - 20-08-2026 12:23 IST"
 RELEASE_NOTES = (
+    "Corrected zero-capture over-blocking: a single-touch/fallback swing level is now an auditable warning instead of a support/resistance hard wall that follows every falling or rising candle.",
+    "Repeated clustered chart zones and option-chain OI walls remain strict proximity blockers, alongside fake-breakout, late-entry, RSI, event, liquidity, daily-loss and recovery safeguards.",
+    "Added regime-aware directional-volume confirmation for established TRENDING continuation when structure, VWAP, EMA 5/20/50, candle direction and at least normal Volume-EMA participation all agree.",
+    "Trend Memory now classifies the complete session using EMA/VWAP persistence ratios so a late bounce cannot relabel a persistent downtrend as RANGE / MIXED.",
+    "Added regression coverage for falling-market fallback support, repeated reliable support, trend-continuation volume and full-session bearish Trend Memory classification.",
     "Added editable Pre-open, Regular Trading Start and Market Close times in Settings; countdowns, candle monitoring, daily evaluation coverage and fresh-entry safety now use the saved session.",
     "Explained Early Watch in Settings and Help as an optional near-qualified completed-candle study alert, never a trade or entry approval.",
     "Made all tab bars theme-aware with readable selected, unselected and hover colours across every TPS colour and UI-style combination.",

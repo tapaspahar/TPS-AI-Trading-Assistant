@@ -43,6 +43,23 @@ class TrendMemoryTests(unittest.TestCase):
             finally:
                 db.close()
 
+    def test_session_persistence_recognizes_downtrend_despite_last_candle_noise(self):
+        rows = []
+        for i in range(30):
+            row = candle(f"2026-08-19T{9 + (15 + i * 5) // 60:02d}:{(15 + i * 5) % 60:02d}:00", 24250 - i * 4,
+                         date="19-08-2026")
+            row.update({"open": 24255 - i * 4, "ema_5": 24252 - i * 4,
+                        "ema_20": 24262 - i * 4, "ema_50": 24275 - i * 4,
+                        "vwap": 24300 - i * 2, "supertrend": 24280 - i * 3})
+            rows.append(row)
+        # A late bounce may flip one final indicator without rewriting the day.
+        rows[-1].update({"ema_5": rows[-1]["close"] + 8, "ema_20": rows[-1]["close"] + 4,
+                         "ema_50": rows[-1]["close"] - 2, "supertrend": rows[-1]["close"] - 5})
+        profile = build_daily_fingerprint(rows, "NIFTY", "19-08-2026")
+        self.assertEqual(profile["trend"], "BEARISH")
+        self.assertEqual(profile["chart_pattern"], "DOWNTREND CONTINUATION")
+        self.assertGreater(profile["features"]["below_vwap_ratio"], .9)
+
 
 if __name__ == "__main__":
     unittest.main()

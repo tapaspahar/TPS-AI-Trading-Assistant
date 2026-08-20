@@ -37,6 +37,11 @@ def build_daily_fingerprint(rows: list[dict], symbol: str, trade_date: str) -> d
     return_pct = ((close - session_open) / session_open * 100.0) if session_open else 0.0
     range_pct = ((high - low) / session_open * 100.0) if session_open else 0.0
     ema_state, vwap_state, supertrend_state = _state(latest)
+    row_states = [_state(row) for row in candles]
+    bearish_ema_ratio = sum(state[0] == "BEARISH" for state in row_states) / len(row_states)
+    bullish_ema_ratio = sum(state[0] == "BULLISH" for state in row_states) / len(row_states)
+    below_vwap_ratio = sum(state[1] == "BELOW" for state in row_states) / len(row_states)
+    above_vwap_ratio = sum(state[1] == "ABOVE" for state in row_states) / len(row_states)
 
     # Compress the session into at most twelve directional blocks. This is the
     # Candle DNA used to compare shape without depending on the index price.
@@ -51,9 +56,9 @@ def build_daily_fingerprint(rows: list[dict], symbol: str, trade_date: str) -> d
     mid = max(1, len(closes) // 2)
     first_move = closes[mid - 1] - session_open
     second_move = close - closes[mid - 1]
-    if return_pct >= 0.35 and ema_state == "BULLISH":
+    if return_pct >= 0.20 and (bullish_ema_ratio >= .55 or above_vwap_ratio >= .60):
         trend = "BULLISH"
-    elif return_pct <= -0.35 and ema_state == "BEARISH":
+    elif return_pct <= -0.20 and (bearish_ema_ratio >= .55 or below_vwap_ratio >= .60):
         trend = "BEARISH"
     elif sum((vwap_state == "ABOVE", ema_state == "BULLISH", supertrend_state == "BULLISH")) >= 2 and return_pct > 0.12:
         trend = "BULLISH"
@@ -87,6 +92,8 @@ def build_daily_fingerprint(rows: list[dict], symbol: str, trade_date: str) -> d
         "atr_pct": round((_number(latest.get("atr_14")) / close * 100.0) if close else 0.0, 4),
         "oi_pcr": round(_number(latest.get("oi_pcr"), 1.0), 4),
         "volume_pcr": round(_number(latest.get("volume_pcr"), 1.0), 4),
+        "bullish_ema_ratio": round(bullish_ema_ratio, 4), "bearish_ema_ratio": round(bearish_ema_ratio, 4),
+        "above_vwap_ratio": round(above_vwap_ratio, 4), "below_vwap_ratio": round(below_vwap_ratio, 4),
         "snapshot_quality": round(min(1.0, len(candles) / 72.0), 4),
     }
     return {

@@ -208,3 +208,43 @@ class TpsEntryConfirmationTests(unittest.TestCase):
         pullback = next(item for item in result["side_evaluations"]["CE"]["confirmations"] if item["name"] == "Pullback and reversal")
         self.assertTrue(pullback["passed"])
         self.assertTrue(result["side_evaluations"]["CE"]["entry_quality"]["fresh_pullback_reversal"])
+
+    @patch("engine.tps_entry_confirmation.analyze_candles", return_value={
+        "state": "Bearish structure", "support": 109.5, "resistance": 125.0,
+        "support_zone": {"source": "fallback", "touches": 1, "reliable": False},
+        "resistance_zone": {"source": "cluster", "touches": 3, "reliable": True},
+    })
+    def test_falling_fallback_support_is_warning_not_repeating_hard_wall(self, _structure):
+        for i, candle in enumerate(self.candles):
+            candle.update({"open": 125-i*.25, "high": 126-i*.25, "low": 123-i*.25,
+                           "close": 124-i*.25, "volume": 100})
+        self.capture.update({
+            "open": "110.5", "close": "110", "ema_5": "111", "ema_20": "113", "ema_50": "116",
+            "vwap": "114", "supertrend": "115", "atr_14": "10", "rsi_14": "45",
+            "volume_ratio": "1.0", "volume_ema": "100", "volume": "100",
+            "candle_direction": "BEARISH", "fake_breakout_risk": False,
+        })
+        self.chain.update({"put_support": 100, "call_resistance": 125, "pcr_oi": .8, "pcr_volume": 1.0})
+        environment = {"regime": "TRENDING", "vix_zone": "NORMAL", "risk_multiplier": 1,
+                       "volume_threshold": 1.5, "regular_move_target_points": 20}
+        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain, self.settings, environment)
+        pe = result["side_evaluations"]["PE"]
+        volume = next(item for item in pe["confirmations"] if item["name"] == "Directional volume")
+        self.assertTrue(volume["passed"])
+        self.assertIn("regime-aware bearish continuation", volume["detail"])
+        self.assertFalse(any("too close to reliable" in item for item in pe["hard_blockers"]))
+        self.assertTrue(any("observation only" in item for item in pe["quality_warnings"]))
+
+    @patch("engine.tps_entry_confirmation.analyze_candles", return_value={
+        "state": "Bearish structure", "support": 109.5, "resistance": 125.0,
+        "support_zone": {"source": "cluster", "touches": 3, "reliable": True},
+        "resistance_zone": {"source": "cluster", "touches": 3, "reliable": True},
+    })
+    def test_repeated_support_remains_a_hard_blocker(self, _structure):
+        self.capture.update({"open": "110.5", "close": "110", "ema_5": "111", "ema_20": "113",
+                             "ema_50": "116", "vwap": "114", "supertrend": "115",
+                             "candle_direction": "BEARISH", "rsi_14": "45"})
+        self.chain.update({"put_support": 100})
+        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain, self.settings,
+                                       {"regime": "TRENDING", "vix_zone": "NORMAL", "risk_multiplier": 1})
+        self.assertTrue(any("reliable chart support" in item for item in result["side_evaluations"]["PE"]["hard_blockers"]))
