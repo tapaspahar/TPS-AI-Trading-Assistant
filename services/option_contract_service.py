@@ -5,12 +5,13 @@ import json
 import os
 from datetime import date, datetime
 from pathlib import Path
-from time import perf_counter
-from urllib.request import urlopen
+from time import perf_counter, sleep
+from urllib.request import Request, urlopen
 
 
 # The current Angel One host resolves on normal Windows/Python installations.
 MASTER_URL = "https://margincalculator.angelone.in/OpenAPI_File/files/OpenAPIScripMaster.json"
+MASTER_DOWNLOAD_ATTEMPTS = 3
 UNDERLYINGS = {
     "NIFTY": "NFO",
     "BANKNIFTY": "NFO",
@@ -177,36 +178,84 @@ class OptionContractService:
         base = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "TPS AI Trading Assistant" / "cache"
         self.cache_path = Path(cache_path) if cache_path else base / "angel_instruments.json"
 
+    @staticmethod
+    def _validate_master(rows):
+        """Reject broker error pages/partial JSON before they can replace a good cache."""
+        if not isinstance(rows, list) or not rows:
+            raise ValueError("Instrument master did not contain a non-empty instrument list.")
+        if not any(
+            isinstance(row, dict) and row.get("token") and row.get("exch_seg")
+            for row in rows
+        ):
+            raise ValueError("Instrument master rows are missing required token/exchange fields.")
+        return rows
+
+    def _read_cache(self):
+        if not self.cache_path.exists():
+            return None
+        try:
+            return self._validate_master(json.loads(self.cache_path.read_text(encoding="utf-8")))
+        except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
+            return None
+
+    def _download_master(self, progress_callback=None):
+        request = Request(MASTER_URL, headers={"User-Agent": "TPS-AI-Trading-Assistant/1.4"})
+        with urlopen(request, timeout=30) as response:
+            total = int(response.headers.get("Content-Length", 0) or 0)
+            chunks, downloaded, started = [], 0, perf_counter()
+            if progress_callback:
+                progress_callback(0, "Connecting to Angel One instrument list…")
+            while True:
+                chunk = response.read(64 * 1024)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                downloaded += len(chunk)
+                if progress_callback and total:
+                    elapsed = max(perf_counter() - started, 0.1)
+                    percent = min(int(downloaded * 100 / total), 99)
+                    rate = downloaded / elapsed
+                    remaining = max(total - downloaded, 0) / rate if rate else 0
+                    progress_callback(percent, f"Downloading Angel One list: {percent}% ({downloaded / 1_048_576:.1f} / {total / 1_048_576:.1f} MB) - about {max(1, round(remaining))} sec left")
+                elif progress_callback:
+                    progress_callback(-1, f"Downloading Angel One list: {downloaded / 1_048_576:.1f} MB received…")
+        return self._validate_master(json.loads(b"".join(chunks).decode("utf-8")))
+
+    def _write_cache(self, rows):
+        """Keep the previous usable cache intact if Windows/app shutdown interrupts a write."""
+        self.cache_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = self.cache_path.with_suffix(self.cache_path.suffix + ".tmp")
+        temporary_path.write_text(json.dumps(rows), encoding="utf-8")
+        os.replace(temporary_path, self.cache_path)
+
     def _load_master(self, progress_callback=None):
-        if self.cache_path.exists() and datetime.fromtimestamp(self.cache_path.stat().st_mtime).date() == date.today():
+        cached_rows = self._read_cache()
+        if cached_rows is not None and datetime.fromtimestamp(self.cache_path.stat().st_mtime).date() == date.today():
             if progress_callback:
                 progress_callback(100, "Using today's saved Angel One instrument list.")
-            return json.loads(self.cache_path.read_text(encoding="utf-8"))
-        try:
-            with urlopen(MASTER_URL, timeout=45) as response:
-                total = int(response.headers.get("Content-Length", 0) or 0)
-                chunks, downloaded, started = [], 0, perf_counter()
+            return cached_rows
+        last_error = None
+        rows = None
+        for attempt_number in range(1, MASTER_DOWNLOAD_ATTEMPTS + 1):
+            try:
+                rows = self._download_master(progress_callback)
+                break
+            except Exception as error:
+                last_error = error
                 if progress_callback:
-                    progress_callback(0, "Connecting to Angel One instrument list…")
-                while True:
-                    chunk = response.read(64 * 1024)
-                    if not chunk:
-                        break
-                    chunks.append(chunk)
-                    downloaded += len(chunk)
-                    if progress_callback and total:
-                        elapsed = max(perf_counter() - started, 0.1)
-                        percent = min(int(downloaded * 100 / total), 99)
-                        rate = downloaded / elapsed
-                        remaining = max(total - downloaded, 0) / rate if rate else 0
-                        progress_callback(percent, f"Downloading Angel One list: {percent}% ({downloaded / 1_048_576:.1f} / {total / 1_048_576:.1f} MB) - about {max(1, round(remaining))} sec left")
-                    elif progress_callback:
-                        progress_callback(-1, f"Downloading Angel One list: {downloaded / 1_048_576:.1f} MB received…")
-                rows = json.loads(b"".join(chunks).decode("utf-8"))
-        except Exception as error:
-            raise RuntimeError("Could not download Angel One's instrument master. Check internet and try again.") from error
-        self.cache_path.parent.mkdir(parents=True, exist_ok=True)
-        self.cache_path.write_text(json.dumps(rows), encoding="utf-8")
+                    progress_callback(-1, f"Instrument-list attempt {attempt_number}/{MASTER_DOWNLOAD_ATTEMPTS} failed; retrying…")
+                if attempt_number < MASTER_DOWNLOAD_ATTEMPTS:
+                    sleep(attempt_number)
+        if rows is None:
+            if cached_rows is not None:
+                cache_date = datetime.fromtimestamp(self.cache_path.stat().st_mtime).strftime("%d-%m-%Y")
+                if progress_callback:
+                    progress_callback(100, f"Live list unavailable; using verified saved list from {cache_date}.")
+                return cached_rows
+            raise RuntimeError(
+                "Could not download Angel One's instrument master and no verified saved list is available. Check internet and try again."
+            ) from last_error
+        self._write_cache(rows)
         if progress_callback:
             progress_callback(100, "Download complete. Preparing the share list…")
         return rows

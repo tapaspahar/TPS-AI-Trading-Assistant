@@ -241,7 +241,11 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
                 checked_at, capture=capture, chart=chart, candidate=candidate, future=future,
                 blockers=strategy.get("hard_blockers"), chain=chain, timing=timing,
                 outcome=classify_attempt(
-                    candidate=bool(candidate and not strategy.get("hard_blockers") and not data_gaps),
+                    # EARLY WATCH and a named CE/PE side are observations, not
+                    # qualified candidates.  A candidate must have passed the
+                    # complete strategy gate; this branch is therefore a
+                    # strategy rejection unless evidence is missing.
+                    candidate=bool(strategy.get("trade_ready")),
                     data_gaps=data_gaps,
                 ),
                 data_gaps=data_gaps, warnings=strategy.get("quality_warnings"),

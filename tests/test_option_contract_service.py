@@ -1,7 +1,13 @@
 import unittest
+import json
+import os
+import time
 from datetime import date, timedelta
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
-from services.option_contract_service import buying_risk, contracts_near_spot, parse_front_month_future, parse_option_contracts
+from services.option_contract_service import OptionContractService, buying_risk, contracts_near_spot, parse_front_month_future, parse_option_contracts
 
 
 class OptionContractServiceTests(unittest.TestCase):
@@ -43,3 +49,29 @@ class OptionContractServiceTests(unittest.TestCase):
         ]
         future = parse_front_month_future(rows, "NIFTY")
         self.assertEqual(future["token"], "near")
+
+    def test_uses_verified_stale_cache_when_all_live_download_attempts_fail(self):
+        rows = [{"token": "saved", "symbol": "NIFTY", "exch_seg": "NSE"}]
+        with TemporaryDirectory() as folder:
+            cache = Path(folder) / "angel_instruments.json"
+            cache.write_text(json.dumps(rows), encoding="utf-8")
+            yesterday = time.time() - 86400
+            os.utime(cache, (yesterday, yesterday))
+            service = OptionContractService(cache)
+            with patch.object(service, "_download_master", side_effect=OSError("offline")) as download, \
+                    patch("services.option_contract_service.sleep"):
+                self.assertEqual(service._load_master(), rows)
+            self.assertEqual(download.call_count, 3)
+
+    def test_invalid_download_never_replaces_verified_cache(self):
+        rows = [{"token": "saved", "symbol": "NIFTY", "exch_seg": "NSE"}]
+        with TemporaryDirectory() as folder:
+            cache = Path(folder) / "angel_instruments.json"
+            cache.write_text(json.dumps(rows), encoding="utf-8")
+            yesterday = time.time() - 86400
+            os.utime(cache, (yesterday, yesterday))
+            service = OptionContractService(cache)
+            with patch.object(service, "_download_master", side_effect=ValueError("bad response")), \
+                    patch("services.option_contract_service.sleep"):
+                self.assertEqual(service._load_master(), rows)
+            self.assertEqual(json.loads(cache.read_text(encoding="utf-8")), rows)

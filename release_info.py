@@ -8,9 +8,11 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.4.4"
-LAST_UPDATED_AT = "21-08-2026 11:43:27 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.4.4 - 21-08-2026 11:43 IST"
+LAST_UPDATED_AT = "21-08-2026 17:22:53 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.4.4 - 21-08-2026 17:22 IST"
 RELEASE_NOTES = (
+    "Made Angel One instrument discovery resilient with verified last-known-good fallback, three bounded live retries, response validation and atomic cache replacement so a temporary master-download outage does not erase an otherwise evaluable market window.",
+    "Corrected Auto Attempt classification: EARLY WATCH and low-score CE/PE observations are now STRATEGY REJECT, while CANDIDATE is reserved for a fully qualified strategy; proven legacy WATCH mislabels are repaired without changing genuine trade history.",
     "Added Cutie as the friendly user-facing guidance voice while retaining TPS AI Trading Assistant as the software brand.",
     "Expanded saved-plan monitoring with Strategy Health and DO NOTHING, WATCH TREND CHANGE, PREPARE HEDGE ADJUSTMENT, BOOK PAPER TARGET, CUT RISK and EXIT & SWITCH SIDE decisions.",
     "Opposite-side replacements now display their expiry, paper target reference and defined maximum loss after the existing structure's close-first sequence.",

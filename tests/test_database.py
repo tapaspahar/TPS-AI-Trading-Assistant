@@ -164,6 +164,43 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(first_valid["delay_seconds"], 300)
         self.assertTrue(first_valid["no_look_ahead"])
 
+    def test_watch_decision_without_qualified_strategy_is_not_a_candidate(self):
+        result = {
+            "status": "No paper trade: CE checklist 2/5 and score 41/100.",
+            "attempt": {
+                "checked_at": "2026-08-21T13:25:00", "candle_time": "2026-08-21T13:20:00+05:30",
+                "candidate": "CE", "capture": {}, "chain": {}, "blockers": [],
+                "chart": {
+                    "decision": "CE WATCH", "score": 41, "trade_ready": False,
+                    "strategy": {"candidate": "CE", "passed": 2, "total": 5, "trade_ready": False},
+                },
+            },
+        }
+        self.assertTrue(self.db.save_auto_trade_attempt("NIFTY", result))
+        row = self.db.get_auto_trade_attempts("21-08-2026")[0]
+        self.assertEqual(row["outcome"], "STRATEGY REJECT")
+
+    def test_startup_repairs_legacy_unqualified_candidate_label(self):
+        result = {
+            "status": "Legacy early watch",
+            "attempt": {
+                "checked_at": "2026-08-21T13:50:00", "candle_time": "2026-08-21T13:45:00+05:30",
+                "candidate": "CE", "capture": {}, "chain": {}, "blockers": [],
+                "chart": {
+                    "decision": "CE WATCH", "score": 41, "trade_ready": False,
+                    "strategy": {"candidate": "CE", "passed": 2, "total": 5, "trade_ready": False},
+                },
+            },
+        }
+        self.assertTrue(self.db.save_auto_trade_attempt("NIFTY", result))
+        self.db.cursor.execute("UPDATE auto_trade_attempts SET outcome = 'CANDIDATE'")
+        self.db.connection.commit()
+        database_path = Path(self.temp_dir.name) / "trades.db"
+        self.db.close()
+        self.db = Database(database_path)
+        row = self.db.get_auto_trade_attempts("21-08-2026")[0]
+        self.assertEqual(row["outcome"], "STRATEGY REJECT")
+
     def test_notification_history_tracks_unread_state_and_exports(self):
         first_id = self.db.save_notification(
             "trade_capture", "TPS paper trade captured", "NIFTY CE entry 100",

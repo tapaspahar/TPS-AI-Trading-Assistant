@@ -470,6 +470,24 @@ class Database:
                    WHEN 'SKIPPED' THEN 'DATA GAP'
                    ELSE outcome END"""
         )
+        # Repair legacy WATCH rows that were labelled CANDIDATE merely because
+        # a CE/PE side existed.  Preserve genuine qualified candidates and all
+        # captured/safety/data-gap history.
+        for legacy_row in self.cursor.execute(
+            "SELECT id, details_json FROM auto_trade_attempts WHERE outcome = 'CANDIDATE' AND trade_id IS NULL"
+        ).fetchall():
+            try:
+                legacy_details = json.loads(legacy_row["details_json"] or "{}")
+                legacy_chart = (legacy_details.get("attempt") or {}).get("chart") or {}
+                legacy_strategy = legacy_chart.get("strategy") or {}
+                strategy_qualified = bool(legacy_chart.get("trade_ready") or legacy_strategy.get("trade_ready"))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                strategy_qualified = True  # Never rewrite history we cannot prove was misclassified.
+            if not strategy_qualified:
+                self.cursor.execute(
+                    "UPDATE auto_trade_attempts SET outcome = 'STRATEGY REJECT' WHERE id = ?",
+                    (int(legacy_row["id"]),),
+                )
         self.connection.commit()
 
     def save_self_development_review(self, review: dict) -> int:
@@ -1506,9 +1524,10 @@ class Database:
         primary_blocker = attempt.get("primary_blocker") or chart.get("primary_blocker")
         outcome = str(attempt.get("outcome") or result.get("attempt_outcome") or "").upper()
         if outcome not in {"DATA GAP", "SAFETY BLOCK", "STRATEGY REJECT", "CANDIDATE", "CAPTURED"}:
+            strategy_qualified = bool(chart.get("trade_ready") or strategy.get("trade_ready"))
             outcome = (
                 "CAPTURED" if result.get("plan") else "DATA GAP" if data_gaps or result.get("retry_pending") or not chart
-                else "SAFETY BLOCK" if safety_blockers else "CANDIDATE" if chart.get("decision") in {"CE WATCH", "PE WATCH", "WATCH"}
+                else "SAFETY BLOCK" if safety_blockers else "CANDIDATE" if strategy_qualified
                 else "STRATEGY REJECT"
             )
         volume = capture.get("volume")
