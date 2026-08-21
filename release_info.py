@@ -1,16 +1,19 @@
 """Application release metadata kept in one place."""
 
 APP_NAME = "TPS AI Trading Assistant"
-VERSION = "1.4.3"
-DISPLAY_VERSION = "Release 1.4.3"
-RELEASE_DATE = "20-08-2026"
+VERSION = "1.4.4"
+DISPLAY_VERSION = "Release 1.4.4"
+RELEASE_DATE = "21-08-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
-SOFTWARE_UPDATE_VERSION = "v1.4.3"
-LAST_UPDATED_AT = "20-08-2026 12:23:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.4.3 - 20-08-2026 12:23 IST"
+SOFTWARE_UPDATE_VERSION = "v1.4.4"
+LAST_UPDATED_AT = "21-08-2026 11:18:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.4.4 - 21-08-2026 11:18 IST"
 RELEASE_NOTES = (
+    "Upgraded Option Strategies with explicit current-expiry candidate side, conservative paper target-profit reference, loss-review threshold and unchanged defined maximum loss.",
+    "Added confirmed CE-to-PE and PE-to-CE thesis transitions: TPS closes the saved defined-risk structure first and only then presents an optional fresh opposite-side replacement.",
+    "Added target/loss-reference monitoring from conservative executable bid/ask quotes while retaining manual review, risk-cap, expiry, liquidity and no-naked-option safeguards.",
     "Corrected zero-capture over-blocking: a single-touch/fallback swing level is now an auditable warning instead of a support/resistance hard wall that follows every falling or rising candle.",
     "Repeated clustered chart zones and option-chain OI walls remain strict proximity blockers, alongside fake-breakout, late-entry, RSI, event, liquidity, daily-loss and recovery safeguards.",
     "Added regime-aware directional-volume confirmation for established TRENDING continuation when structure, VWAP, EMA 5/20/50, candle direction and at least normal Volume-EMA participation all agree.",

@@ -52,7 +52,7 @@ class OptionStrategiesPage(QWidget):
         cards = QGridLayout()
         self.cards = {key: DashboardCard(label, "-") for key, label in (
             ("strategy", "Suggested Structure"), ("bias", "Market Bias"), ("environment", "VIX / Regime"),
-            ("range", "Expected / Remaining Range"), ("payoff", "One-Lot Max Profit / Loss"), ("target", "Regular-Move Objective"),
+            ("range", "Expected / Remaining Range"), ("payoff", "Target Profit / Max Defined Loss"), ("target", "Expiry / Candidate Side"),
         )}
         for i, card in enumerate(self.cards.values()):
             card.set_compact(True); cards.addWidget(card, i // 3, i % 3)
@@ -87,7 +87,7 @@ class OptionStrategiesPage(QWidget):
 
     @staticmethod
     def _saved_plan(result):
-        keep = ("symbol", "strategy", "spot", "net_type", "net_premium", "expected_daily_range", "breakevens", "expiry")
+        keep = ("symbol", "strategy", "spot", "net_type", "net_premium", "expected_daily_range", "breakevens", "expiry", "candidate_side", "management_reference")
         plan = {key: result.get(key) for key in keep}
         plan["legs"] = [
             {key: leg.get(key) for key in ("action", "option_type", "strike", "symbol", "price", "lots", "lot_size", "quantity")}
@@ -161,10 +161,13 @@ class OptionStrategiesPage(QWidget):
             f"{range_text}\nRemaining {remaining if remaining is not None else '-'} points{utilization_text}"
         )
         if result.get("max_loss") is not None:
-            self.cards["payoff"].set_value(f"Profit Rs {result['max_profit']:,.2f}\nLoss Rs {result['max_loss']:,.2f}")
+            management = result.get("management_reference") or {}
+            self.cards["payoff"].set_value(
+                f"Target Rs {float(management.get('target_profit') or 0):,.2f}\nMax loss Rs {result['max_loss']:,.2f}"
+            )
         else:
             self.cards["payoff"].set_value("No valid payoff yet")
-        self.cards["target"].set_value(f"{result.get('regular_move_target_points') or '-'} underlying points\nEnvironment-adaptive")
+        self.cards["target"].set_value(f"{result.get('expiry') or '-'}\n{result.get('candidate_side') or '-'} defined-risk")
         legs = result.get("legs") or []; self.table.setRowCount(len(legs))
         for row_index, leg in enumerate(legs):
             values = (leg["action"], leg["option_type"], f"{leg['strike']:,.0f}", leg["symbol"], f"{leg['price']:,.2f}", leg["lots"], leg["quantity"])
@@ -173,6 +176,14 @@ class OptionStrategiesPage(QWidget):
         reasons = "\n- ".join(result.get("reasons") or [])
         blockers = "\n- ".join(result.get("blockers") or [])
         payoff = f"Net {result.get('net_type')} {result.get('net_premium')} | Breakeven(s): {result.get('breakevens')}" if result.get("net_type") else "No tradeable defined-risk payoff is ready."
+        management = result.get("management_reference") or {}
+        management_text = (
+            f"\nPaper management: target profit Rs {float(management.get('target_profit') or 0):,.2f} "
+            f"({management.get('target_profit_percent_of_max') or '-'}% of maximum potential profit) | "
+            f"loss-review at Rs {float(management.get('loss_review_amount') or 0):,.2f} | "
+            f"defined maximum loss Rs {float(management.get('defined_max_loss') or 0):,.2f}. Not guaranteed."
+            if management else ""
+        )
         greeks = result.get("portfolio_greeks_estimate")
         greek_text = (
             f"\nEstimated portfolio Greeks (whole position): Delta {greeks['delta']} | Gamma {greeks['gamma']} | "
@@ -181,7 +192,7 @@ class OptionStrategiesPage(QWidget):
         )
         self.details.setText(
             f"Completed candle: {result['candle_time']} | Expiry: {result['expiry']} | {result['quoted_contracts']} live contracts quoted\n"
-            f"{payoff}{greek_text}\nEvidence:\n- {reasons}"
+            f"{payoff}{management_text}{greek_text}\nEvidence:\n- {reasons}"
             + (f"\nBlockers:\n- {blockers}" if blockers else "")
             + f"\n\n{result['warning']}"
         )
@@ -196,7 +207,9 @@ class OptionStrategiesPage(QWidget):
         pnl_text = f" | Estimated executable P&L Rs {pnl:,.2f}" if pnl is not None else " | P&L unavailable (quotes incomplete)"
         self.monitor_status.setText(
             f"Adjustment monitor: {monitor['state']} | Spot {monitor['spot']:,.2f} | Fresh bias {monitor['fresh_bias']}{pnl_text}\n"
-            f"{monitor['reason']}\n{monitor['warning']}"
+            f"{monitor['reason']}"
+            + (f"\nConfirmed transition: {monitor['transition']} | Replacement: {monitor.get('replacement_strategy')} | Expiry: {monitor.get('replacement_expiry')}" if monitor.get("transition") else "")
+            + f"\n{monitor['warning']}"
         )
         actions = monitor.get("actions") or []; self.adjustments.setRowCount(len(actions))
         for row, action in enumerate(actions):

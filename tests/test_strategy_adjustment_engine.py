@@ -59,6 +59,42 @@ class StrategyAdjustmentEngineTests(unittest.TestCase):
         self.assertEqual(result["state"], "HOLD")
         self.assertEqual(result["estimated_pnl"], 780.0)
 
+    def test_confirmed_bear_put_to_bull_call_switch_closes_old_plan_first(self):
+        plan = {
+            "strategy": "Bear Put Debit Spread", "spot": 24500, "net_type": "DEBIT", "net_premium": 30,
+            "expected_daily_range": 100, "breakevens": [24470], "expiry": "20 Aug 2026",
+            "management_reference": {"target_profit": 1000, "loss_review_amount": 500},
+            "legs": [_leg("BUY", "PE", 24500), _leg("SELL", "PE", 24400)],
+        }
+        latest = {
+            "spot": 24530, "bias": "BULLISH", "state": "REVIEW CANDIDATE",
+            "strategy": "Bull Call Debit Spread", "expiry": "27 Aug 2026",
+            "legs": [_leg("BUY", "CE", 24500), _leg("SELL", "CE", 24600)],
+            "chain": {"quote_rows": []},
+        }
+        result = monitor_strategy_plan(plan, latest)
+        self.assertEqual(result["state"], "EXIT / REASSESS")
+        self.assertEqual(result["transition"], "PE -> CE")
+        self.assertEqual(result["replacement_strategy"], "Bull Call Debit Spread")
+        self.assertTrue(all(action["step"].startswith("1.") for action in result["actions"][:2]))
+        self.assertTrue(all(action["step"].startswith("2.") for action in result["actions"][2:]))
+
+    def test_target_reference_requests_controlled_exit(self):
+        legs = [_leg("BUY", "CE", 24500), _leg("SELL", "CE", 24600)]
+        plan = {
+            "strategy": "Bull Call Debit Spread", "spot": 24500, "net_type": "DEBIT", "net_premium": 20,
+            "expected_daily_range": 100, "breakevens": [24520],
+            "management_reference": {"target_profit": 300, "loss_review_amount": 400}, "legs": legs,
+        }
+        quotes = [
+            {"symbol": legs[0]["symbol"], "bid": 30, "ask": 30, "ltp": 30},
+            {"symbol": legs[1]["symbol"], "bid": 5, "ask": 5, "ltp": 5},
+        ]
+        result = monitor_strategy_plan(plan, {"spot": 24510, "bias": "BULLISH", "state": "WAIT", "chain": {"quote_rows": quotes}})
+        self.assertEqual(result["estimated_pnl"], 325.0)
+        self.assertEqual(result["state"], "EXIT / REASSESS")
+        self.assertIn("target reference reached", result["reason"])
+
 
 if __name__ == "__main__":
     unittest.main()

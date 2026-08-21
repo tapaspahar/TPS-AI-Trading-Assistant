@@ -55,11 +55,19 @@ def _close_actions(plan: dict, scope: str = "ALL") -> list[dict]:
         if scope in {"CE", "PE"} and leg.get("option_type") != scope:
             continue
         actions.append({
-            "step": "CLOSE SAVED PLAN", "action": _reverse(leg.get("action")),
+            "step": "1. CLOSE EXISTING PLAN", "action": _reverse(leg.get("action")),
             "option_type": leg.get("option_type"), "strike": leg.get("strike"),
             "symbol": leg.get("symbol"), "reason": "Close the existing defined-risk leg; verify live quote first.",
         })
     return actions
+
+
+def _strategy_side(strategy: str) -> str:
+    if "Bull Call" in strategy:
+        return "CE"
+    if "Bear Put" in strategy:
+        return "PE"
+    return "HEDGED RANGE"
 
 
 def monitor_strategy_plan(saved_plan: dict, latest: dict) -> dict:
@@ -74,6 +82,7 @@ def monitor_strategy_plan(saved_plan: dict, latest: dict) -> dict:
     bias = str(latest.get("bias") or "RANGE / MIXED")
     breakevens = sorted(float(value) for value in (saved_plan.get("breakevens") or []))
     state, reason, scope = "HOLD", "Saved plan remains inside its monitored structure.", None
+    transition = None
 
     if "Iron Condor" in strategy and len(breakevens) == 2:
         lower, upper = breakevens
@@ -92,6 +101,7 @@ def monitor_strategy_plan(saved_plan: dict, latest: dict) -> dict:
         if invalid:
             state, scope = "EXIT / REASSESS", "ALL"
             reason = f"Bullish thesis invalidated: fresh bias is BEARISH and spot moved below the monitored buffer from {entry_spot:,.2f}."
+            transition = "CE -> PE"
         elif bias != "BULLISH":
             state = "WATCH"; reason = f"Fresh bias is {bias}; do not add another call spread until direction reconfirms."
     elif "Bear Put" in strategy:
@@ -99,21 +109,38 @@ def monitor_strategy_plan(saved_plan: dict, latest: dict) -> dict:
         if invalid:
             state, scope = "EXIT / REASSESS", "ALL"
             reason = f"Bearish thesis invalidated: fresh bias is BULLISH and spot moved above the monitored buffer from {entry_spot:,.2f}."
+            transition = "PE -> CE"
         elif bias != "BEARISH":
             state = "WATCH"; reason = f"Fresh bias is {bias}; do not add another put spread until direction reconfirms."
 
+    pnl = _estimated_pnl(saved_plan, latest)
+    management = saved_plan.get("management_reference") or {}
+    target_profit = float(management.get("target_profit") or 0)
+    loss_review = float(management.get("loss_review_amount") or 0)
+    if state == "HOLD" and pnl is not None and target_profit > 0 and pnl >= target_profit:
+        state, scope = "EXIT / REASSESS", "ALL"
+        reason = f"Paper target reference reached: estimated executable P&L Rs {pnl:,.2f} is at/above Rs {target_profit:,.2f}."
+    elif state == "HOLD" and pnl is not None and loss_review > 0 and pnl <= -loss_review:
+        state, scope = "EXIT / REASSESS", "ALL"
+        reason = f"Loss-review reference reached: estimated executable P&L Rs {pnl:,.2f} is at/below -Rs {loss_review:,.2f}."
+
     actions = _close_actions(saved_plan, scope or "ALL") if state == "EXIT / REASSESS" else []
     replacement = []
-    if state == "EXIT / REASSESS" and latest.get("state") == "REVIEW CANDIDATE":
+    latest_strategy = str(latest.get("strategy") or "")
+    confirmed_opposite = transition and latest.get("state") == "REVIEW CANDIDATE" and _strategy_side(latest_strategy) != _strategy_side(strategy)
+    if confirmed_opposite:
         for leg in latest.get("legs") or []:
             replacement.append({
-                "step": "OPTIONAL NEW PLAN (ONLY AFTER CLOSE)", "action": leg.get("action"),
+                "step": "2. OPTIONAL REPLACEMENT (AFTER CLOSE CONFIRMATION)", "action": leg.get("action"),
                 "option_type": leg.get("option_type"), "strike": leg.get("strike"),
-                "symbol": leg.get("symbol"), "reason": f"Fresh defined-risk {latest.get('strategy')} candidate; recheck margin and total risk.",
+                "symbol": leg.get("symbol"),
+                "reason": f"Fresh defined-risk {latest_strategy} for expiry {latest.get('expiry') or '-'}; open only after every old close leg is confirmed.",
             })
     return {
         "state": state, "reason": reason, "spot": spot, "fresh_bias": bias,
-        "estimated_pnl": _estimated_pnl(saved_plan, latest),
+        "estimated_pnl": pnl, "transition": transition,
+        "replacement_strategy": latest_strategy if confirmed_opposite else None,
+        "replacement_expiry": latest.get("expiry") if confirmed_opposite else None,
         "actions": actions + replacement,
         "warning": "Manual review only. Close/roll multi-leg positions as one controlled structure; never leave an uncovered short option.",
     }

@@ -37,6 +37,10 @@ class OptionStrategyEngineTests(unittest.TestCase):
         self.assertGreater(result["max_loss"], 0)
         self.assertIsNotNone(result["portfolio_greeks_estimate"])
         self.assertIn("delta", result["portfolio_greeks_estimate"])
+        self.assertEqual(result["candidate_side"], "CE")
+        self.assertGreater(result["management_reference"]["target_profit"], 0)
+        self.assertLess(result["management_reference"]["target_profit"], result["max_profit"])
+        self.assertEqual(result["management_reference"]["defined_max_loss"], result["max_loss"])
 
     @patch("engine.option_strategy_engine.analyze_candles", return_value={"state": "Bullish structure"})
     def test_one_lot_plan_is_blocked_above_risk_cap(self, _structure):
@@ -51,6 +55,7 @@ class OptionStrategyEngineTests(unittest.TestCase):
         result = recommend_option_strategy("NIFTY", 10000, self.candles, self.capture, self.chain, environment, {"capital": 100000, "risk_percent": 10})
         self.assertEqual(result["strategy"], "Defined-Risk Iron Condor")
         self.assertEqual(len(result["legs"]), 4)
+        self.assertEqual(result["candidate_side"], "HEDGED RANGE")
 
     @patch("engine.option_strategy_engine.analyze_candles", return_value={"state": "Bullish structure"})
     def test_extreme_vix_returns_wait(self, _structure):

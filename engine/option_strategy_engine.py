@@ -131,6 +131,23 @@ def _iron_condor(rows, strikes, spot, support, resistance):
     }
 
 
+def _management_reference(plan):
+    """Return conservative paper-management references, never guarantees."""
+    is_debit = plan.get("net_type") == "DEBIT"
+    target_fraction = .35 if is_debit else .50
+    loss_review_fraction = .50 if is_debit else .40
+    max_profit = float(plan.get("max_profit") or 0)
+    max_loss = float(plan.get("max_loss") or 0)
+    return {
+        "target_profit": round(max_profit * target_fraction, 2),
+        "target_profit_percent_of_max": round(target_fraction * 100),
+        "loss_review_amount": round(max_loss * loss_review_fraction, 2),
+        "loss_review_percent_of_max": round(loss_review_fraction * 100),
+        "defined_max_loss": round(max_loss, 2),
+        "note": "Paper-management reference only; slippage, gaps and execution can change realised P&L.",
+    }
+
+
 def recommend_option_strategy(symbol, spot, candles, capture, chain, environment, settings):
     """Return one executable-shape research suggestion or an explicit wait."""
     minimum_volume = float(settings.get("minimum_option_volume", 100))
@@ -192,5 +209,8 @@ def recommend_option_strategy(symbol, spot, candles, capture, chain, environment
         blockers.append(f"Maximum profit/loss ratio {plan['payoff_ratio']:.2f} is below 0.30")
     confidence = min(85, 45 + votes * 8 + (8 if environment.get("regular_move_available", True) else 0))
     portfolio_greeks = _portfolio_greeks(plan, rows, float(spot))
+    management = _management_reference(plan)
+    candidate_side = "CE" if direction == "BULLISH" else "PE" if direction == "BEARISH" else "HEDGED RANGE"
     return {**base, **plan, "state": state, "confidence": confidence, "risk_cap": round(risk_cap, 2),
-            "risk_within_cap": within_cap, "portfolio_greeks_estimate": portfolio_greeks, "blockers": blockers}
+            "risk_within_cap": within_cap, "portfolio_greeks_estimate": portfolio_greeks,
+            "candidate_side": candidate_side, "management_reference": management, "blockers": blockers}
