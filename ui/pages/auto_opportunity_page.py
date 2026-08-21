@@ -92,7 +92,7 @@ class AutoOpportunityPage(QWidget):
         if self.scanning:
             return
         if not LiveSession.connected():
-            self.status.setText("AUTO MODE ON — broker live data disconnected; TPS will retry automatically.")
+            self.status.setText("Cutie keh rahi hai: broker live data disconnected hai; main automatically retry karungi.")
             return
         now = datetime.now()
         if not force and (now.weekday() >= 5 or not (time(9, 20) <= now.time() <= time(15, 25))):

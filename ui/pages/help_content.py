@@ -150,7 +150,7 @@ PAGES = (
      "VIX/regime-aware current-expiry research—live legs, target-profit reference, defined maximum loss, breakeven aur estimated portfolio Greeks.",
      "VIX/रेजीम आधारित सीमित-जोखिम रणनीति रिसर्च—लाइव लेग मूल्य, पेऑफ, ब्रेकईवन और अनुमानित पोर्टफोलियो ग्रीक्स।",
      "Analyze manually, save a REVIEW CANDIDATE and monitor every 5 minutes. A confirmed CE/PE thesis reversal closes the saved spread first, then shows an optional opposite-side replacement. Target profit is a paper reference, never guaranteed. Always verify margin and quotes in broker.",
-     "Manual Analyze karein, REVIEW CANDIDATE save karke 5-minute monitor use karein. Confirmed CE/PE reversal me TPS pehle purana spread close karne aur uske baad optional opposite replacement batata hai. Target profit sirf paper reference hai, guarantee nahi; broker margin/quote verify karein.",
+     "Manual Analyze karein, REVIEW CANDIDATE save karke 5-minute monitor use karein. Cutie Strategy Health ke saath HOLD, WATCH, hedge adjustment, book target, cut risk ya CE/PE switch batati hai. Switch me pehle purana spread close aur uske baad optional opposite replacement aata hai. Target profit sirf paper reference hai, guarantee nahi; broker margin/quote verify karein.",
      "मैनुअल Analyze या 5-मिनट मॉनिटर उपयोग करें। स्प्रेड/कंडोर, RISK BLOCKED या WAIT आ सकता है; ब्रोकर मार्जिन/कोट जाँचें।"),
     (22, "Post Market Analysis of TPS",
      "Automatic date-wise Roman-Hindi audit explaining why TPS captured or rejected trades and where monitoring/data gaps occurred.",

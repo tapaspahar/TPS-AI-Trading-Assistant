@@ -10,6 +10,7 @@ from services.live_session import LiveSession
 from services.option_strategy_service import OptionStrategyService
 from engine.strategy_adjustment_engine import monitor_strategy_plan
 from core.settings_store import SettingsStore
+from core.assistant_voice import cutie_says
 from services.notification_service import NotificationService
 from ui.widgets.cards.dashboard_card import DashboardCard
 
@@ -46,7 +47,7 @@ class OptionStrategiesPage(QWidget):
         plan_controls.addWidget(self.start_plan, 0, 0)
         plan_controls.addWidget(self.stop_plan, 0, 1)
         layout.addLayout(plan_controls)
-        self.status = QLabel("Connect a supported broker and analyze an index. TPS may return WAIT when no clean hedged payoff exists.")
+        self.status = QLabel(cutie_says("Broker connect karke index analyze kijiye. Clean hedged payoff na mile to main WAIT bataungi."))
         self.status.setWordWrap(True); layout.addWidget(self.status)
 
         cards = QGridLayout()
@@ -62,7 +63,7 @@ class OptionStrategiesPage(QWidget):
         self.table.setMinimumHeight(180); self.table.horizontalHeader().setStretchLastSection(True); layout.addWidget(self.table)
         self.details = QLabel("No strategy analysis has run yet."); self.details.setWordWrap(True); layout.addWidget(self.details)
         self.monitor_status = QLabel(
-            "Adjustment monitor: no saved plan. Save only a REVIEW CANDIDATE; TPS will compare fresh 5-minute evidence and suggest HOLD, WATCH or EXIT/REASSESS."
+            cutie_says("Abhi koi active strategy save nahi hai. REVIEW CANDIDATE save kijiye; main har 5-minute evidence par strategy health aur adjustment bataungi.")
         )
         self.monitor_status.setWordWrap(True); layout.addWidget(self.monitor_status)
         self.adjustments = QTableWidget(0, 6)
@@ -117,22 +118,22 @@ class OptionStrategiesPage(QWidget):
     def stop_plan_monitor(self):
         self.active_plan = None; self.last_monitor_state = None; self._persist_plan(None); self.stop_plan.setEnabled(False)
         self.adjustments.setRowCount(0)
-        self.monitor_status.setText("Adjustment monitor stopped. No broker order was placed or changed.")
+        self.monitor_status.setText(cutie_says("Strategy monitor band hai. Maine koi broker order place ya change nahi kiya."))
 
     def toggle_auto(self, enabled):
         if enabled:
             self.timer.start(); self.analyze()
         else:
-            self.timer.stop(); self.status.setText("Automatic strategy monitoring disabled; manual analysis remains available.")
+            self.timer.stop(); self.status.setText(cutie_says("Automatic strategy monitoring band hai; manual analysis available hai."))
 
     def analyze(self):
         if self.running:
             return
         if not LiveSession.connected():
-            self.status.setText("Broker data is not connected. Connect a supported broker from Settings first.")
+            self.status.setText(cutie_says("Broker data connected nahi hai. Pehle Settings se supported broker connect kijiye."))
             return
         self.running = True; self.run.setEnabled(False)
-        symbol = self.index.currentText(); self.status.setText(f"Analyzing {symbol} completed candles, VIX and live defined-risk spreads...")
+        symbol = self.index.currentText(); self.status.setText(cutie_says(f"Main {symbol} ke completed candles, VIX aur live defined-risk spreads analyze kar rahi hoon..."))
         Thread(target=self._worker, args=(symbol,), daemon=True).start()
 
     def _worker(self, symbol):
@@ -196,7 +197,7 @@ class OptionStrategiesPage(QWidget):
             + (f"\nBlockers:\n- {blockers}" if blockers else "")
             + f"\n\n{result['warning']}"
         )
-        self.status.setText(f"{result['symbol']} analysis complete: {result['state']}. No broker order placed.")
+        self.status.setText(cutie_says(f"{result['symbol']} analysis complete hai: {result['state']}. Maine koi broker order place nahi kiya."))
         self.start_plan.setEnabled(result.get("state") == "REVIEW CANDIDATE" and bool(result.get("legs")))
         if self.active_plan:
             self.show_monitor_result(monitor_strategy_plan(self.active_plan, result))
@@ -206,9 +207,10 @@ class OptionStrategiesPage(QWidget):
         pnl = monitor.get("estimated_pnl")
         pnl_text = f" | Estimated executable P&L Rs {pnl:,.2f}" if pnl is not None else " | P&L unavailable (quotes incomplete)"
         self.monitor_status.setText(
-            f"Adjustment monitor: {monitor['state']} | Spot {monitor['spot']:,.2f} | Fresh bias {monitor['fresh_bias']}{pnl_text}\n"
+            cutie_says(f"{monitor['decision']} | Strategy health {monitor['strategy_health']}/100 | Spot {monitor['spot']:,.2f} | Fresh bias {monitor['fresh_bias']}{pnl_text}") + "\n"
             f"{monitor['reason']}"
             + (f"\nConfirmed transition: {monitor['transition']} | Replacement: {monitor.get('replacement_strategy')} | Expiry: {monitor.get('replacement_expiry')}" if monitor.get("transition") else "")
+            + (f"\nReplacement reference: target Rs {float(monitor.get('replacement_target_profit') or 0):,.2f} | max defined loss Rs {float(monitor.get('replacement_max_loss') or 0):,.2f}" if monitor.get("replacement_strategy") else "")
             + f"\n{monitor['warning']}"
         )
         actions = monitor.get("actions") or []; self.adjustments.setRowCount(len(actions))
@@ -218,13 +220,13 @@ class OptionStrategiesPage(QWidget):
         self.adjustments.resizeColumnsToContents(); self.adjustments.horizontalHeader().setStretchLastSection(True)
         if monitor["state"] != self.last_monitor_state and monitor["state"] in {"WATCH", "EXIT / REASSESS"}:
             NotificationService.instance().notify(
-                "option_strategies", f"TPS strategy monitor — {monitor['state']}",
-                f"{self.active_plan.get('symbol')} {self.active_plan.get('strategy')}: {monitor['reason']}",
-                dedupe_key=f"{self.active_plan.get('symbol')}:{self.active_plan.get('strategy')}:{monitor['state']}",
+                "option_strategies", f"Cutie strategy alert — {monitor['decision']}",
+                f"Cutie keh rahi hai: {self.active_plan.get('symbol')} {self.active_plan.get('strategy')}: {monitor['reason']}",
+                dedupe_key=f"{self.active_plan.get('symbol')}:{self.active_plan.get('strategy')}:{monitor['decision']}",
                 once_per_day=True,
             )
         self.last_monitor_state = monitor["state"]
 
     def show_error(self, message):
-        self.status.setText(f"Option strategy analysis unavailable: {message}")
+        self.status.setText(cutie_says(f"Option strategy analysis abhi unavailable hai: {message}"))
         self.running = False; self.run.setEnabled(True)

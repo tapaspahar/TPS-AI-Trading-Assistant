@@ -82,36 +82,42 @@ def monitor_strategy_plan(saved_plan: dict, latest: dict) -> dict:
     bias = str(latest.get("bias") or "RANGE / MIXED")
     breakevens = sorted(float(value) for value in (saved_plan.get("breakevens") or []))
     state, reason, scope = "HOLD", "Saved plan remains inside its monitored structure.", None
+    decision = "DO NOTHING"
     transition = None
 
     if "Iron Condor" in strategy and len(breakevens) == 2:
         lower, upper = breakevens
         if spot <= lower or spot >= upper:
             state = "EXIT / REASSESS"
+            decision = "CUT TESTED-SIDE RISK"
             scope = "PE" if spot <= lower else "CE"
             reason = f"Spot {spot:,.2f} breached the {'lower' if spot <= lower else 'upper'} breakeven {lower if spot <= lower else upper:,.2f}."
         elif spot - lower <= warning_distance or upper - spot <= warning_distance:
             state = "WATCH"
+            decision = "PREPARE HEDGE ADJUSTMENT"
             reason = f"Spot {spot:,.2f} is within {warning_distance:,.2f} points of a condor breakeven. Do not add a naked hedge."
         elif bias != "RANGE / MIXED":
             state = "WATCH"
+            decision = "WATCH TREND CHANGE"
             reason = f"Fresh chart bias changed to {bias}; wait for a completed-candle breach before changing the condor."
     elif "Bull Call" in strategy:
         invalid = bias == "BEARISH" and spot < entry_spot - warning_distance
         if invalid:
             state, scope = "EXIT / REASSESS", "ALL"
+            decision = "EXIT & SWITCH SIDE"
             reason = f"Bullish thesis invalidated: fresh bias is BEARISH and spot moved below the monitored buffer from {entry_spot:,.2f}."
             transition = "CE -> PE"
         elif bias != "BULLISH":
-            state = "WATCH"; reason = f"Fresh bias is {bias}; do not add another call spread until direction reconfirms."
+            state = "WATCH"; decision = "WAIT FOR RECONFIRMATION"; reason = f"Fresh bias is {bias}; do not add another call spread until direction reconfirms."
     elif "Bear Put" in strategy:
         invalid = bias == "BULLISH" and spot > entry_spot + warning_distance
         if invalid:
             state, scope = "EXIT / REASSESS", "ALL"
+            decision = "EXIT & SWITCH SIDE"
             reason = f"Bearish thesis invalidated: fresh bias is BULLISH and spot moved above the monitored buffer from {entry_spot:,.2f}."
             transition = "PE -> CE"
         elif bias != "BEARISH":
-            state = "WATCH"; reason = f"Fresh bias is {bias}; do not add another put spread until direction reconfirms."
+            state = "WATCH"; decision = "WAIT FOR RECONFIRMATION"; reason = f"Fresh bias is {bias}; do not add another put spread until direction reconfirms."
 
     pnl = _estimated_pnl(saved_plan, latest)
     management = saved_plan.get("management_reference") or {}
@@ -119,9 +125,11 @@ def monitor_strategy_plan(saved_plan: dict, latest: dict) -> dict:
     loss_review = float(management.get("loss_review_amount") or 0)
     if state == "HOLD" and pnl is not None and target_profit > 0 and pnl >= target_profit:
         state, scope = "EXIT / REASSESS", "ALL"
+        decision = "BOOK PAPER TARGET"
         reason = f"Paper target reference reached: estimated executable P&L Rs {pnl:,.2f} is at/above Rs {target_profit:,.2f}."
     elif state == "HOLD" and pnl is not None and loss_review > 0 and pnl <= -loss_review:
         state, scope = "EXIT / REASSESS", "ALL"
+        decision = "CUT RISK"
         reason = f"Loss-review reference reached: estimated executable P&L Rs {pnl:,.2f} is at/below -Rs {loss_review:,.2f}."
 
     actions = _close_actions(saved_plan, scope or "ALL") if state == "EXIT / REASSESS" else []
@@ -137,10 +145,13 @@ def monitor_strategy_plan(saved_plan: dict, latest: dict) -> dict:
                 "reason": f"Fresh defined-risk {latest_strategy} for expiry {latest.get('expiry') or '-'}; open only after every old close leg is confirmed.",
             })
     return {
-        "state": state, "reason": reason, "spot": spot, "fresh_bias": bias,
+        "state": state, "decision": decision, "reason": reason, "spot": spot, "fresh_bias": bias,
         "estimated_pnl": pnl, "transition": transition,
         "replacement_strategy": latest_strategy if confirmed_opposite else None,
         "replacement_expiry": latest.get("expiry") if confirmed_opposite else None,
+        "replacement_max_loss": latest.get("max_loss") if confirmed_opposite else None,
+        "replacement_target_profit": (latest.get("management_reference") or {}).get("target_profit") if confirmed_opposite else None,
+        "strategy_health": 20 if state == "EXIT / REASSESS" else 55 if state == "WATCH" else 90,
         "actions": actions + replacement,
         "warning": "Manual review only. Close/roll multi-leg positions as one controlled structure; never leave an uncovered short option.",
     }

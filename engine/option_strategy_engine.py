@@ -176,7 +176,7 @@ def recommend_option_strategy(symbol, spot, candles, capture, chain, environment
         "vix_expected_low": round(float(spot) - float(environment.get("expected_daily_range") or 0), 2) if environment.get("expected_daily_range") else None,
         "vix_expected_high": round(float(spot) + float(environment.get("expected_daily_range") or 0), 2) if environment.get("expected_daily_range") else None,
         "regular_move_target_points": environment.get("regular_move_target_points"),
-        "reasons": reasons, "warning": "Review-only defined-risk research. Verify live prices, liquidity, margin and payoff in the broker before any manual action.",
+        "reasons": reasons, "warning": "Cutie keh rahi hai: ye review-only defined-risk research hai. Manual action se pehle broker me live prices, liquidity, margin aur payoff verify kijiye.",
     }
     if environment.get("time_state") == "LATE SESSION" or vix_zone in {"EXTREME RISK", "EXTREME VOLATILITY"}:
         return {**base, "state": "WAIT", "strategy": "No new strategy", "legs": [], "blockers": ["Late session or extreme-VIX risk blocks a new strategy"]}

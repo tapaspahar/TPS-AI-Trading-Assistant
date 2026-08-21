@@ -267,7 +267,7 @@ class GapProbabilityPage(QWidget):
             if stage == "PREVIEW":
                 self.explanation.setText(
                     f"PREVIEW ONLY: {result['predicted_class']} | This is not the protected 3:20 snapshot. "
-                    "TPS will recalculate from completed evidence during the 3:20 capture window."
+                    "Cutie completed evidence se 3:20 capture window me dobara calculate karegi."
                 )
             else:
                 self._refresh_stage_results()

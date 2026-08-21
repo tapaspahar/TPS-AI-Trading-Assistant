@@ -364,7 +364,7 @@ class OptionsPage(QWidget):
         greeks = calculate_greeks(self.spot_price, contract["strike"], premium, contract.get("expiry"), contract["option_type"]) if self.spot_price else None
         greek_text = (
             f"\nModel Greeks (estimate): IV {greeks['iv']:.2f}% | Delta {greeks['delta']:.3f} | Theta/day {greeks['theta_per_day']:.2f} | Gamma {greeks['gamma']:.5f}"
-            if greeks else "\nModel Greeks unavailable: verify premium, expiry and liquidity; TPS will not invent values."
+            if greeks else "\nCutie keh rahi hai: Model Greeks unavailable hain; premium, expiry aur liquidity verify kijiye. Main values invent nahi karungi."
         )
         self.details.setText(
             f"{contract['symbol']}\nPremium: ₹{premium:,.2f} | OI: {oi} | Volume: {volume}\n"
@@ -660,7 +660,7 @@ class OptionsPage(QWidget):
         self.details.setText(
             f"PAPER TRADE CAPTURED - no broker order was sent.\n{plan['contract']['symbol']} | ATM / 1 lot | "
             f"Entry {plan['entry']:.2f} | Stop {plan['stoploss']:.2f} | Target {plan['target']:.2f}.\n"
-            "TPS will check the live option LTP every 30 seconds and book the first hit in the Trade Journal."
+            "Cutie live option LTP har 30 seconds check karegi aur first hit Trade Journal me note karegi."
         )
         if not self.paper_monitor_timer.isActive():
             self.paper_monitor_timer.start(30_000)
@@ -713,7 +713,7 @@ class OptionsPage(QWidget):
                 return
             if self.event_check.currentText() != "No known high-impact event":
                 self.auto_paper_enabled.blockSignals(True); self.auto_paper_enabled.setChecked(False); self.auto_paper_enabled.blockSignals(False)
-                QMessageBox.warning(self, "Auto paper trading", "First select 'No known high-impact event' after checking news/events. TPS will not automate around an unreviewed event.")
+                QMessageBox.warning(self, "Auto paper trading", "Cutie keh rahi hai: news/events check karke pehle 'No known high-impact event' select kijiye. Unreviewed event ke aas-paas main automation nahi karungi.")
                 return
             if not LiveSession.connected():
                 self.auto_paper_enabled.blockSignals(True); self.auto_paper_enabled.setChecked(False); self.auto_paper_enabled.blockSignals(False)
@@ -767,7 +767,7 @@ class OptionsPage(QWidget):
         if not connected:
             self.auto_paper_status.emit(
                 "Auto paper evaluation gap recorded: broker live data is disconnected. "
-                "TPS will resume on the next completed candle after reconnection."
+                "Cutie reconnection ke baad next completed candle par resume karegi."
             )
             return
         if bucket == self.last_auto_paper_bucket:
@@ -793,7 +793,7 @@ class OptionsPage(QWidget):
         except (RuntimeError, ValueError) as error:
             candle_time = (bucket_start - timedelta(minutes=5)).isoformat()
             result = {
-                "status": f"Retry pending for candle {candle_time}: {error} TPS will retry this same candle automatically.",
+                "status": f"Cutie keh rahi hai: candle {candle_time} ka retry pending hai: {error} Main isi candle ko automatically retry karungi.",
                 "retry_pending": True,
                 "attempt": {"checked_at": datetime.now().astimezone().isoformat(timespec="seconds"), "candle_time": candle_time, "future_symbol": None, "candidate": None, "capture": {}, "chart": {}, "chain": {}, "blockers": [str(error), "Automatic retry remains pending for this candle"]},
             }

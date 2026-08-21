@@ -297,7 +297,7 @@ class SelfDevelopmentPage(QWidget):
             f"Observation:\n{item.get('observation')}\n\nSaved evidence:\n{item.get('evidence')}\n\n"
             f"Suggested development:\n{item.get('suggestion')}\n\n"
             f"Approval / validation test:\n{item.get('validation')}\n\n"
-            "Safety: TPS will not modify source code or production trading rules automatically."
+            "Cutie keh rahi hai: safety ke liye main source code ya production trading rules automatically modify nahi karungi."
         )
 
     def refresh_validation_evidence(self, trade_date: str):

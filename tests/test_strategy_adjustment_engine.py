@@ -12,6 +12,18 @@ def _leg(action, option_type, strike):
 
 
 class StrategyAdjustmentEngineTests(unittest.TestCase):
+    def test_healthy_plan_stays_unchanged(self):
+        plan = {
+            "strategy": "Bull Call Debit Spread",
+            "spot": 24500,
+            "expected_daily_range": 100,
+            "legs": [_leg("BUY", "CE", 24500), _leg("SELL", "CE", 24600)],
+        }
+        result = monitor_strategy_plan(plan, {"spot": 24510, "bias": "BULLISH", "state": "WAIT", "chain": {"quote_rows": []}})
+        self.assertEqual(result["state"], "HOLD")
+        self.assertEqual(result["decision"], "DO NOTHING")
+        self.assertEqual(result["strategy_health"], 90)
+
     def test_active_plan_can_survive_restart_in_update_safe_settings(self):
         with TemporaryDirectory() as folder:
             store = SettingsStore(Path(folder) / "settings.json")
@@ -74,6 +86,8 @@ class StrategyAdjustmentEngineTests(unittest.TestCase):
         }
         result = monitor_strategy_plan(plan, latest)
         self.assertEqual(result["state"], "EXIT / REASSESS")
+        self.assertEqual(result["decision"], "EXIT & SWITCH SIDE")
+        self.assertEqual(result["strategy_health"], 20)
         self.assertEqual(result["transition"], "PE -> CE")
         self.assertEqual(result["replacement_strategy"], "Bull Call Debit Spread")
         self.assertTrue(all(action["step"].startswith("1.") for action in result["actions"][:2]))
@@ -93,6 +107,7 @@ class StrategyAdjustmentEngineTests(unittest.TestCase):
         result = monitor_strategy_plan(plan, {"spot": 24510, "bias": "BULLISH", "state": "WAIT", "chain": {"quote_rows": quotes}})
         self.assertEqual(result["estimated_pnl"], 325.0)
         self.assertEqual(result["state"], "EXIT / REASSESS")
+        self.assertEqual(result["decision"], "BOOK PAPER TARGET")
         self.assertIn("target reference reached", result["reason"])
 
 

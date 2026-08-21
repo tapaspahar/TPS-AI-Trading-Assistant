@@ -8,9 +8,12 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.4.4"
-LAST_UPDATED_AT = "21-08-2026 11:18:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.4.4 - 21-08-2026 11:18 IST"
+LAST_UPDATED_AT = "21-08-2026 11:43:27 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.4.4 - 21-08-2026 11:43 IST"
 RELEASE_NOTES = (
+    "Added Cutie as the friendly user-facing guidance voice while retaining TPS AI Trading Assistant as the software brand.",
+    "Expanded saved-plan monitoring with Strategy Health and DO NOTHING, WATCH TREND CHANGE, PREPARE HEDGE ADJUSTMENT, BOOK PAPER TARGET, CUT RISK and EXIT & SWITCH SIDE decisions.",
+    "Opposite-side replacements now display their expiry, paper target reference and defined maximum loss after the existing structure's close-first sequence.",
     "Upgraded Option Strategies with explicit current-expiry candidate side, conservative paper target-profit reference, loss-review threshold and unchanged defined maximum loss.",
     "Added confirmed CE-to-PE and PE-to-CE thesis transitions: TPS closes the saved defined-risk structure first and only then presents an optional fresh opposite-side replacement.",
     "Added target/loss-reference monitoring from conservative executable bid/ask quotes while retaining manual review, risk-cap, expiry, liquidity and no-naked-option safeguards.",

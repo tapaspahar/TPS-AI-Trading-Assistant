@@ -10,5 +10,8 @@ Release date: 21 August 2026
 - A confirmed CE-to-PE or PE-to-CE thesis reversal first lists every close leg for the old structure and only then lists an optional opposite-side replacement.
 - Replacement expiry and strategy are recorded, and uncovered option selling remains prohibited.
 - Risk cap, liquidity, spread, late-session, extreme-VIX and no-naked-option safeguards remain active.
+- Cutie is the friendly guidance voice for strategy analysis and key alerts; TPS AI Trading Assistant remains the product name.
+- Strategy Health now distinguishes DO NOTHING, WATCH, PREPARE HEDGE ADJUSTMENT, BOOK PAPER TARGET, CUT RISK and EXIT & SWITCH SIDE.
+- Any optional replacement shows its expiry, paper target reference and defined maximum loss after the old structure's close-first instructions.
 
 TPS remains read-only decision-support and paper-validation software. Release 1.4.4 does not place, modify or cancel broker orders. Target profit is not guaranteed.
