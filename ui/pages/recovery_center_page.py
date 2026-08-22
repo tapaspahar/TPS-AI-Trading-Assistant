@@ -1,10 +1,10 @@
 """Overtrading protection and bounded paper-validation testing controls."""
 from __future__ import annotations
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QFormLayout, QGridLayout, QGroupBox, QLabel,
-    QLineEdit, QMessageBox, QPushButton, QSpinBox, QVBoxLayout, QWidget,
+    QLineEdit, QMessageBox, QPushButton, QScrollArea, QSpinBox, QVBoxLayout, QWidget,
 )
 
 from core.database_manager import Database
@@ -16,9 +16,26 @@ class RecoveryCenterPage(QWidget):
     def __init__(self):
         super().__init__()
         self.guard = OvertradingGuard()
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setObjectName("recoveryCenterScrollArea")
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFrameShape(QScrollArea.NoFrame)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+
+        content = QWidget()
+        content.setObjectName("recoveryCenterScrollContent")
+        # Preserve each section's usable height. On shorter windows the page
+        # scrolls instead of forcing form rows, cards and buttons to overlap.
+        content.setMinimumHeight(980)
+        layout = QVBoxLayout(content)
         layout.setContentsMargins(18, 16, 18, 18)
         layout.setSpacing(12)
+        self.scroll_area.setWidget(content)
+        outer.addWidget(self.scroll_area)
 
         title = QLabel("Overtrading Protection & Paper Validation Center — Release 1.4.4")
         title.setObjectName("pageTitle")
@@ -33,6 +50,7 @@ class RecoveryCenterPage(QWidget):
         layout.addWidget(intro)
 
         testing_box = QGroupBox("Paper Validation Testing Mode")
+        testing_box.setMinimumHeight(205)
         testing_form = QFormLayout(testing_box)
         self.testing_mode = QCheckBox(
             "Temporary testing mode ON — recovery/overtrading locks suspend karein (sirf paper trades)"
@@ -63,10 +81,12 @@ class RecoveryCenterPage(QWidget):
         self.streak = self._card("Consecutive losses")
         self.validation = self._card("Paper validation")
         for index, card in enumerate((self.status, self.limit, self.streak, self.validation)):
+            card[0].setMinimumHeight(105 if card is not self.validation else 145)
             cards.addWidget(card[0], index // 2, index % 2)
         layout.addLayout(cards)
 
         check_box = QGroupBox("Daily Recovery check-in")
+        check_box.setMinimumHeight(190)
         form = QFormLayout(check_box)
         self.emotional_state = QComboBox()
         self.emotional_state.addItems(EMOTIONAL_STATES)

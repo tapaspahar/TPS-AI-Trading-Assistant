@@ -8,9 +8,10 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.4.4"
-LAST_UPDATED_AT = "22-08-2026 10:46:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.4.4 - 22-08-2026 10:46 IST"
+LAST_UPDATED_AT = "22-08-2026 11:30:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.4.4 - 22-08-2026 11:30 IST"
 RELEASE_NOTES = (
+    "Rebuilt the Overtrading Protection page inside a dedicated vertical scroll area with protected section heights, mouse-wheel movement and visible arrow controls so testing-mode, guard, validation and recovery fields no longer overlap on shorter displays.",
     "Made paper target, stop-loss and configured time exits independent of the Options page lifecycle with an always-on 10-second watchdog; one failed contract quote no longer pauses monitoring of other open paper trades.",
     "Added a last-verified-premium fallback for mandatory paper time exits when the broker returns an error or blank quote, with a resolved audit record instead of a lingering active alert.",
     "Added an explicit temporary Paper Validation Testing Mode with a configurable 1-20 simulated-trade daily limit while keeping event, data-quality, liquidity, expiry, risk, one-open-position, target, stop-loss and time-exit safeguards active.",
