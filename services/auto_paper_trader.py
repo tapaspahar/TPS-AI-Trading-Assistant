@@ -171,7 +171,9 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
         )
         expiry_strategy = analyze_expiry_strategy(spot, chain, environment, (expiry_date - checked_at.date()).days)
         environment["expiry_strategy"] = expiry_strategy
-        environment["adaptive_max_trades"] = min(
+        testing_mode = bool(settings.get("paper_validation_testing_mode", False))
+        testing_limit = min(20, max(1, int(settings.get("paper_validation_daily_limit", 20))))
+        environment["adaptive_max_trades"] = testing_limit if testing_mode else min(
             int(settings.get("max_trades_per_day", 5)),
             1 if environment["vix_zone"] == "EXTREME RISK" else 2 if environment["regime"] == "LOW VOLATILITY" else int(settings.get("max_trades_per_day", 5)),
         )
@@ -210,7 +212,10 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             timing = _fallback_timing(timing_stage, checked_at, capture.get("candle_time"))
         chart["signal_timing"] = timing
         daily_limit = float(settings.get("capital", 100000)) * float(settings.get("daily_loss_percent", 3)) / 100
-        progress["daily_remaining"] = max(0, daily_limit - max(0, -float(progress.get("realized_pnl", 0))))
+        progress["daily_remaining"] = (
+            float("inf") if testing_mode
+            else max(0, daily_limit - max(0, -float(progress.get("realized_pnl", 0))))
+        )
         operational_blockers = []
         recovery = OvertradingGuard().assess(settings, database, checked_at)
         if settings.get("news_risk_pause"): operational_blockers.append("Emergency News Risk Pause is ON")
@@ -266,7 +271,9 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             "event_context": event_risk, "market_environment": environment,
         }
         selected_quote = next((row for row in chain["quote_rows"] if str(row.get("token")) == str(plan["contract"]["token"])), {})
-        cooldown = database.paper_trade_cooldown_remaining(settings.get("paper_trade_cooldown_minutes", 15), checked_at)
+        cooldown = 0 if testing_mode else database.paper_trade_cooldown_remaining(
+            settings.get("paper_trade_cooldown_minutes", 15), checked_at
+        )
         safety_settings = {**settings, "max_trades_per_day": adaptive_limit}
         safety = assess_execution_safety(
             now=checked_at, candle_time=capture.get("candle_time"), quote=selected_quote, plan=plan,

@@ -22,6 +22,10 @@ DEFAULT_SETTINGS = {
     # captures only; TPS remains unable to place a broker order.
     "recovery_mode_enabled": True,
     "recovery_daily_trade_limit": 1,
+    # Explicit paper-only validation mode. It suspends behavioural recovery
+    # locks, but keeps a bounded daily capture limit and never enables orders.
+    "paper_validation_testing_mode": False,
+    "paper_validation_daily_limit": 20,
     "recovery_loss_streak_limit": 2,
     "recovery_lock_hours": 48,
     "recovery_min_paper_sessions": 30,
@@ -157,6 +161,8 @@ class SettingsStore:
             "market_close_time": str(settings.get("market_close_time", current["market_close_time"])).strip(),
             "recovery_mode_enabled": bool(settings.get("recovery_mode_enabled", current["recovery_mode_enabled"])),
             "recovery_daily_trade_limit": int(settings.get("recovery_daily_trade_limit", current["recovery_daily_trade_limit"])),
+            "paper_validation_testing_mode": bool(settings.get("paper_validation_testing_mode", current["paper_validation_testing_mode"])),
+            "paper_validation_daily_limit": int(settings.get("paper_validation_daily_limit", current["paper_validation_daily_limit"])),
             "recovery_loss_streak_limit": int(settings.get("recovery_loss_streak_limit", current["recovery_loss_streak_limit"])),
             "recovery_lock_hours": int(settings.get("recovery_lock_hours", current["recovery_lock_hours"])),
             "recovery_min_paper_sessions": int(settings.get("recovery_min_paper_sessions", current["recovery_min_paper_sessions"])),
@@ -203,6 +209,8 @@ class SettingsStore:
         parse_session_times(values)
         if not 1 <= values["recovery_daily_trade_limit"] <= values["max_trades_per_day"]:
             raise ValueError("Recovery daily limit must be between 1 and the normal maximum-trades limit.")
+        if not 1 <= values["paper_validation_daily_limit"] <= 20:
+            raise ValueError("Paper-validation testing limit must be between 1 and 20 trades per day.")
         if not 1 <= values["recovery_loss_streak_limit"] <= 10:
             raise ValueError("Recovery loss-streak limit must be between 1 and 10.")
         if not 1 <= values["recovery_lock_hours"] <= 168:

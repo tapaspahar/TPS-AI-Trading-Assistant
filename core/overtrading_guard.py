@@ -66,6 +66,37 @@ class OvertradingGuard:
 
     def assess(self, settings: dict, database, now=None) -> dict:
         current = self._local_now(now)
+        trade_date = current.strftime("%d-%m-%Y")
+        progress = database.paper_trade_progress(trade_date)
+        if not isinstance(progress, dict):
+            progress = {}
+        all_progress = database.paper_trade_progress()
+        if not isinstance(all_progress, dict):
+            all_progress = {}
+        target = int(settings.get("recovery_min_paper_sessions", 30))
+
+        if settings.get("paper_validation_testing_mode", False):
+            testing_limit = min(20, max(1, int(settings.get("paper_validation_daily_limit", 20))))
+            count = int(progress.get("trades", 0) or 0)
+            blockers = []
+            if count >= testing_limit:
+                blockers.append(f"Paper-validation daily limit reached ({count}/{testing_limit})")
+            return {
+                "allowed": not blockers,
+                "blockers": blockers,
+                "warnings": [
+                    "Paper Validation Testing Mode is ON: behavioural recovery locks are temporarily suspended for simulated trades only",
+                    "Target, stop-loss, time-exit, event, data-quality and open-position safety monitoring remain active",
+                ],
+                "check_in": self.today_check_in(current),
+                "mode": "PAPER VALIDATION TESTING",
+                "paper_trades_today": count,
+                "daily_limit": testing_limit,
+                "loss_streak": int((database.paper_loss_streak() or {}).get("count", 0) or 0),
+                "locked_until": None,
+                "paper_sessions": int(all_progress.get("days", 0) or 0),
+                "paper_session_target": target,
+            }
         if not settings.get("recovery_mode_enabled", True):
             return {"allowed": True, "blockers": [], "warnings": ["Recovery Mode is disabled"], "check_in": None}
 
@@ -80,10 +111,6 @@ class OvertradingGuard:
             if not check_in.get("paper_only_commitment"):
                 blockers.append("Paper-only safety commitment is not confirmed")
 
-        trade_date = current.strftime("%d-%m-%Y")
-        progress = database.paper_trade_progress(trade_date)
-        if not isinstance(progress, dict):
-            progress = {}
         normal_limit = int(settings.get("max_trades_per_day", 5))
         recovery_limit = min(normal_limit, int(settings.get("recovery_daily_trade_limit", 1)))
         if progress.get("trades", 0) >= recovery_limit:
@@ -106,10 +133,6 @@ class OvertradingGuard:
                     f"({streak_count} losses)"
                 )
 
-        all_progress = database.paper_trade_progress()
-        if not isinstance(all_progress, dict):
-            all_progress = {}
-        target = int(settings.get("recovery_min_paper_sessions", 30))
         if all_progress.get("days", 0) < target:
             warnings.append(f"Paper validation: {all_progress.get('days', 0)}/{target} sessions; real-money eligibility remains withheld")
         return {
@@ -123,4 +146,5 @@ class OvertradingGuard:
             "locked_until": locked_until.isoformat(timespec="minutes") if locked_until else None,
             "paper_sessions": all_progress.get("days", 0),
             "paper_session_target": target,
+            "mode": "RECOVERY PROTECTION",
         }

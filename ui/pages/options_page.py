@@ -243,6 +243,11 @@ class OptionsPage(QWidget):
         self.auto_paper_captured.connect(self.show_auto_paper_captured)
         self.paper_monitor_timer = QTimer(self)
         self.paper_monitor_timer.timeout.connect(self.monitor_paper_trades)
+        # Open positions must remain protected even when automatic capture is
+        # paused or this page is never opened. A short watchdog interval also
+        # reduces the chance of missing a brief option-premium target touch.
+        self.paper_monitor_timer.start(10_000)
+        QTimer.singleShot(1_000, self.monitor_paper_trades)
         self.auto_paper_timer = QTimer(self)
         self.auto_paper_timer.timeout.connect(self.check_auto_paper_cycle)
 
@@ -571,7 +576,7 @@ class OptionsPage(QWidget):
         if LiveSession.connected() and not self.contracts:
             self.load_contracts()
         if LiveSession.connected() and not self.paper_monitor_timer.isActive():
-            self.paper_monitor_timer.start(30_000)
+            self.paper_monitor_timer.start(10_000)
             self.monitor_paper_trades()
         if (
             LiveSession.connected()
@@ -660,10 +665,10 @@ class OptionsPage(QWidget):
         self.details.setText(
             f"PAPER TRADE CAPTURED - no broker order was sent.\n{plan['contract']['symbol']} | ATM / 1 lot | "
             f"Entry {plan['entry']:.2f} | Stop {plan['stoploss']:.2f} | Target {plan['target']:.2f}.\n"
-            "Cutie live option LTP har 30 seconds check karegi aur first hit Trade Journal me note karegi."
+            "Cutie live option LTP har 10 seconds check karegi aur first verified hit Trade Journal me note karegi."
         )
         if not self.paper_monitor_timer.isActive():
-            self.paper_monitor_timer.start(30_000)
+            self.paper_monitor_timer.start(10_000)
         self.update_plan_readiness()
 
     def monitor_paper_trades(self):
@@ -700,7 +705,7 @@ class OptionsPage(QWidget):
                 f"{row['symbol']} LTP {row.get('ltp') or 0:.2f} | SL {row['stoploss']:.2f} | "
                 f"Target {row['target']:.2f} | MAE {row['mae']:.2f} | MFE {row['mfe']:.2f}{alert}"
             )
-        self.details.setText("PAPER TRADE PREMIUM MONITOR (30-second quote check)\n" + "\n".join(lines))
+        self.details.setText("PAPER TRADE PREMIUM MONITOR (10-second quote check)\n" + "\n".join(lines))
 
     def show_paper_trade_error(self, message):
         self.details.setText(f"Paper-trade monitor paused: {message}. No broker order was sent; retry after broker data is available.")
@@ -976,7 +981,7 @@ class OptionsPage(QWidget):
         )
         self.paper_trade_captured.emit(plan)
         if not self.paper_monitor_timer.isActive():
-            self.paper_monitor_timer.start(30_000)
+            self.paper_monitor_timer.start(10_000)
         self.update_plan_readiness()
 
     def send_plan_to_journal(self):

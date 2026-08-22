@@ -72,6 +72,18 @@ class SettingsStoreTests(unittest.TestCase):
             self.assertTrue(store.save(settings)["auto_paper_monitor_enabled"])
             self.assertTrue(store.load()["auto_paper_monitor_enabled"])
 
+    def test_paper_validation_testing_mode_and_limit_persist(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = SettingsStore(Path(directory) / "settings.json")
+            settings = store.load()
+            settings.update({"paper_validation_testing_mode": True, "paper_validation_daily_limit": 20})
+            saved = store.save(settings)
+            self.assertTrue(saved["paper_validation_testing_mode"])
+            self.assertEqual(store.load()["paper_validation_daily_limit"], 20)
+            settings["paper_validation_daily_limit"] = 21
+            with self.assertRaisesRegex(ValueError, "testing limit"):
+                store.save(settings)
+
     def test_trade_plan_minimum_score_is_persisted_and_validated(self):
         with tempfile.TemporaryDirectory() as directory:
             store = SettingsStore(Path(directory) / "settings.json")

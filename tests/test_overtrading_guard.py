@@ -69,6 +69,16 @@ class OvertradingGuardTests(unittest.TestCase):
         self.assertTrue(any("daily paper-trade limit" in item for item in result["blockers"]))
         self.assertTrue(any("Consecutive-loss lock" in item for item in result["blockers"]))
 
+    def test_paper_validation_testing_mode_bypasses_recovery_but_stops_at_twenty(self):
+        settings = {**self.settings, "paper_validation_testing_mode": True, "paper_validation_daily_limit": 20}
+        allowed = self.guard.assess(settings, FakeDatabase(today=19, losses=5), self.now)
+        self.assertTrue(allowed["allowed"])
+        self.assertEqual(allowed["mode"], "PAPER VALIDATION TESTING")
+        self.assertEqual(allowed["daily_limit"], 20)
+        blocked = self.guard.assess(settings, FakeDatabase(today=20, losses=5), self.now)
+        self.assertFalse(blocked["allowed"])
+        self.assertTrue(any("20/20" in item for item in blocked["blockers"]))
+
 
 if __name__ == "__main__":
     unittest.main()

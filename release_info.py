@@ -8,9 +8,13 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.4.4"
-LAST_UPDATED_AT = "21-08-2026 17:22:53 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.4.4 - 21-08-2026 17:22 IST"
+LAST_UPDATED_AT = "22-08-2026 10:46:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.4.4 - 22-08-2026 10:46 IST"
 RELEASE_NOTES = (
+    "Made paper target, stop-loss and configured time exits independent of the Options page lifecycle with an always-on 10-second watchdog; one failed contract quote no longer pauses monitoring of other open paper trades.",
+    "Added a last-verified-premium fallback for mandatory paper time exits when the broker returns an error or blank quote, with a resolved audit record instead of a lingering active alert.",
+    "Added an explicit temporary Paper Validation Testing Mode with a configurable 1-20 simulated-trade daily limit while keeping event, data-quality, liquidity, expiry, risk, one-open-position, target, stop-loss and time-exit safeguards active.",
+    "Expanded paper self-validation with captured, open and closed counts, target/stop/time-exit outcomes, target-versus-stop accuracy and closed-trade P&L win rate.",
     "Made Angel One instrument discovery resilient with verified last-known-good fallback, three bounded live retries, response validation and atomic cache replacement so a temporary master-download outage does not erase an otherwise evaluable market window.",
     "Corrected Auto Attempt classification: EARLY WATCH and low-score CE/PE observations are now STRATEGY REJECT, while CANDIDATE is reserved for a fully qualified strategy; proven legacy WATCH mislabels are repaired without changing genuine trade history.",
     "Added Cutie as the friendly user-facing guidance voice while retaining TPS AI Trading Assistant as the software brand.",

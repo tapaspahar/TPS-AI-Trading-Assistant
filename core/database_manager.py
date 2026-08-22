@@ -1190,10 +1190,41 @@ class Database:
                JOIN paper_trade_links p ON p.trade_id = t.id WHERE t.status = 'OPEN'"""
         ).fetchall()
         closed = []
+
+        def close_on_last_verified_at_time_exit(row, reason: str) -> bool:
+            """Use a previously verified premium only for the mandatory paper time exit."""
+            close_at = datetime.combine(now.date(), parse_session_times(settings)[2], IST)
+            exit_window = settings.get("time_exit_minutes_before_close")
+            time_exit = exit_window is not None and now >= close_at - timedelta(minutes=int(exit_window))
+            last_ltp = float(row["last_ltp"] or 0)
+            if not time_exit or last_ltp <= 0 or not self.close_trade(int(row["id"]), last_ltp, "TIME EXIT"):
+                return False
+            created_at = datetime.now().isoformat(timespec="seconds")
+            self.cursor.execute(
+                "INSERT OR IGNORE INTO trade_alerts (trade_id, created_at, alert_type, title, message) VALUES (?, ?, ?, ?, ?)",
+                (int(row["id"]), created_at, "TIME_EXIT_LAST_VERIFIED",
+                 "Paper time exit used last verified premium",
+                 f"Fresh exit quote was unavailable ({reason}); paper trade closed at last verified LTP {last_ltp:.2f}."),
+            )
+            self.cursor.execute(
+                "UPDATE trade_alerts SET status = 'RESOLVED' WHERE trade_id = ? AND alert_type = 'TIME_EXIT_LAST_VERIFIED'",
+                (int(row["id"]),),
+            )
+            closed.append({"trade_id": int(row["id"]), "symbol": row["contract_symbol"], "ltp": last_ltp, "outcome": "TIME EXIT"})
+            return True
+
         for row in rows:
-            quote = client.get_option_quote(row["exchange"], row["token"])
-            ltp = float(quote.get("ltp", 0) or 0)
+            try:
+                quote = client.get_option_quote(row["exchange"], row["token"])
+                ltp = float(quote.get("ltp", 0) or 0)
+            except (RuntimeError, ValueError, TypeError, KeyError) as error:
+                # One unavailable contract must never pause monitoring for all
+                # other open paper positions. Time exit can use the last
+                # already-verified premium, clearly recorded as a fallback.
+                close_on_last_verified_at_time_exit(row, str(error))
+                continue
             if ltp <= 0:
+                close_on_last_verified_at_time_exit(row, "broker returned a zero/blank premium")
                 continue
             minimum = min(ltp, float(row["min_ltp"])) if row["min_ltp"] is not None else ltp
             maximum = max(ltp, float(row["max_ltp"])) if row["max_ltp"] is not None else ltp
@@ -1263,10 +1294,18 @@ class Database:
             f"""SELECT COUNT(*) AS trades, COUNT(DISTINCT t.trade_date) AS days,
                        SUM(CASE WHEN t.status = 'OPEN' THEN 1 ELSE 0 END) AS open_trades,
                        SUM(CASE WHEN t.status = 'CLOSED' AND t.outcome = 'TARGET HIT' THEN 1 ELSE 0 END) AS target_hits,
-                       SUM(CASE WHEN t.status = 'CLOSED' AND t.outcome IN ('STOP LOSS HIT','TRAILING STOP HIT') THEN 1 ELSE 0 END) AS stoploss_hits
+                       SUM(CASE WHEN t.status = 'CLOSED' AND t.outcome IN ('STOP LOSS HIT','TRAILING STOP HIT') THEN 1 ELSE 0 END) AS stoploss_hits,
+                       SUM(CASE WHEN t.status = 'CLOSED' AND t.outcome = 'TIME EXIT' THEN 1 ELSE 0 END) AS time_exits,
+                       SUM(CASE WHEN t.status = 'CLOSED' THEN 1 ELSE 0 END) AS closed_trades,
+                       SUM(CASE WHEN t.status = 'CLOSED' AND t.pnl > 0 THEN 1 ELSE 0 END) AS profitable_closes
                 FROM trades t JOIN paper_trade_links p ON p.trade_id = t.id {where}""", values,
         ).fetchone()
-        result = {key: int(row[key] or 0) for key in ("trades", "days", "open_trades", "target_hits", "stoploss_hits")}
+        result = {key: int(row[key] or 0) for key in (
+            "trades", "days", "open_trades", "target_hits", "stoploss_hits", "time_exits", "closed_trades", "profitable_closes"
+        )}
+        decisive = result["target_hits"] + result["stoploss_hits"]
+        result["target_vs_stop_accuracy"] = round(result["target_hits"] * 100 / decisive, 1) if decisive else 0.0
+        result["closed_trade_win_rate"] = round(result["profitable_closes"] * 100 / result["closed_trades"], 1) if result["closed_trades"] else 0.0
         pnl_row = self.cursor.execute(
             f"SELECT COALESCE(SUM(pnl), 0) AS realized_pnl FROM trades t JOIN paper_trade_links p ON p.trade_id=t.id {where} AND t.status='CLOSED'" if where
             else "SELECT COALESCE(SUM(t.pnl), 0) AS realized_pnl FROM trades t JOIN paper_trade_links p ON p.trade_id=t.id WHERE t.status='CLOSED'",
