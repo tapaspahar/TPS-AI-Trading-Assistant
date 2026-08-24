@@ -54,6 +54,7 @@ class OptionStrategiesPage(QWidget):
         self.cards = {key: DashboardCard(label, "-") for key, label in (
             ("strategy", "Suggested Structure"), ("bias", "Market Bias"), ("environment", "VIX / Regime"),
             ("range", "Expected / Remaining Range"), ("payoff", "Target Profit / Max Defined Loss"), ("target", "Expiry / Candidate Side"),
+            ("fibonacci", "Fibonacci Context"), ("evidence", "Smart Evidence Gate"),
         )}
         for i, card in enumerate(self.cards.values()):
             card.set_compact(True); cards.addWidget(card, i // 3, i % 3)
@@ -62,6 +63,10 @@ class OptionStrategiesPage(QWidget):
         self.table.setHorizontalHeaderLabels(("Action", "Type", "Strike", "Contract", "Price", "Lots", "Quantity"))
         self.table.setMinimumHeight(180); self.table.horizontalHeader().setStretchLastSection(True); layout.addWidget(self.table)
         self.details = QLabel("No strategy analysis has run yet."); self.details.setWordWrap(True); layout.addWidget(self.details)
+        self.what_if = QTableWidget(0, 4)
+        self.what_if.setHorizontalHeaderLabels(("What-if (paper study only)", "Score gate", "Checklist matches", "Result"))
+        self.what_if.setMinimumHeight(135); self.what_if.horizontalHeader().setStretchLastSection(True)
+        layout.addWidget(self.what_if)
         self.monitor_status = QLabel(
             cutie_says("Abhi koi active strategy save nahi hai. REVIEW CANDIDATE save kijiye; main har 5-minute evidence par strategy health aur adjustment bataungi.")
         )
@@ -169,11 +174,24 @@ class OptionStrategiesPage(QWidget):
         else:
             self.cards["payoff"].set_value("No valid payoff yet")
         self.cards["target"].set_value(f"{result.get('expiry') or '-'}\n{result.get('candidate_side') or '-'} defined-risk")
+        fib = result.get("fibonacci") or {}
+        self.cards["fibonacci"].set_value(
+            f"{fib.get('state', 'DATA GAP')}\n{fib.get('nearest_ratio', '-')}% @ {fib.get('nearest_level', '-')}"
+        )
+        self.cards["evidence"].set_value(
+            f"{result.get('strategy_score', 0)}/100\n{result.get('strategy_passed', 0)}/{result.get('strategy_total', 0)} checks"
+        )
         legs = result.get("legs") or []; self.table.setRowCount(len(legs))
         for row_index, leg in enumerate(legs):
             values = (leg["action"], leg["option_type"], f"{leg['strike']:,.0f}", leg["symbol"], f"{leg['price']:,.2f}", leg["lots"], leg["quantity"])
             for column, value in enumerate(values): self.table.setItem(row_index, column, QTableWidgetItem(str(value)))
         self.table.resizeColumnsToContents(); self.table.horizontalHeader().setStretchLastSection(True)
+        simulations = result.get("what_if") or []; self.what_if.setRowCount(len(simulations))
+        for row_index, scenario in enumerate(simulations):
+            values = (scenario["name"], scenario["score_gate"], scenario["matches_gate"], scenario["result"])
+            for column, value in enumerate(values):
+                self.what_if.setItem(row_index, column, QTableWidgetItem(str(value)))
+        self.what_if.resizeColumnsToContents(); self.what_if.horizontalHeader().setStretchLastSection(True)
         reasons = "\n- ".join(result.get("reasons") or [])
         blockers = "\n- ".join(result.get("blockers") or [])
         payoff = f"Net {result.get('net_type')} {result.get('net_premium')} | Breakeven(s): {result.get('breakevens')}" if result.get("net_type") else "No tradeable defined-risk payoff is ready."
@@ -197,7 +215,7 @@ class OptionStrategiesPage(QWidget):
             + (f"\nBlockers:\n- {blockers}" if blockers else "")
             + f"\n\n{result['warning']}"
         )
-        self.status.setText(cutie_says(f"{result['symbol']} analysis complete hai: {result['state']}. Maine koi broker order place nahi kiya."))
+        self.status.setText(cutie_says(f"{result['symbol']} analysis complete hai: {result['state']}. WATCH candidate study ke liye hai; maine koi broker order place nahi kiya."))
         self.start_plan.setEnabled(result.get("state") == "REVIEW CANDIDATE" and bool(result.get("legs")))
         if self.active_plan:
             self.show_monitor_result(monitor_strategy_plan(self.active_plan, result))

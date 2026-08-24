@@ -8,9 +8,12 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.4.4"
-LAST_UPDATED_AT = "24-08-2026 16:06:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.4.4 - 24-08-2026 16:06 IST"
+LAST_UPDATED_AT = "24-08-2026 17:30:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.4.4 - 24-08-2026 17:30 IST"
 RELEASE_NOTES = (
+    "Upgraded Option Strategies with a smart READY/WATCH/DATA-GAP suggestion flow so a near-valid fully hedged structure is explained instead of disappearing behind a generic WAIT.",
+    "Added completed-candle Fibonacci swing and 23.6/38.2/50/61.8/78.6 retracement context as supporting evidence; it never bypasses liquidity, expiry, risk, event or late-session locks.",
+    "Added a read-only what-if gate simulator comparing the saved score/checklist with balanced and exploratory paper-study gates without changing production settings or weakening hard safety blockers.",
     "Added an evidence-led late-entry guard after the 24 August stop-loss audit: a fresh-trigger grace entry is now rejected when it is already beyond the preferred ATR extension and the VIX-implied daily movement budget is exhausted.",
     "Added expected-range utilization, remaining movement points and movement-state evidence beside entry timing in Options Workspace and the permanent Auto Attempt report; normal fresh-trigger grace remains available while movement budget exists.",
     "Rebuilt the Overtrading Protection page inside a dedicated vertical scroll area with protected section heights, mouse-wheel movement and visible arrow controls so testing-mode, guard, validation and recovery fields no longer overlap on shorter displays.",

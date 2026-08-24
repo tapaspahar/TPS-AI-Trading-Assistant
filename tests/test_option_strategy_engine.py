@@ -63,3 +63,27 @@ class OptionStrategyEngineTests(unittest.TestCase):
         result = recommend_option_strategy("NIFTY", 10000, self.candles, self.capture, self.chain, environment, {"capital": 100000, "risk_percent": 10})
         self.assertEqual(result["state"], "WAIT")
         self.assertFalse(result["legs"])
+
+    @patch("engine.option_strategy_engine.analyze_candles", return_value={"state": "Bullish structure"})
+    def test_smart_candidate_includes_fibonacci_and_gate_simulation(self, _structure):
+        candles = []
+        for index in range(60):
+            close = 9900 + index * 2
+            candles.append({"open": close - 2, "high": close + 5, "low": close - 5, "close": close, "volume": 100})
+        result = recommend_option_strategy(
+            "NIFTY", 10000, candles, self.capture, {**self.chain, "data_quality": 80},
+            self.environment, {"capital": 100000, "risk_percent": 10, "tps_match_mode": "adaptive"},
+        )
+        self.assertIn(result["state"], {"REVIEW CANDIDATE", "WATCH CANDIDATE"})
+        self.assertIn("nearest_level", result["fibonacci"])
+        self.assertEqual(len(result["what_if"]), 3)
+        self.assertEqual(result["strategy_total"], 7)
+
+    @patch("engine.option_strategy_engine.analyze_candles", return_value={"state": "Bullish structure"})
+    def test_what_if_never_bypasses_risk_cap(self, _structure):
+        result = recommend_option_strategy(
+            "NIFTY", 10000, self.candles, self.capture, {**self.chain, "data_quality": 80},
+            self.environment, {"capital": 1000, "risk_percent": 1, "tps_match_mode": "adaptive"},
+        )
+        self.assertEqual(result["state"], "RISK BLOCKED")
+        self.assertTrue(all(not row["would_qualify"] for row in result["what_if"]))
