@@ -8,9 +8,11 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.4.4"
-LAST_UPDATED_AT = "22-08-2026 11:30:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.4.4 - 22-08-2026 11:30 IST"
+LAST_UPDATED_AT = "24-08-2026 16:06:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.4.4 - 24-08-2026 16:06 IST"
 RELEASE_NOTES = (
+    "Added an evidence-led late-entry guard after the 24 August stop-loss audit: a fresh-trigger grace entry is now rejected when it is already beyond the preferred ATR extension and the VIX-implied daily movement budget is exhausted.",
+    "Added expected-range utilization, remaining movement points and movement-state evidence beside entry timing in Options Workspace and the permanent Auto Attempt report; normal fresh-trigger grace remains available while movement budget exists.",
     "Rebuilt the Overtrading Protection page inside a dedicated vertical scroll area with protected section heights, mouse-wheel movement and visible arrow controls so testing-mode, guard, validation and recovery fields no longer overlap on shorter displays.",
     "Made paper target, stop-loss and configured time exits independent of the Options page lifecycle with an always-on 10-second watchdog; one failed contract quote no longer pauses monitoring of other open paper trades.",
     "Added a last-verified-premium fallback for mandatory paper time exits when the broker returns an error or blank quote, with a resolved audit record instead of a lingering active alert.",

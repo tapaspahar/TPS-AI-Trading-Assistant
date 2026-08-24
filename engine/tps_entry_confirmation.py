@@ -241,6 +241,10 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
     support_confluence = support_gap is not None and support_gap <= zone_tolerance
     resistance_confluence = resistance_gap is not None and resistance_gap <= zone_tolerance
     regular_target = float(environment.get("regular_move_target_points") or 0)
+    remaining_expected_range = environment.get("remaining_expected_range")
+    range_consumed_percent = environment.get("range_consumed_percent")
+    movement_state = str(environment.get("movement_state") or "UNAVAILABLE")
+    regular_move_available = environment.get("regular_move_available")
     required_room = max(close * .0005, min(atr * .75, regular_target) if regular_target > 0 else atr * .75)
     configured_extension = settings.get("tps_max_entry_extension_atr")
     adaptive_extension = environment.get("max_entry_extension_atr", DEFAULT_MAX_ENTRY_EXTENSION_ATR)
@@ -298,8 +302,14 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
             if extension_atr > extension_hard_limit:
                 blockers.append(f"Late CE entry: price is {extension_atr:.2f} ATR above VWAP/EMA20 (hard limit {extension_hard_limit:.2f})")
             elif extension_atr > max_extension_atr:
-                if trigger_ok:
+                if trigger_ok and regular_move_available is not False:
                     quality_warnings.append(f"CE extension {extension_atr:.2f} ATR is above preferred {max_extension_atr:.2f}, but within the fresh-trigger grace band")
+                elif trigger_ok:
+                    blockers.append(
+                        f"Late CE entry after expected range exhaustion: {extension_atr:.2f} ATR extension exceeds the "
+                        f"preferred {max_extension_atr:.2f}; only {remaining_expected_range if remaining_expected_range is not None else '-'} "
+                        f"expected points remain ({movement_state})"
+                    )
                 else:
                     blockers.append(f"Late CE entry: {extension_atr:.2f} ATR extension has no fresh pullback/reversal trigger")
             if rsi is not None and rsi >= ce_max_rsi:
@@ -328,8 +338,14 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
             if extension_atr > extension_hard_limit:
                 blockers.append(f"Late PE entry: price is {extension_atr:.2f} ATR below VWAP/EMA20 (hard limit {extension_hard_limit:.2f})")
             elif extension_atr > max_extension_atr:
-                if trigger_ok:
-                    quality_warnings.append(f"PE extension {extension_atr:.2f} ATR is below preferred {max_extension_atr:.2f}, but within the fresh-trigger grace band")
+                if trigger_ok and regular_move_available is not False:
+                    quality_warnings.append(f"PE extension {extension_atr:.2f} ATR is above preferred {max_extension_atr:.2f}, but within the fresh-trigger grace band")
+                elif trigger_ok:
+                    blockers.append(
+                        f"Late PE entry after expected range exhaustion: {extension_atr:.2f} ATR extension exceeds the "
+                        f"preferred {max_extension_atr:.2f}; only {remaining_expected_range if remaining_expected_range is not None else '-'} "
+                        f"expected points remain ({movement_state})"
+                    )
                 else:
                     blockers.append(f"Late PE entry: {extension_atr:.2f} ATR extension has no fresh pullback/reversal trigger")
             if rsi is not None and rsi <= pe_min_rsi:
@@ -362,6 +378,10 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
                 "nearest_level": nearest, "room_to_level": round(room, 2) if room is not None else None,
                 "chart_level_quality": resistance_quality if side == "CE" else support_quality,
                 "environment_regime": environment.get("regime", "unavailable"),
+                "movement_state": movement_state,
+                "range_consumed_percent": range_consumed_percent,
+                "remaining_expected_range": remaining_expected_range,
+                "regular_move_available": regular_move_available,
                 "timely": extension_atr <= extension_hard_limit and (
                     rsi is None or (rsi < ce_max_rsi if side == "CE" else rsi > pe_min_rsi)
                 ) and trigger_ok,

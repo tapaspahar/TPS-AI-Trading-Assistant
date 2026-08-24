@@ -142,6 +142,57 @@ class TpsEntryConfirmationTests(unittest.TestCase):
         self.assertEqual(quality["regular_move_target_points"], 20)
         self.assertTrue(quality["timely"])
 
+    @patch("engine.tps_entry_confirmation.analyze_candles", return_value={
+        "state": "Bearish structure", "support": 24100.0, "resistance": 24350.0,
+        "support_zone": {"source": "fallback", "touches": 1, "reliable": False},
+        "resistance_zone": {"source": "cluster", "touches": 3, "reliable": True},
+    })
+    def test_fresh_pe_grace_is_blocked_when_vix_range_is_exhausted(self, _structure):
+        for i, candle in enumerate(self.candles):
+            candle.update({"open": 24400-i*3, "high": 24405-i*3, "low": 24390-i*3,
+                           "close": 24395-i*3, "volume": 100})
+        self.candles[-1].update({"open": 24195, "high": 24200, "low": 24188,
+                                 "close": 24190.30, "volume": 123})
+        self.capture.update({
+            "open": "24195", "close": "24190.30", "ema_5": "24196.05", "ema_20": "24207.31",
+            "ema_50": "24234.93", "vwap": "24254.90", "supertrend": "24146.57",
+            "atr_14": "14.70", "rsi_14": "47.60", "volume_ratio": "1.23",
+            "candle_direction": "BEARISH", "fake_breakout_risk": False,
+        })
+        self.chain.update({"put_support": 24000, "call_resistance": 24300,
+                           "pcr_oi": .72, "pcr_volume": 1.64})
+        environment = {
+            "regime": "TRENDING", "vix_zone": "CALM / RANGE", "risk_multiplier": .75,
+            "volume_threshold": 1.0, "max_entry_extension_atr": 1.0,
+            "regular_move_target_points": 17.57, "remaining_expected_range": 1.38,
+            "range_consumed_percent": 99.2, "movement_state": "RANGE NEARLY USED",
+            "regular_move_available": False,
+        }
+        settings = {**self.settings, "trade_plan_min_score": 60, "tps_required_matches": 4}
+        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain, settings, environment)
+        pe = result["side_evaluations"]["PE"]
+        self.assertFalse(pe["trade_ready"])
+        self.assertTrue(any("expected range exhaustion" in item for item in pe["hard_blockers"]))
+        self.assertEqual(pe["entry_quality"]["range_consumed_percent"], 99.2)
+        self.assertEqual(pe["entry_quality"]["remaining_expected_range"], 1.38)
+
+    @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
+    @patch("engine.tps_entry_confirmation.ema", return_value=95)
+    def test_fresh_extension_grace_remains_when_move_budget_is_available(self, _ema, _supertrend):
+        self.capture.update({"open": "116", "close": "117", "ema_20": "105", "vwap": "106", "rsi_14": "58"})
+        self.candles[-1].update({"open": 116, "high": 118, "low": 105.2, "close": 117, "volume": 200})
+        environment = {
+            "regime": "TRENDING", "vix_zone": "NORMAL", "risk_multiplier": 1,
+            "volume_threshold": 1.5, "max_entry_extension_atr": 1.0,
+            "regular_move_target_points": 20, "remaining_expected_range": 80,
+            "range_consumed_percent": 55, "movement_state": "MOVEMENT AVAILABLE",
+            "regular_move_available": True,
+        }
+        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain, self.settings, environment)
+        ce = result["side_evaluations"]["CE"]
+        self.assertFalse(any("expected range exhaustion" in item for item in ce["hard_blockers"]))
+        self.assertTrue(any("fresh-trigger grace band" in item for item in ce["quality_warnings"]))
+
     @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
     @patch("engine.tps_entry_confirmation.ema", return_value=95)
     def test_low_volatility_keeps_trend_checks_and_marks_only_missing_data_na(self, _ema, _supertrend):

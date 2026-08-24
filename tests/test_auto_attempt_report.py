@@ -10,10 +10,17 @@ class AutoAttemptReportTests(unittest.TestCase):
             "attempt": {
                 "checked_at": "2026-08-10T11:00:10+05:30",
                 "candle_time": "2026-08-10T11:00:00+05:30",
+                "candidate": "CE",
                 "chart": {"strategy": {
                     "required": 5,
                     "minimum_score": 70,
-                    "side_evaluations": {"CE": {"score": 80, "passed": 6, "total": 8},
+                    "side_evaluations": {"CE": {"score": 80, "passed": 6, "total": 8,
+                                                  "entry_quality": {"timely": False, "extension_points": 18,
+                                                                    "extension_atr": 1.2, "maximum_extension_atr": 1.0,
+                                                                    "rsi": 58, "fresh_pullback_reversal": True,
+                                                                    "range_consumed_percent": 99.2,
+                                                                    "remaining_expected_range": 1.38,
+                                                                    "movement_state": "RANGE NEARLY USED"}},
                                          "PE": {"score": 20, "passed": 2, "total": 8}},
                     "zones": {"chart_support": 25000, "oi_support": 25000, "support_confluence": True,
                               "chart_resistance": 25200, "oi_resistance": 25200,
@@ -36,6 +43,8 @@ class AutoAttemptReportTests(unittest.TestCase):
         self.assertIn("Zone confluence", report)
         self.assertIn("Opening range", report)
         self.assertIn("forecast 4.0%", report)
+        self.assertIn("Range used 99.2%", report)
+        self.assertIn("Remaining 1.38 points", report)
 
 
 if __name__ == "__main__":

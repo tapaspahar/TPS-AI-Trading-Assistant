@@ -866,7 +866,10 @@ class OptionsPage(QWidget):
                     f"Entry timing: {'TIMELY' if entry_quality.get('timely') else 'LATE / EXTENDED'} | "
                     f"Distance {entry_quality.get('extension_points')} points = {entry_quality.get('extension_atr')} ATR "
                     f"(maximum {entry_quality.get('maximum_extension_atr')} ATR) | RSI {entry_quality.get('rsi')} | "
-                    f"Fresh pullback/reversal {'YES' if entry_quality.get('fresh_pullback_reversal') else 'NO'}"
+                    f"Fresh pullback/reversal {'YES' if entry_quality.get('fresh_pullback_reversal') else 'NO'} | "
+                    f"Range used {entry_quality.get('range_consumed_percent') if entry_quality.get('range_consumed_percent') is not None else '-'}% | "
+                    f"Remaining {entry_quality.get('remaining_expected_range') if entry_quality.get('remaining_expected_range') is not None else '-'} points | "
+                    f"Movement {entry_quality.get('movement_state', 'UNAVAILABLE')}"
                 )
             reasons = chart.get("reasons") or []
             if reasons:

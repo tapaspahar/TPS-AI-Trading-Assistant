@@ -4,6 +4,8 @@ Release date: 21 August 2026
 
 ## What changed
 
+- Added a combined late-entry and exhausted-range safeguard after the 24 August evidence audit. A fresh pullback trigger no longer receives grace when price is already beyond the preferred ATR extension and the VIX-implied daily movement budget is consumed.
+- Entry audit text now includes expected-range utilization, remaining movement points and movement state. Normal fresh-trigger grace is unchanged while sufficient movement budget remains.
 - Option Strategies now labels the current-expiry candidate side as CE, PE or Hedged Range.
 - Every valid defined-risk structure shows maximum potential profit, a conservative paper target-profit reference, loss-review reference and defined maximum loss.
 - Saved strategies are checked every completed 5-minute cycle using conservative executable bid/ask quotes.
