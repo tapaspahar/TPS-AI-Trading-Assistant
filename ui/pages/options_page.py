@@ -226,7 +226,9 @@ class OptionsPage(QWidget):
         self.send_plan_button = QPushButton("Send Review Plan to Journal")
         self.send_plan_button.clicked.connect(self.send_plan_to_journal)
         self.send_plan_button.setEnabled(False)
-        layout.addWidget(self.send_plan_button)
+        # Legacy compatibility only. The journal is now populated exclusively
+        # by automatic capture/monitoring and exposes no manual plan workflow.
+        self.send_plan_button.setVisible(False)
         layout.addWidget(QLabel("TPS only analyses data. It does not place, modify, or cancel a broker order."))
         layout.addStretch()
         self.contracts_loaded.connect(self.show_contracts)
