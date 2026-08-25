@@ -64,6 +64,32 @@ class SelfDevelopmentDecisionTests(unittest.TestCase):
         self.assertEqual(ensure_completed_self_development_reviews(self.db), ["13-08-2026"])
         self.assertEqual(ensure_completed_self_development_reviews(self.db), [])
 
+    def test_loss_heavy_day_cannot_be_labelled_stable(self):
+        self.db.save_post_market_tps_analysis({
+            "trade_date": "13-08-2026", "generated_at": "2026-08-13T15:40:00+05:30",
+            "title": "Post Market Analysis of TPS", "summary_text": "Test evidence",
+            "metrics": {
+                "source_attempt_count": 74, "evaluated": 74, "captured": 5,
+                "retry_or_skipped": 0, "coverage_percent": 97.0, "source_snapshot_count": 70,
+                "structured_evidence_total": 370, "structured_evidence_known": 370,
+                "structured_evidence_coverage": 100.0,
+            },
+        })
+        for index, outcome in enumerate(("STOP LOSS HIT", "STOP LOSS HIT", "STOP LOSS HIT", "TARGET HIT", "TARGET HIT"), 1):
+            self.db.cursor.execute(
+                """INSERT INTO trades
+                   (trade_date,trade_time,market,symbol,entry,exit,stoploss,target,quantity,pnl,rr_ratio,
+                    trend,vwap,ema,volume,oi,confidence,ai_score,status,outcome,created_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                ("13-08-2026", f"10:0{index}", "NSE", "NIFTY", 10, 9, 8, 12, 1,
+                 -1 if "STOP" in outcome else 2, 2, 0, 0, 0, 0, 0, 0, 0, "CLOSED", outcome,
+                 "2026-08-13T10:00:00+05:30"),
+            )
+        self.db.connection.commit()
+        review = generate_and_save_self_development_review(self.db, "13-08-2026")
+        self.assertLessEqual(review["health_score"], 74)
+        self.assertEqual(review["verdict"], "REVIEW REQUIRED")
+
 
 if __name__ == "__main__":
     unittest.main()

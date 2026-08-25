@@ -197,6 +197,10 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             "final_confidence": max(0, round(strategy["score"] * float(environment.get("risk_multiplier", 1)))),
         }
         chart["data_gaps"] = unique_messages(strategy.get("data_gaps"))
+        # Keep the tri-state evidence map at the chart boundary as well as in
+        # the nested strategy payload. Persistence/reporting consumers use
+        # this stable boundary and must not silently lose UNKNOWN evidence.
+        chart["evidence_states"] = dict(strategy.get("evidence_states") or {})
         chart["primary_blocker"] = strategy.get("primary_blocker")
         chart["secondary_warnings"] = unique_messages(strategy.get("secondary_warnings"))
         # This is deliberately an audit-only companion to strict TPS.  A READY

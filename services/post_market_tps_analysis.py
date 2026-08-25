@@ -9,6 +9,14 @@ from datetime import datetime, time, timedelta
 from core.database_manager import Database
 
 
+def _json(value: str | None, fallback):
+    try:
+        parsed = json.loads(value or "")
+        return parsed
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return fallback
+
+
 def _details(row) -> dict:
     try:
         value = json.loads(row["details_json"] or "{}")
@@ -86,8 +94,12 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
     best_attempts: list[dict] = []
     attempt_audit: list[dict] = []
     observed: set[datetime] = set()
+    evidence_total = evidence_known = 0
 
     for row in attempts:
+        completeness = _json(row["source_completeness_json"], {})
+        evidence_total += int(completeness.get("total") or 0)
+        evidence_known += int(completeness.get("known") or 0)
         try:
             candle = datetime.fromisoformat(str(row["candle_time"])).replace(tzinfo=None)
             if candle.date() == day.date() and session_open <= candle.time() <= last_candle_start:
@@ -266,6 +278,12 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
         "retry_reasons": dict(retry_reasons),
         "best_attempts": best_attempts[:10],
         "attempt_audit_count": len(attempt_audit),
+        "structured_evidence_total": evidence_total,
+        "structured_evidence_known": evidence_known,
+        "structured_evidence_coverage": round(evidence_known * 100 / evidence_total, 1) if evidence_total else 0.0,
+        "target_hits": sum(str(row["outcome"]).upper() == "TARGET HIT" for row in trades),
+        "stop_hits": sum("STOP" in str(row["outcome"]).upper() for row in trades),
+        "net_pnl": round(sum(float(row["pnl"] or 0) for row in trades), 2),
     }
     return {
         "trade_date": trade_date,
@@ -282,12 +300,17 @@ def generate_and_save_post_market_analysis(database: Database, trade_date: str, 
     return analysis
 
 
-def _source_signature(database: Database, trade_date: str) -> tuple[int, int, int, str]:
+def _source_signature(database: Database, trade_date: str) -> tuple[int, int, int, str, int, int]:
     attempts = database.get_auto_trade_attempts(trade_date, limit=5000)
     trades = database.get_trades_for_date(trade_date)
     snapshots = database.get_market_snapshots(trade_date)
     latest = max((str(row["checked_at"]) for row in attempts), default="")
-    return len(attempts), len(trades), len(snapshots), latest
+    evidence_total = evidence_known = 0
+    for row in attempts:
+        completeness = _json(row["source_completeness_json"], {})
+        evidence_total += int(completeness.get("total") or 0)
+        evidence_known += int(completeness.get("known") or 0)
+    return len(attempts), len(trades), len(snapshots), latest, evidence_total, evidence_known
 
 
 def ensure_completed_post_market_reports(
@@ -331,6 +354,8 @@ def ensure_completed_post_market_reports(
                 int(metrics.get("source_trade_count", -1)),
                 int(metrics.get("source_snapshot_count", -1)),
                 str(metrics.get("latest_checked_at", "")),
+                int(metrics.get("structured_evidence_total", -1)),
+                int(metrics.get("structured_evidence_known", -1)),
             )
             stale = saved_signature != signature
         if stale:

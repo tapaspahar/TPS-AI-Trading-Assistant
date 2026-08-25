@@ -49,6 +49,9 @@ def build_self_development_review(database: Database, trade_date: str, now: date
     coverage = float(metrics.get("coverage_percent") or 0)
     snapshots = int(metrics.get("source_snapshot_count") or 0)
     both_pass = int(metrics.get("score_and_checklist_pass") or 0)
+    evidence_total = int(metrics.get("structured_evidence_total") or 0)
+    evidence_known = int(metrics.get("structured_evidence_known") or 0)
+    evidence_coverage = float(metrics.get("structured_evidence_coverage") or 0)
     failed = {str(k): int(v) for k, v in (metrics.get("failed_conditions") or {}).items()}
     blockers = {str(k): int(v) for k, v in (metrics.get("hard_blockers") or {}).items()}
     retry_reasons = {str(k): int(v) for k, v in (metrics.get("retry_reasons") or {}).items()}
@@ -82,6 +85,14 @@ def build_self_development_review(database: Database, trade_date: str, now: date
             f"Saved attempts {attempts}; complete evaluations {evaluated}; coverage {coverage:.1f}%.",
             "Scheduler heartbeat, broker connection, completed-candle trigger aur exception audit ko ek health panel me jodein.",
             f"Next 3 trading sessions me {configured_open.strftime('%H:%M')}–{configured_close.strftime('%H:%M')} expected slots aur saved evaluations reconcile karein.",
+        )
+    if evaluated and (not evidence_total or evidence_coverage < 90):
+        add(
+            "evidence_integrity", "CRITICAL", "Structured evidence integrity",
+            "Decision hua, lekin condition-wise TRUE/FALSE/UNKNOWN evidence report ke liye complete nahi hai.",
+            f"Structured evidence {evidence_known}/{evidence_total} known ({evidence_coverage:.1f}%); evaluations {evaluated}.",
+            "Nested strategy evidence ko attempt record me persist karein aur recorded legacy payload se safe backfill karein.",
+            "Next complete session me 95%+ structured-evidence coverage aur UNKNOWN ko DATA GAP classification se verify karein.",
         )
     if coverage < 85:
         priority = "CRITICAL" if coverage < 50 else "HIGH"
@@ -179,7 +190,14 @@ def build_self_development_review(database: Database, trade_date: str, now: date
     penalties += 20 if evaluated == 0 else 0
     penalties += 10 if attempts >= 10 and captured == 0 and both_pass > 0 else 0
     penalties += min(10, stop_hits * 3) if stop_hits > target_hits else 0
+    if evaluated and evidence_coverage < 90:
+        penalties += min(25, round((90 - evidence_coverage) * 0.28))
     health = max(0, min(100, 100 - penalties))
+    # Pipeline uptime and strategy outcome quality are separate dimensions.
+    # A loss-heavy decisive sample must not be labelled STABLE merely because
+    # the scheduler and broker feed worked reliably.
+    if target_hits + stop_hits >= 3 and stop_hits > target_hits:
+        health = min(health, 74)
     verdict = "NEEDS ATTENTION" if health < 50 else "REVIEW REQUIRED" if health < 75 else "STABLE / MONITOR"
     priority_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "INFO": 3}
     suggestions.sort(key=lambda item: (priority_order[item["priority"]], item["area"]))
@@ -189,7 +207,7 @@ def build_self_development_review(database: Database, trade_date: str, now: date
         f"Trading date: {trade_date} | System health: {health}/100 | Verdict: {verdict}",
         "",
         "Ye explainable AI review saved TPS evidence se development suggestions banata hai. Ye code ya trading rules khud change nahi karta.",
-        f"Evidence: attempts {attempts}, evaluations {evaluated}, coverage {coverage:.1f}%, retries {retry_count}, captures {captured}, journal trades {len(trades)}.",
+        f"Evidence: attempts {attempts}, evaluations {evaluated}, coverage {coverage:.1f}%, structured evidence {evidence_known}/{evidence_total}, retries {retry_count}, captures {captured}, journal trades {len(trades)}.",
         "",
         "Suggested rectifications:",
     ]

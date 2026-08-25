@@ -503,6 +503,7 @@ class Database:
                     "UPDATE auto_trade_attempts SET outcome = 'STRATEGY REJECT' WHERE id = ?",
                     (int(legacy_row["id"]),),
                 )
+        self._backfill_attempt_evidence_states()
         self.connection.commit()
         # Upgrade-safe backfill: previously closed automatic paper trades also
         # become searchable outcome memories without changing their records.
@@ -513,6 +514,59 @@ class Database:
         ).fetchall():
             self._save_automatic_outcome_review(int(legacy_trade["id"]))
         self.connection.commit()
+
+    def _backfill_attempt_evidence_states(self) -> int:
+        """Recover structured evidence already present in legacy payloads.
+
+        Older builds saved the complete strategy inside ``details_json`` but
+        left the indexed evidence column empty. This copies recorded facts;
+        it never reconstructs or guesses market evidence.
+        """
+        updated = 0
+        rows = self.cursor.execute(
+            """SELECT id, details_json FROM auto_trade_attempts
+               WHERE evidence_states_json IS NULL OR evidence_states_json = '' OR evidence_states_json = '{}'"""
+        ).fetchall()
+        for row in rows:
+            try:
+                payload = json.loads(row["details_json"] or "{}")
+                attempt_payload = payload.get("attempt") or {}
+                chart_payload = attempt_payload.get("chart") or {}
+                strategy_payload = chart_payload.get("strategy") or {}
+                states = (
+                    chart_payload.get("evidence_states")
+                    or strategy_payload.get("evidence_states")
+                    or attempt_payload.get("evidence_states")
+                    or {}
+                )
+                if not isinstance(states, dict) or not states:
+                    continue
+                gaps = (
+                    attempt_payload.get("data_gaps")
+                    or chart_payload.get("data_gaps")
+                    or strategy_payload.get("data_gaps")
+                    or []
+                )
+                known = sum(str(value).upper() != "UNKNOWN" for value in states.values())
+                completeness = {
+                    "complete": not bool(gaps) and known == len(states),
+                    "data_gaps": gaps,
+                    "total": len(states),
+                    "known": known,
+                }
+                self.cursor.execute(
+                    """UPDATE auto_trade_attempts
+                       SET evidence_states_json = ?, source_completeness_json = ? WHERE id = ?""",
+                    (
+                        json.dumps(states, ensure_ascii=False, default=str),
+                        json.dumps(completeness, ensure_ascii=False, default=str),
+                        int(row["id"]),
+                    ),
+                )
+                updated += 1
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+        return updated
 
     def save_self_development_review(self, review: dict) -> int:
         """Save one date-wise rectification review while retaining review states."""
@@ -1680,6 +1734,12 @@ class Database:
             level_age_seconds = max(0, int((datetime.fromisoformat(checked_at).replace(tzinfo=None) - datetime.fromisoformat(str(candle_time)).replace(tzinfo=None)).total_seconds()))
         except (TypeError, ValueError):
             pass
+        evidence_states = (
+            chart.get("evidence_states")
+            or strategy.get("evidence_states")
+            or attempt.get("evidence_states")
+            or {}
+        )
         values = (
             checked_at, candle_time, datetime.fromisoformat(checked_at).strftime("%d-%m-%Y"), str(symbol).upper(),
             attempt.get("future_symbol"), outcome, chart.get("decision"), attempt.get("candidate"),
@@ -1693,11 +1753,11 @@ class Database:
             capture.get("provider_data_age_seconds"),
             primary_blocker,
             json.dumps(secondary_warnings, ensure_ascii=False, default=str),
-            json.dumps(chart.get("evidence_states") or attempt.get("evidence_states") or {}, ensure_ascii=False, default=str),
+            json.dumps(evidence_states, ensure_ascii=False, default=str),
             json.dumps({
                 "complete": not bool(data_gaps), "data_gaps": data_gaps,
-                "total": len(chart.get("evidence_states") or {}),
-                "known": sum(str(value).upper() != "UNKNOWN" for value in (chart.get("evidence_states") or {}).values()),
+                "total": len(evidence_states),
+                "known": sum(str(value).upper() != "UNKNOWN" for value in evidence_states.values()),
             }, ensure_ascii=False, default=str),
             json.dumps(result, ensure_ascii=False, default=str),
         )

@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+import json
 from pathlib import Path
 
 from core.database_manager import Database
@@ -8,6 +9,64 @@ from services.development_lifecycle import BUILD_ID, IMPLEMENTED_FEATURES, sync_
 
 
 class EvidenceIntegrityTests(unittest.TestCase):
+    def test_attempt_persists_nested_strategy_evidence(self):
+        with tempfile.TemporaryDirectory() as folder:
+            database = Database(Path(folder) / "evidence.db")
+            try:
+                result = {
+                    "status": "evaluated",
+                    "attempt": {
+                        "checked_at": "2026-08-25T10:05:05+05:30",
+                        "candle_time": "2026-08-25T10:00:00+05:30",
+                        "future_symbol": "NIFTY25AUG26FUT",
+                        "candidate": "CE",
+                        "outcome": "STRATEGY REJECT",
+                        "capture": {"volume": 100, "volume_ratio": 1.0},
+                        "chart": {
+                            "score": 50, "decision": "CE REJECTED",
+                            "strategy": {
+                                "passed": 1, "total": 2,
+                                "evidence_states": {"ema": "TRUE", "volume": "UNKNOWN"},
+                            },
+                        },
+                    },
+                }
+                self.assertTrue(database.save_auto_trade_attempt("NIFTY", result))
+                row = database.get_auto_trade_attempts("25-08-2026", limit=10)[0]
+                self.assertEqual(json.loads(row["evidence_states_json"]), {"ema": "TRUE", "volume": "UNKNOWN"})
+                completeness = json.loads(row["source_completeness_json"])
+                self.assertEqual((completeness["known"], completeness["total"]), (1, 2))
+            finally:
+                database.close()
+
+    def test_legacy_details_evidence_is_backfilled_without_guessing(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "evidence.db"
+            database = Database(path)
+            result = {
+                "attempt": {
+                    "checked_at": "2026-08-25T10:05:05+05:30",
+                    "candle_time": "2026-08-25T10:00:00+05:30",
+                    "candidate": "PE", "outcome": "STRATEGY REJECT",
+                    "chart": {"strategy": {"evidence_states": {"vwap": "FALSE"}}},
+                }
+            }
+            database.cursor.execute(
+                """INSERT INTO auto_trade_attempts
+                   (checked_at,candle_time,trade_date,symbol,outcome,status_text,details_json,evidence_states_json)
+                   VALUES (?,?,?,?,?,?,?,?)""",
+                ("2026-08-25T10:05:05+05:30", "2026-08-25T10:00:00+05:30", "25-08-2026", "NIFTY",
+                 "STRATEGY REJECT", "legacy", json.dumps(result), "{}"),
+            )
+            database.connection.commit()
+            database.close()
+            reopened = Database(path)
+            try:
+                row = reopened.get_auto_trade_attempts("25-08-2026", limit=10)[0]
+                self.assertEqual(json.loads(row["evidence_states_json"]), {"vwap": "FALSE"})
+            finally:
+                reopened.close()
+
     def test_unknown_is_a_data_gap_and_not_a_false_strategy_condition(self):
         self.assertEqual(evidence_state(None), EvidenceState.UNKNOWN)
         self.assertEqual(evidence_state(False), EvidenceState.FALSE)
