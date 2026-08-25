@@ -272,6 +272,26 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
         passed = sum(item["passed"] for item in selected)
         blockers = []
         quality_warnings = []
+        # Checklist selection controls scoring, but these four directional
+        # anchors may never be voted away. Premium buying against the actual
+        # trend produced misleading high scores in forward testing because
+        # unrelated confirmations compensated for a contradictory direction.
+        direction_anchor_names = {
+            "Market structure", "Price vs VWAP",
+            "EMA 5/20/50 alignment", "SuperTrend confirmation",
+        }
+        direction_anchors = [
+            item for item in common[side] if item["name"] in direction_anchor_names
+        ]
+        missing_direction = [
+            item["name"] for item in direction_anchors
+            if not item.get("applicable", True) or not item.get("passed", False)
+        ]
+        if missing_direction:
+            blockers.append(
+                f"{side} directional consensus is incomplete: "
+                + ", ".join(missing_direction)
+            )
         if not applicable_count:
             blockers.append("No selected checklist condition is applicable to the current candle")
         unknown_selected = [item for item in common[side] if item["name"] in enabled and not item.get("applicable", True)]
@@ -363,6 +383,11 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
             "passed": passed, "total": len(selected), "required": required, "score": score,
             "checklist_matched": checklist_matched, "score_matched": score_matched,
             "hard_blockers": blockers, "quality_warnings": quality_warnings, "trade_ready": ready,
+            "directional_consensus": {
+                "passed": not missing_direction,
+                "required": sorted(direction_anchor_names),
+                "missing": missing_direction,
+            },
             "data_gaps": data_gaps,
             "evidence_states": {item["name"]: item["evidence_state"] for item in common[side] if item["name"] in enabled},
             "primary_blocker": blockers[0] if blockers else data_gaps[0] if data_gaps else None,

@@ -330,6 +330,10 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             timing["delay_seconds"] = max(0, int((
                 datetime.fromisoformat(final_capture_at) - datetime.fromisoformat(timing["signal_discovery_at"])
             ).total_seconds()))
+        if timing.get("first_valid_at"):
+            timing["entry_delay_seconds"] = max(0, int((
+                datetime.fromisoformat(final_capture_at) - datetime.fromisoformat(timing["first_valid_at"])
+            ).total_seconds()))
         plan["signal_timing"] = dict(timing)
         trade_id = database.save_paper_trade(plan)
         chart["signal_timing"] = timing

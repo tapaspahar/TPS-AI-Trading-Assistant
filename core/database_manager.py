@@ -1142,6 +1142,16 @@ class Database:
         return int(self.cursor.lastrowid)
 
     def save_paper_trade(self, plan: dict) -> int:
+        timing = plan.get("signal_timing") or {}
+        entry_delay = timing.get("entry_delay_seconds")
+        if entry_delay is None and timing.get("first_valid_at") and timing.get("final_capture_at"):
+            try:
+                entry_delay = max(0, int((
+                    datetime.fromisoformat(timing["final_capture_at"])
+                    - datetime.fromisoformat(timing["first_valid_at"])
+                ).total_seconds()))
+            except (TypeError, ValueError):
+                entry_delay = None
         """Store a simulated one-lot/selected-lot plan; never send a broker order."""
         contract = plan["contract"]
         trade = Trade(
@@ -1163,7 +1173,7 @@ class Database:
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (trade_id, str(contract["exchange"]), str(contract["token"]), str(contract["symbol"]),
              float(plan["stoploss"]), float(plan["stoploss"]),
-             (plan.get("signal_timing") or {}).get("delay_seconds"),
+             entry_delay,
              (plan.get("execution_safety") or {}).get("spread_percent"),
              (plan.get("evidence_context") or {}).get("atr_14"),
              json.dumps(plan, ensure_ascii=False, default=str)),
@@ -1186,7 +1196,7 @@ class Database:
         now = now.astimezone(IST) if now.tzinfo else now.replace(tzinfo=IST)
         rows = self.cursor.execute(
             """SELECT t.*, p.exchange, p.token, p.contract_symbol, p.last_ltp, p.min_ltp, p.max_ltp,
-                      p.last_alert_level, p.initial_stoploss, p.trailing_stoploss FROM trades t
+                      p.last_alert_level, p.initial_stoploss, p.trailing_stoploss, p.plan_json FROM trades t
                JOIN paper_trade_links p ON p.trade_id = t.id WHERE t.status = 'OPEN'"""
         ).fetchall()
         closed = []
@@ -1231,8 +1241,18 @@ class Database:
             initial_stop = float(row["initial_stoploss"] if row["initial_stoploss"] is not None else row["stoploss"])
             active_stop = float(row["trailing_stoploss"] if row["trailing_stoploss"] is not None else row["stoploss"])
             risk = max(float(row["entry"]) - initial_stop, 0.000001)
-            if settings.get("trailing_stop_enabled", True) and maximum >= float(row["entry"]) + float(settings.get("trailing_stop_trigger_r", 1)) * risk:
-                active_stop = max(active_stop, float(row["entry"]) + float(settings.get("trailing_stop_lock_r", .25)) * risk)
+            entry = float(row["entry"])
+            target = float(row["target"])
+            if settings.get("trailing_stop_enabled", True):
+                # Capital-protection ladder based only on already-observed
+                # option premiums (no target fabrication or look-ahead).
+                if maximum >= entry + .50 * risk:
+                    active_stop = max(active_stop, entry)
+                if maximum >= entry + float(settings.get("trailing_stop_trigger_r", 1)) * risk:
+                    active_stop = max(active_stop, entry + float(settings.get("trailing_stop_lock_r", .25)) * risk)
+                target_distance = max(target - entry, 0.0)
+                if target_distance and maximum >= entry + .90 * target_distance:
+                    active_stop = max(active_stop, entry + .65 * target_distance)
             if active_stop > float(row["trailing_stoploss"] or initial_stop):
                 self.cursor.execute(
                     "INSERT OR IGNORE INTO trade_alerts (trade_id, created_at, alert_type, title, message) VALUES (?, ?, ?, ?, ?)",

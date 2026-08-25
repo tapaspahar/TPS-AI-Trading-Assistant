@@ -72,6 +72,25 @@ class TpsEntryConfirmationTests(unittest.TestCase):
         self.assertGreater(pe["score"], result["side_evaluations"]["CE"]["score"])
         self.assertFalse(next(item for item in pe["confirmations"] if item["name"] == "SuperTrend confirmation")["passed"])
         self.assertEqual(result["candidate"], "PE")
+        self.assertFalse(pe["trade_ready"])
+        self.assertFalse(pe["directional_consensus"]["passed"])
+        self.assertIn("SuperTrend confirmation", pe["directional_consensus"]["missing"])
+
+    @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
+    @patch("engine.tps_entry_confirmation.ema", return_value=95)
+    def test_selected_checklist_cannot_vote_away_core_direction(self, _ema, _supertrend):
+        settings = {
+            "trade_plan_min_score": 60,
+            "tps_required_matches": 2,
+            "tps_enabled_conditions": ["Pullback and reversal", "Directional volume", "OI/PCR context"],
+        }
+        self.capture["vwap"] = "111"
+        result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain, settings)
+        ce = result["side_evaluations"]["CE"]
+        self.assertGreaterEqual(ce["score"], 60)
+        self.assertFalse(ce["trade_ready"])
+        self.assertIn("Price vs VWAP", ce["directional_consensus"]["missing"])
+        self.assertTrue(any("directional consensus" in item for item in ce["hard_blockers"]))
 
     @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
     @patch("engine.tps_entry_confirmation.ema", return_value=95)

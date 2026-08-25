@@ -74,6 +74,32 @@ class PaperTradeTests(unittest.TestCase):
             self.assertEqual(closed[0]["outcome"], "TIME EXIT")
             db.close()
 
+    def test_half_r_move_arms_breakeven_before_full_trailing_trigger(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db = Database(Path(directory) / "paper.db")
+            plan = {**self.plan(), "stoploss": 90, "target": 120}
+            trade_id = db.save_paper_trade(plan)
+            settings = {"trailing_stop_enabled": True, "trailing_stop_trigger_r": 1, "trailing_stop_lock_r": .25}
+            self.assertEqual(db.monitor_paper_trades(QuoteClient(106), settings), [])
+            self.assertEqual(db.get_paper_trade_monitoring()[0]["stoploss"], 100)
+            closed = db.monitor_paper_trades(QuoteClient(100), settings)
+            self.assertEqual(closed[0]["outcome"], "TRAILING STOP HIT")
+            self.assertEqual(db.get_trade(trade_id)["pnl"], 0)
+            db.close()
+
+    def test_near_target_move_locks_material_profit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db = Database(Path(directory) / "paper.db")
+            plan = {**self.plan(), "stoploss": 90, "target": 120}
+            trade_id = db.save_paper_trade(plan)
+            settings = {"trailing_stop_enabled": True, "trailing_stop_trigger_r": 1, "trailing_stop_lock_r": .25}
+            self.assertEqual(db.monitor_paper_trades(QuoteClient(119), settings), [])
+            self.assertEqual(db.get_paper_trade_monitoring()[0]["stoploss"], 113)
+            closed = db.monitor_paper_trades(QuoteClient(113), settings)
+            self.assertEqual(closed[0]["outcome"], "TRAILING STOP HIT")
+            self.assertEqual(db.get_trade(trade_id)["pnl"], 650)
+            db.close()
+
     def test_one_quote_failure_does_not_pause_other_open_trade_monitoring(self):
         with tempfile.TemporaryDirectory() as directory:
             db = Database(Path(directory) / "paper.db")
