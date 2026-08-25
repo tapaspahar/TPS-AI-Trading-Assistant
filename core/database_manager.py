@@ -185,6 +185,21 @@ class Database:
         )
         self.cursor.execute(
             """
+            CREATE TABLE IF NOT EXISTS trade_outcome_reviews (
+                trade_id INTEGER PRIMARY KEY,
+                generated_at TEXT NOT NULL,
+                outcome TEXT NOT NULL,
+                fingerprint_json TEXT NOT NULL,
+                review_text TEXT NOT NULL,
+                solution_text TEXT NOT NULL,
+                mfe REAL NOT NULL DEFAULT 0,
+                mae REAL NOT NULL DEFAULT 0,
+                pnl REAL NOT NULL DEFAULT 0
+            )
+            """
+        )
+        self.cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS auto_trade_attempts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 checked_at TEXT NOT NULL,
@@ -488,6 +503,15 @@ class Database:
                     "UPDATE auto_trade_attempts SET outcome = 'STRATEGY REJECT' WHERE id = ?",
                     (int(legacy_row["id"]),),
                 )
+        self.connection.commit()
+        # Upgrade-safe backfill: previously closed automatic paper trades also
+        # become searchable outcome memories without changing their records.
+        for legacy_trade in self.cursor.execute(
+            """SELECT t.id FROM trades t JOIN paper_trade_links p ON p.trade_id=t.id
+               LEFT JOIN trade_outcome_reviews r ON r.trade_id=t.id
+               WHERE t.status='CLOSED' AND r.trade_id IS NULL"""
+        ).fetchall():
+            self._save_automatic_outcome_review(int(legacy_trade["id"]))
         self.connection.commit()
 
     def save_self_development_review(self, review: dict) -> int:
@@ -1400,8 +1424,51 @@ class Database:
         self.connection.commit()
         if closed:
             self.cursor.execute("UPDATE trade_alerts SET status = 'RESOLVED' WHERE trade_id = ? AND status = 'ACTIVE'", (int(trade_id),))
+            self._save_automatic_outcome_review(int(trade_id))
             self.connection.commit()
         return closed
+
+    def _save_automatic_outcome_review(self, trade_id: int) -> None:
+        """Create an immutable, explainable postmortem as part of every automatic close."""
+        from engine.trade_outcome_memory import build_outcome_review
+
+        row = self.cursor.execute("SELECT * FROM trades WHERE id = ?", (trade_id,)).fetchone()
+        link = self.cursor.execute("SELECT plan_json, mfe, mae FROM paper_trade_links WHERE trade_id = ?", (trade_id,)).fetchone()
+        if not row:
+            return
+        review = build_outcome_review(dict(row), link["plan_json"] if link else None, dict(link) if link else {})
+        self.cursor.execute(
+            """INSERT INTO trade_outcome_reviews
+               (trade_id, generated_at, outcome, fingerprint_json, review_text, solution_text, mfe, mae, pnl)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(trade_id) DO UPDATE SET generated_at=excluded.generated_at,
+               outcome=excluded.outcome, fingerprint_json=excluded.fingerprint_json,
+               review_text=excluded.review_text, solution_text=excluded.solution_text,
+               mfe=excluded.mfe, mae=excluded.mae, pnl=excluded.pnl""",
+            (trade_id, datetime.now().isoformat(timespec="seconds"), row["outcome"],
+             json.dumps(review["fingerprint"], ensure_ascii=False), review["finding"], review["solution"],
+             review["mfe"], review["mae"], review["pnl"]),
+        )
+
+    def get_trade_outcome_review(self, trade_id: int) -> sqlite3.Row | None:
+        return self.cursor.execute("SELECT * FROM trade_outcome_reviews WHERE trade_id = ?", (int(trade_id),)).fetchone()
+
+    def find_trade_outcome_analogs(self, fingerprint: dict, minimum_similarity: float = 78, limit: int = 3) -> list[dict]:
+        from engine.trade_outcome_memory import similarity_score
+
+        matches = []
+        for row in self.cursor.execute(
+            """SELECT r.*, t.trade_date, t.symbol, t.option_type, t.strike
+               FROM trade_outcome_reviews r JOIN trades t ON t.id = r.trade_id
+               ORDER BY r.generated_at DESC LIMIT 250"""
+        ).fetchall():
+            historical = json.loads(row["fingerprint_json"] or "{}")
+            similarity = similarity_score(fingerprint, historical)
+            if similarity >= float(minimum_similarity):
+                item = dict(row)
+                item["similarity"] = similarity
+                matches.append(item)
+        return sorted(matches, key=lambda item: item["similarity"], reverse=True)[:int(limit)]
 
     def get_trade(self, trade_id: int) -> sqlite3.Row | None:
         return self.cursor.execute("SELECT * FROM trades WHERE id = ?", (int(trade_id),)).fetchone()

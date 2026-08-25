@@ -43,10 +43,7 @@ class JournalPage(QWidget):
         actions = QHBoxLayout()
         self.refresh_button = QPushButton("Refresh Automatic Journal")
         self.refresh_button.clicked.connect(self.load_trades)
-        self.review_button = QPushButton("Review Selected Stop-Loss Evidence")
-        self.review_button.clicked.connect(self.review_stoploss_hit)
         actions.addWidget(self.refresh_button)
-        actions.addWidget(self.review_button)
         layout.addLayout(actions)
 
         self.summary = QLabel("Loading automatic trade records...")
@@ -104,36 +101,20 @@ class JournalPage(QWidget):
         trade = self.db.get_trade(int(self.table.item(row, 1).text()))
         if not trade:
             return
+        review = self.db.get_trade_outcome_review(int(trade["id"]))
+        automatic_review = (
+            f"\n\nCutie automatic outcome review:\n{review['review_text']}\n"
+            f"Solution / next reference: {review['solution_text']}\n"
+            f"MFE ₹{float(review['mfe']):.2f} | MAE ₹{float(review['mae']):.2f}"
+            if review else "\n\nAutomatic outcome review trade close hote hi generate hoga."
+        )
         self.selected_details.setText(
             f"{trade['symbol']} {trade['strike'] or ''} {trade['option_type'] or ''} | "
             f"Status: {trade['status']} | Outcome: {trade['outcome'] or 'Monitoring'} | "
             f"Entry ₹{float(trade['entry']):.2f} | Stop ₹{float(trade['stoploss']):.2f} | "
             f"Target ₹{float(trade['target']):.2f} | P&L ₹{float(trade['pnl'] or 0):,.2f} | "
-            f"AI decision: {trade['ai_decision'] or '-'}"
+            f"AI decision: {trade['ai_decision'] or '-'}{automatic_review}"
         )
-
-    def review_stoploss_hit(self) -> None:
-        row = self.table.currentRow()
-        if row < 0 or not self.table.item(row, 1):
-            self.selected_details.setText("Stop-loss evidence review ke liye ek closed Stop Loss Hit row select karein.")
-            return
-        trade = self.db.get_trade(int(self.table.item(row, 1).text()))
-        if not trade or trade["outcome"] != "STOP LOSS HIT":
-            self.selected_details.setText("Selected record Stop Loss Hit nahi hai.")
-            return
-        snapshots = [
-            snapshot for snapshot in self.db.get_market_snapshots(trade["trade_date"])
-            if snapshot["symbol"] == trade["symbol"]
-        ]
-        timeframes = ", ".join(sorted({snapshot["timeframe"] for snapshot in snapshots})) or "none"
-        self.selected_details.setText(
-            f"Cutie review: {trade['symbol']} {trade['strike'] or ''} {trade['option_type']} ke liye "
-            f"{len(snapshots)} same-day snapshot(s) ({timeframes}) saved hain. "
-            f"Confirmations: trend={bool(trade['trend'])}, VWAP={bool(trade['vwap'])}, "
-            f"EMA={bool(trade['ema'])}, volume={bool(trade['volume'])}, OI={bool(trade['oi'])}. "
-            "Historical replay khola ja raha hai; ek result ke basis par risk increase na karein."
-        )
-        self.open_backtesting.emit()
 
     def set_symbol_from_capture(self, _symbol: str) -> None:
         return

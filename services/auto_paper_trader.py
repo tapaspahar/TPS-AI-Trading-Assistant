@@ -15,6 +15,7 @@ from engine.trade_plan_engine import create_review_plan
 from engine.tps_entry_confirmation import evaluate_tps_entry_v2
 from engine.regular_scalp_validation import evaluate_regular_scalp_validation
 from engine.evidence_model import classify_attempt, unique_messages
+from engine.trade_outcome_memory import build_trade_fingerprint
 from services.option_contract_service import UNDERLYING_QUOTES, OptionContractService, contracts_near_spot
 from services.economic_calendar_service import EconomicCalendarService
 from services.provider_telemetry import record_request, start_request
@@ -270,6 +271,11 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             "hard_blockers": strategy.get("hard_blockers", []),
             "event_context": event_risk, "market_environment": environment,
         }
+        plan["strategy"] = {
+            "candidate": candidate, "direction": strategy.get("direction"),
+            "score": strategy.get("score"), "selected_confirmations": selected_confirmations,
+        }
+        plan["market_environment"] = environment
         selected_quote = next((row for row in chain["quote_rows"] if str(row.get("token")) == str(plan["contract"]["token"])), {})
         cooldown = 0 if testing_mode else database.paper_trade_cooldown_remaining(
             settings.get("paper_trade_cooldown_minutes", 15), checked_at
@@ -289,6 +295,12 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             "zones": strategy.get("zones") or {}, "provider": provider,
             "provider_data_age_seconds": capture.get("provider_data_age_seconds"),
         }
+        # Historical outcomes are advisory context only. They never bypass the
+        # current candle's strategy, execution, event, expiry or risk gates.
+        current_fingerprint = build_trade_fingerprint(
+            {"symbol": symbol, "option_type": candidate, "ai_score": strategy.get("score", 0)}, plan
+        )
+        plan["historical_outcome_matches"] = database.find_trade_outcome_analogs(current_fingerprint)
         if not safety["allowed"]:
             chart["warnings"].extend(safety["blockers"])
             result = _attempt(

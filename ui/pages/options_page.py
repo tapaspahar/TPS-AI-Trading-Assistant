@@ -15,6 +15,7 @@ from services.auto_paper_trader import run_auto_paper_cycle
 from core.overtrading_guard import OvertradingGuard
 from services.live_session import LiveSession
 from services.option_contract_service import UNDERLYING_QUOTES, OptionContractService, buying_risk, contracts_near_spot
+from services.notification_service import NotificationService
 
 
 class SessionSpinBox(QSpinBox):
@@ -671,6 +672,15 @@ class OptionsPage(QWidget):
         )
         if not self.paper_monitor_timer.isActive():
             self.paper_monitor_timer.start(10_000)
+        matches = plan.get("historical_outcome_matches") or []
+        if matches:
+            match = matches[0]
+            NotificationService.instance(self).notify(
+                "trend_memory", f"Cutie historical trade match — {plan['underlying']} {plan['option_type']}",
+                f"{match['similarity']:.1f}% condition match {match['trade_date']} se mila; "
+                f"us din outcome {match['outcome']} tha. Ye context hai, profit guarantee nahi.",
+                dedupe_key=f"trade-analog:{plan.get('trade_id')}:{match['trade_id']}", once_per_day=True,
+            )
         self.update_plan_readiness()
 
     def monitor_paper_trades(self):
