@@ -1,3 +1,4 @@
+from datetime import datetime
 from threading import Thread
 
 from PySide6.QtCore import QTimer, Signal
@@ -11,6 +12,7 @@ from services.option_strategy_service import OptionStrategyService
 from engine.strategy_adjustment_engine import monitor_strategy_plan
 from core.settings_store import SettingsStore
 from core.assistant_voice import cutie_says
+from core.market_session import IST, market_session
 from services.notification_service import NotificationService
 from ui.widgets.cards.dashboard_card import DashboardCard
 
@@ -76,8 +78,13 @@ class OptionStrategiesPage(QWidget):
         self.adjustments.setMinimumHeight(145); self.adjustments.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(self.adjustments)
         layout.addStretch()
-        self.timer = QTimer(self); self.timer.setInterval(300_000); self.timer.timeout.connect(self.analyze)
+        # Poll cheaply so a broker connection made after application startup is
+        # noticed immediately.  _auto_tick still permits only one analysis per
+        # five-minute market bucket, so this does not increase broker traffic.
+        self.timer = QTimer(self); self.timer.setInterval(10_000); self.timer.timeout.connect(self._auto_tick)
         self.running = False; self.last_result = None; self.last_monitor_state = None
+        self._last_auto_bucket = None
+        self._last_suggestion_signature = None
         self.settings_store = SettingsStore()
         self.active_plan = self.settings_store.load().get("active_option_strategy_plan") or None
         self.loaded.connect(self.show_result); self.failed.connect(self.show_error)
@@ -89,7 +96,10 @@ class OptionStrategiesPage(QWidget):
                 f"Restored saved {self.active_plan.get('strategy')} monitor from spot {float(self.active_plan.get('spot') or 0):,.2f}. "
                 "It will resume after broker data connects."
             )
-            self.auto.setChecked(True)
+        # Automatic review is the normal operating mode.  If the app starts
+        # before the broker connects, the short scheduler waits and runs as
+        # soon as both live data and the configured trading session are ready.
+        self.auto.setChecked(True)
 
     @staticmethod
     def _saved_plan(result):
@@ -127,9 +137,39 @@ class OptionStrategiesPage(QWidget):
 
     def toggle_auto(self, enabled):
         if enabled:
-            self.timer.start(); self.analyze()
+            self.timer.start()
+            QTimer.singleShot(0, self._auto_tick)
         else:
             self.timer.stop(); self.status.setText(cutie_says("Automatic strategy monitoring band hai; manual analysis available hai."))
+
+    @staticmethod
+    def _five_minute_bucket(now=None):
+        current = now or datetime.now(IST)
+        current = current.astimezone(IST) if current.tzinfo else current.replace(tzinfo=IST)
+        return current.strftime("%Y-%m-%d"), current.hour, current.minute // 5
+
+    def _auto_tick(self):
+        """Run once now and then once per live five-minute market bucket."""
+        settings = self.settings_store.load()
+        session = market_session(settings=settings)
+        if session["state"] != "OPEN":
+            self._last_auto_bucket = None
+            self.status.setText(cutie_says(
+                "Option Strategy auto mode ready hai. Configured market trading time shuru hote hi main analysis karungi."
+            ))
+            return
+        if not LiveSession.connected():
+            self.status.setText(cutie_says(
+                "Market open hai; Option Strategy auto mode broker connection ka wait kar raha hai."
+            ))
+            return
+        if self.running:
+            return
+        bucket = self._five_minute_bucket()
+        if bucket == self._last_auto_bucket:
+            return
+        self._last_auto_bucket = bucket
+        self.analyze()
 
     def analyze(self):
         if self.running:
@@ -223,9 +263,44 @@ class OptionStrategiesPage(QWidget):
             "Maine koi broker order place nahi kiya."
         ))
         self.start_plan.setEnabled(result.get("state") == "REVIEW CANDIDATE" and bool(result.get("legs")))
+        self._notify_strategy_candidate(result)
         if self.active_plan:
             self.show_monitor_result(monitor_strategy_plan(self.active_plan, result))
         self.running = False; self.run.setEnabled(True)
+
+    def _notify_strategy_candidate(self, result):
+        """Notify a new actionable review candidate, never a guaranteed trade."""
+        if market_session(settings=self.settings_store.load())["state"] != "OPEN":
+            return False
+        if result.get("state") not in {"REVIEW CANDIDATE", "WATCH CANDIDATE"} or not result.get("legs"):
+            return False
+        legs = tuple(
+            (str(leg.get("action")), str(leg.get("option_type")), float(leg.get("strike") or 0))
+            for leg in result.get("legs") or []
+        )
+        signature = (
+            str(result.get("symbol")), str(result.get("state")), str(result.get("strategy")), legs,
+        )
+        if signature == self._last_suggestion_signature:
+            return False
+        self._last_suggestion_signature = signature
+        management = result.get("management_reference") or {}
+        leg_text = ", ".join(f"{action} {strike:,.0f} {kind}" for action, kind, strike in legs)
+        message = (
+            f"Cutie ke live analysis me {result.get('state')}: {result.get('strategy')} ({leg_text}). "
+            f"Bias {result.get('bias')} | Expiry {result.get('expiry')} | "
+            f"Target reference Rs {float(management.get('target_profit') or 0):,.2f} | "
+            f"Maximum defined loss Rs {float(result.get('max_loss') or 0):,.2f}. "
+            "Ye review suggestion hai; live quotes aur liquidity verify karke hi koi manual action lein."
+        )
+        identity = f"{result.get('symbol')}:{result.get('state')}:{result.get('strategy')}:{legs}"
+        return NotificationService.instance().notify(
+            "option_strategies",
+            f"Cutie defined-risk strategy — {result.get('symbol')}",
+            message,
+            dedupe_key=identity,
+            once_per_day=True,
+        )
 
     def show_monitor_result(self, monitor):
         pnl = monitor.get("estimated_pnl")
