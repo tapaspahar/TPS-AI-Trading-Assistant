@@ -1,16 +1,19 @@
 """Application release metadata kept in one place."""
 
 APP_NAME = "TPS AI Trading Assistant"
-VERSION = "1.4.4"
-DISPLAY_VERSION = "Release 1.4.4"
-RELEASE_DATE = "21-08-2026"
+VERSION = "1.4.5"
+DISPLAY_VERSION = "Release 1.4.5"
+RELEASE_DATE = "25-08-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
-SOFTWARE_UPDATE_VERSION = "v1.4.4"
-LAST_UPDATED_AT = "24-08-2026 17:30:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.4.4 - 24-08-2026 17:30 IST"
+SOFTWARE_UPDATE_VERSION = "v1.4.5"
+LAST_UPDATED_AT = "25-08-2026 18:00:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.4.5 - 25-08-2026 18:00 IST"
 RELEASE_NOTES = (
+    "Started Release 1.4.5 with TPS expanded visibly as Trading Plan System in the application header.",
+    "Added automatic closed-trade outcome memory: target, stop-loss, trailing-stop and time-exit results now receive a permanent Cutie postmortem and corrective solution without manual journal entry.",
+    "Added condition fingerprints and duplicate-safe historical trade analog alerts so a newly captured setup can reference a similar past trade and its actual outcome as context, never as a profit guarantee.",
     "Upgraded Option Strategies with a smart READY/WATCH/DATA-GAP suggestion flow so a near-valid fully hedged structure is explained instead of disappearing behind a generic WAIT.",
     "Added completed-candle Fibonacci swing and 23.6/38.2/50/61.8/78.6 retracement context as supporting evidence; it never bypasses liquidity, expiry, risk, event or late-session locks.",
     "Added a read-only what-if gate simulator comparing the saved score/checklist with balanced and exploratory paper-study gates without changing production settings or weakening hard safety blockers.",

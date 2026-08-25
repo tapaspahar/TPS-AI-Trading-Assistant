@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QApplication, QLabel, QTabWidget
 
 from release_info import DISPLAY_VERSION, FOOTER_UPDATE_TEXT, LAST_UPDATED_AT, RELEASE_DATE, RELEASE_NOTES, SOFTWARE_UPDATE_VERSION, VERSION
 from ui.pages.about_help_page import AboutPage, HelpPage
+from ui.widgets.header import Header
 from ui.widgets.information_panel import InformationPanel
 
 
@@ -20,6 +21,12 @@ class ReleaseNotesTests(unittest.TestCase):
         texts = [label.text() for label in panel.findChildren(QLabel)]
         self.assertIn(FOOTER_UPDATE_TEXT, texts)
         panel.close()
+
+    def test_header_expands_tps_as_trading_plan_system(self):
+        header = Header()
+        texts = [label.text() for label in header.findChildren(QLabel)]
+        self.assertIn("TPS — Trading Plan System • Professional Trading Dashboard", texts)
+        header.close()
 
     def test_help_page_has_separate_release_notes_tab(self):
         page = HelpPage()
@@ -35,17 +42,17 @@ class ReleaseNotesTests(unittest.TestCase):
         for note in RELEASE_NOTES:
             self.assertIn(note, html)
 
-    def test_release_1_4_4_metadata_and_packaging_are_aligned(self):
-        self.assertEqual(VERSION, "1.4.4")
-        self.assertEqual(DISPLAY_VERSION, "Release 1.4.4")
-        self.assertEqual(RELEASE_DATE, "21-08-2026")
+    def test_release_1_4_5_metadata_and_packaging_are_aligned(self):
+        self.assertEqual(VERSION, "1.4.5")
+        self.assertEqual(DISPLAY_VERSION, "Release 1.4.5")
+        self.assertEqual(RELEASE_DATE, "25-08-2026")
         with open("packaging/installer.iss", encoding="utf-8") as file:
             installer = file.read()
         with open("packaging/windows_version_info.txt", encoding="utf-8") as file:
             windows_info = file.read()
-        self.assertIn('#define MyAppVersion "1.4.4"', installer)
-        self.assertIn("TPS-AI-Trading-Assistant-Setup-1.4.4", installer)
-        self.assertIn("ProductVersion', '1.4.4'", windows_info)
+        self.assertIn('#define MyAppVersion "1.4.5"', installer)
+        self.assertIn("TPS-AI-Trading-Assistant-Setup-1.4.5", installer)
+        self.assertIn("ProductVersion', '1.4.5'", windows_info)
 
 
 if __name__ == "__main__":
