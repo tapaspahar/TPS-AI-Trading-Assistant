@@ -116,33 +116,49 @@ def _portfolio_greeks(plan, rows, spot):
     return {key: round(value, 4 if key == "gamma" else 2) for key, value in totals.items()}
 
 
-def _debit_spread(rows, strikes, spot, direction):
+def _debit_spread(rows, strikes, spot, direction, risk_cap=None):
+    """Search nearby quoted verticals instead of trusting one fixed ATM pair."""
     atm_index = min(range(len(strikes)), key=lambda index: abs(strikes[index] - spot))
-    width_steps = 2 if len(strikes) >= 5 else 1
-    if direction == "BULLISH":
-        buy_strike = strikes[atm_index]
-        sell_index = min(len(strikes) - 1, atm_index + width_steps)
-        sell_strike, option_type, name = strikes[sell_index], "CE", "Bull Call Debit Spread"
-    else:
-        buy_strike = strikes[atm_index]
-        sell_index = max(0, atm_index - width_steps)
-        sell_strike, option_type, name = strikes[sell_index], "PE", "Bear Put Debit Spread"
-    buy, sell = _row(rows, buy_strike, option_type), _row(rows, sell_strike, option_type)
-    if not buy or not sell:
+    option_type = "CE" if direction == "BULLISH" else "PE"
+    name = "Bull Call Debit Spread" if direction == "BULLISH" else "Bear Put Debit Spread"
+    candidates = []
+    # Buy ATM or slightly ITM; do not game the risk cap with a cheap, remote
+    # OTM vertical whose probability and executable value are poor.
+    buy_indexes = (range(max(0, atm_index - 2), atm_index + 1) if direction == "BULLISH"
+                   else range(atm_index, min(len(strikes), atm_index + 3)))
+    for buy_index in buy_indexes:
+        sell_indexes = (range(buy_index + 1, min(len(strikes), buy_index + 4)) if direction == "BULLISH"
+                        else range(max(0, buy_index - 3), buy_index))
+        for sell_index in sell_indexes:
+            buy_strike, sell_strike = strikes[buy_index], strikes[sell_index]
+            buy, sell = _row(rows, buy_strike, option_type), _row(rows, sell_strike, option_type)
+            if not buy or not sell:
+                continue
+            buy_price, sell_price = _price(buy, "BUY"), _price(sell, "SELL")
+            width = abs(sell_strike - buy_strike)
+            debit = buy_price - sell_price
+            # Near-zero debit versus strike width is normally a stale/crossed
+            # snapshot, not a realistic executable edge.
+            if min(buy_price, sell_price) <= 0 or debit <= width * .03 or debit >= width:
+                continue
+            lot_size = int(buy["lot_size"])
+            max_loss, max_profit = debit * lot_size, (width - debit) * lot_size
+            candidates.append({
+                "strategy": name, "net_type": "DEBIT", "net_premium": round(debit, 2),
+                "max_loss": round(max_loss, 2), "max_profit": round(max_profit, 2),
+                "payoff_ratio": round(max_profit / max_loss, 2),
+                "breakevens": [round(buy_strike + debit, 2) if direction == "BULLISH" else round(buy_strike - debit, 2)],
+                "legs": [_leg("BUY", buy), _leg("SELL", sell)],
+                "selection_note": f"Best of {option_type} vertical combinations around ATM",
+                "_distance": abs(buy_strike - spot),
+            })
+    if not candidates:
         return None
-    buy_price, sell_price = _price(buy, "BUY"), _price(sell, "SELL")
-    width = abs(sell_strike - buy_strike)
-    debit = buy_price - sell_price
-    if min(buy_price, sell_price) <= 0 or debit <= 0 or debit >= width:
-        return None
-    lot_size = int(buy["lot_size"])
-    return {
-        "strategy": name, "net_type": "DEBIT", "net_premium": round(debit, 2),
-        "max_loss": round(debit * lot_size, 2), "max_profit": round((width - debit) * lot_size, 2),
-        "payoff_ratio": round((width - debit) / debit, 2),
-        "breakevens": [round(buy_strike + debit, 2) if direction == "BULLISH" else round(buy_strike - debit, 2)],
-        "legs": [_leg("BUY", buy), _leg("SELL", sell)],
-    }
+    affordable = [item for item in candidates if risk_cap is None or item["max_loss"] <= risk_cap]
+    pool = affordable or candidates
+    selected = max(pool, key=lambda item: (item["payoff_ratio"], -item["_distance"], -item["max_loss"]))
+    selected.pop("_distance", None)
+    return selected
 
 
 def _iron_condor(rows, strikes, spot, support, resistance):
@@ -220,6 +236,16 @@ def recommend_option_strategy(symbol, spot, candles, capture, chain, environment
         f"ATM expected move {chain.get('expected_move') or '-'}; focused max pain {chain.get('focused_max_pain') or '-'}; chain quality {chain.get('data_quality', 0)}/100",
         f"Fibonacci context: {fib.get('reason')}; state {fib.get('state')}",
     ]
+    chart_evidence = [
+        ("Directional chart votes", direction in {"BULLISH", "BEARISH"} and votes >= 3),
+        ("Completed market structure", bool(structure) and "unavailable" not in structure.lower()),
+        ("Live option quotes", bool(chain.get("quote_rows"))),
+        ("Tradeable strike coverage", len(strikes) >= 4),
+        ("OI context", bool(chain.get("put_support") or chain.get("call_resistance"))),
+    ]
+    chart_passed = sum(bool(value) for _name, value in chart_evidence)
+    chart_score = round(chart_passed / len(chart_evidence) * 100)
+    confidence = min(85, 35 + votes * 10 + (10 if chart_passed >= 4 else 0))
     base = {
         "symbol": symbol, "spot": float(spot), "bias": direction, "regime": regime,
         "vix": environment.get("vix"), "vix_zone": vix_zone,
@@ -228,18 +254,28 @@ def recommend_option_strategy(symbol, spot, candles, capture, chain, environment
         "vix_expected_low": round(float(spot) - float(environment.get("expected_daily_range") or 0), 2) if environment.get("expected_daily_range") else None,
         "vix_expected_high": round(float(spot) + float(environment.get("expected_daily_range") or 0), 2) if environment.get("expected_daily_range") else None,
         "regular_move_target_points": environment.get("regular_move_target_points"),
-        "fibonacci": fib, "reasons": reasons, "warning": "Cutie keh rahi hai: ye review-only defined-risk research hai. Manual action se pehle broker me live prices, liquidity, margin aur payoff verify kijiye.",
+        "fibonacci": fib, "reasons": reasons, "confidence": confidence,
+        "strategy_evidence": [{"name": name, "passed": bool(value)} for name, value in chart_evidence],
+        "strategy_score": chart_score, "strategy_passed": chart_passed, "strategy_total": len(chart_evidence),
+        "warning": "Cutie keh rahi hai: ye review-only defined-risk research hai. Manual action se pehle broker me live prices, liquidity, margin aur payoff verify kijiye.",
     }
     if environment.get("time_state") == "LATE SESSION" or vix_zone in {"EXTREME RISK", "EXTREME VOLATILITY"}:
-        return {**base, "state": "WAIT", "strategy": "No new strategy", "legs": [], "blockers": ["Late session or extreme-VIX risk blocks a new strategy"]}
+        blocker = ("Late-session entry lock: expiry/gamma, spread and execution risk are elevated near market close"
+                   if environment.get("time_state") == "LATE SESSION" else
+                   "Extreme-VIX regime blocks a new defined-risk strategy until volatility stabilises")
+        return {**base, "state": "SAFETY WAIT", "strategy": "No new strategy", "legs": [],
+                "blockers": [blocker], "what_if": _gate_simulation(chart_score, chart_passed, len(chart_evidence), settings, [blocker])}
     if len(strikes) < 4:
-        return {**base, "state": "WAIT", "strategy": "No liquid structure", "legs": [], "blockers": ["Insufficient live option strikes/prices"]}
+        return {**base, "state": "DATA GAP / WAIT", "strategy": "No liquid structure", "legs": [],
+                "blockers": [f"Only {len(strikes)} tradeable strikes passed live volume/spread checks; at least 4 are required"],
+                "what_if": _gate_simulation(chart_score, chart_passed, len(chart_evidence), settings, ["Live option-chain coverage incomplete"])}
     plan = None
     soft_warnings = []
     if not environment.get("regular_move_available", True):
         soft_warnings.append("VIX-implied daily range is substantially consumed; new entry needs a fresh breakout/reversal confirmation")
+    risk_cap = float(settings.get("capital", 0)) * float(settings.get("risk_percent", 1)) / 100
     if direction in {"BULLISH", "BEARISH"}:
-        plan = _debit_spread(rows, strikes, float(spot), direction)
+        plan = _debit_spread(rows, strikes, float(spot), direction, risk_cap=risk_cap)
     elif direction == "RANGE / MIXED" and regime in {"SIDEWAYS / TRANSITION", "LOW VOLATILITY", "HIGH VOLATILITY"}:
         vix_move = float(environment.get("expected_daily_range") or 0)
         # Place the short wings around the more conservative of the VIX estimate
@@ -253,7 +289,6 @@ def recommend_option_strategy(symbol, spot, candles, capture, chain, environment
         blocker = "Live direction/regime and tradeable spread prices do not form a valid defined-risk payoff"
         return {**base, "state": "DATA GAP / WAIT", "strategy": "No clean limited-risk setup", "legs": [],
                 "blockers": [blocker], "what_if": _gate_simulation(0, 0, 7, settings, [blocker])}
-    risk_cap = float(settings.get("capital", 0)) * float(settings.get("risk_percent", 1)) / 100
     within_cap = plan["max_loss"] <= risk_cap
     payoff_ok = plan["payoff_ratio"] >= .30
     evidence = [

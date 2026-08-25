@@ -215,7 +215,13 @@ class OptionStrategiesPage(QWidget):
             + (f"\nBlockers:\n- {blockers}" if blockers else "")
             + f"\n\n{result['warning']}"
         )
-        self.status.setText(cutie_says(f"{result['symbol']} analysis complete hai: {result['state']}. WATCH candidate study ke liye hai; maine koi broker order place nahi kiya."))
+        primary_blocker = (result.get("blockers") or [None])[0]
+        blocker_text = f" Main reason: {primary_blocker}" if primary_blocker else ""
+        self.status.setText(cutie_says(
+            f"{result['symbol']} analysis complete hai: {result['state']}. "
+            f"Direction {result.get('bias')} hai aur evidence {result.get('strategy_passed', 0)}/{result.get('strategy_total', 0)} hai.{blocker_text} "
+            "Maine koi broker order place nahi kiya."
+        ))
         self.start_plan.setEnabled(result.get("state") == "REVIEW CANDIDATE" and bool(result.get("legs")))
         if self.active_plan:
             self.show_monitor_result(monitor_strategy_plan(self.active_plan, result))

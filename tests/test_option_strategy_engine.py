@@ -61,8 +61,33 @@ class OptionStrategyEngineTests(unittest.TestCase):
     def test_extreme_vix_returns_wait(self, _structure):
         environment = {**self.environment, "vix_zone": "EXTREME RISK"}
         result = recommend_option_strategy("NIFTY", 10000, self.candles, self.capture, self.chain, environment, {"capital": 100000, "risk_percent": 10})
-        self.assertEqual(result["state"], "WAIT")
+        self.assertEqual(result["state"], "SAFETY WAIT")
         self.assertFalse(result["legs"])
+        self.assertGreater(result["strategy_total"], 0)
+        self.assertGreater(result["confidence"], 0)
+
+    @patch("engine.option_strategy_engine.analyze_candles", return_value={"state": "Bullish structure"})
+    def test_searches_alternative_vertical_when_fixed_atm_pair_is_invalid(self, _structure):
+        for row in self.rows:
+            if row["strike"] == 10100 and row["option_type"] == "CE":
+                row["bid"] = 0
+        result = recommend_option_strategy(
+            "NIFTY", 10000, self.candles, self.capture, self.chain,
+            self.environment, {"capital": 100000, "risk_percent": 10},
+        )
+        self.assertEqual(result["strategy"], "Bull Call Debit Spread")
+        self.assertEqual(len(result["legs"]), 2)
+
+    @patch("engine.option_strategy_engine.analyze_candles", return_value={"state": "Bullish structure"})
+    def test_late_session_wait_explains_evidence_instead_of_zero_over_zero(self, _structure):
+        result = recommend_option_strategy(
+            "NIFTY", 10000, self.candles, self.capture, self.chain,
+            {**self.environment, "time_state": "LATE SESSION"},
+            {"capital": 100000, "risk_percent": 10},
+        )
+        self.assertEqual(result["state"], "SAFETY WAIT")
+        self.assertEqual(result["strategy_total"], 5)
+        self.assertIn("Late-session", result["blockers"][0])
 
     @patch("engine.option_strategy_engine.analyze_candles", return_value={"state": "Bullish structure"})
     def test_smart_candidate_includes_fibonacci_and_gate_simulation(self, _structure):
