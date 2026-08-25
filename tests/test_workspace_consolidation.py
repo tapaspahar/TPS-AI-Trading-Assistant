@@ -39,7 +39,7 @@ class WorkspaceConsolidationTests(unittest.TestCase):
 
     def test_sidebar_contains_only_primary_workspaces(self):
         labels = "\n".join(button.text() for button in self.screen.sidebar.buttons)
-        self.assertEqual(len(self.screen.sidebar.buttons), 25)
+        self.assertEqual(len(self.screen.sidebar.buttons), 23)
         for retired_label in (
             "Checklist",
             "Stock Options Watch",
@@ -49,6 +49,8 @@ class WorkspaceConsolidationTests(unittest.TestCase):
             "Pre-Candle Probability",
             "Options Intelligence",
             "Volatility Intelligence",
+            "Chart Capture",
+            "Risk Manager",
         ):
             self.assertNotIn(retired_label, labels)
 
@@ -57,7 +59,7 @@ class WorkspaceConsolidationTests(unittest.TestCase):
             (5, 2, self.screen.optionsHub, 0),
             (25, 2, self.screen.optionsHub, 1),
             (11, 22, self.screen.postMarketHub, 1),
-            (17, 26, self.screen.gapHub, 1),
+            (17, 26, self.screen.gapHub, 0),
             (18, 24, self.screen.powerfulHub, 1),
             (23, 24, self.screen.powerfulHub, 2),
             (20, 27, self.screen.autoOpportunityHub, 1),
@@ -68,6 +70,12 @@ class WorkspaceConsolidationTests(unittest.TestCase):
                 self.screen.show_page(route)
                 self.assertEqual(self.screen.stack.currentIndex(), stack_index)
                 self.assertEqual(hub.tabs.currentIndex(), tab_index)
+
+    def test_retired_manual_routes_open_automatic_replacements(self):
+        self.screen.show_page(3)
+        self.assertEqual(self.screen.stack.currentIndex(), 2)
+        self.screen.show_page(7)
+        self.assertEqual(self.screen.stack.currentIndex(), 9)
 
     def test_primary_routes_return_to_the_first_tab(self):
         cases = (

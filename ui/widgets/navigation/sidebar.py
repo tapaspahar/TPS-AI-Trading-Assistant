@@ -29,10 +29,8 @@ class Sidebar(QFrame):
         nav = lambda label: QPushButton(f"{self.NAV_BULLET}  {label}")
         self.dashboardButton = nav("Dashboard")
         self.liveMarketButton = nav("Market Snapshot")
-        self.chartCaptureButton = nav("Chart Capture")
         self.optionsButton = nav("Options Workspace")
         self.journalButton = nav("Trade Journal")
-        self.riskButton = nav("Risk Manager")
         self.reportButton = nav("Reports")
         self.settingsButton = nav("Settings")
         self.backtestButton = nav("Backtesting")
@@ -56,10 +54,10 @@ class Sidebar(QFrame):
         # market context -> chart confirmation -> option plan -> journal.
         self.buttons = (
             self.dashboardButton, self.liveMarketButton,
-            self.equityButton, self.chartCaptureButton,
+            self.equityButton,
             self.optionsButton, self.autoOpportunityButton, self.autoAttemptReportButton,
             self.notificationCenterButton, self.recoveryCenterButton, self.journalButton,
-            self.riskButton, self.reportButton, self.backtestButton, self.replayButton,
+            self.reportButton, self.backtestButton, self.replayButton,
             self.postMarketTpsAnalysisButton, self.selfDevelopmentButton, self.casAnalysisButton,
             self.optionStrategiesButton, self.gapProbabilityButton, self.scalperButton, self.trendMemoryButton,
             self.powerfulEngineButton, self.settingsButton, self.aboutButton, self.helpButton,
@@ -71,9 +69,7 @@ class Sidebar(QFrame):
             0: self.dashboardButton,
             1: self.liveMarketButton,
             2: self.optionsButton,
-            3: self.chartCaptureButton,
             4: self.journalButton,
-            7: self.riskButton,
             8: self.reportButton,
             9: self.settingsButton,
             10: self.backtestButton,

@@ -141,17 +141,17 @@ class AboutPage(QWidget):
           and connect live data.</li>
           <li>Use <b>Market Snapshot</b> to select NIFTY, BANKNIFTY or SENSEX and confirm the 5-minute structure,
           support, resistance and breakout/breakdown levels.</li>
-          <li>Use <b>Chart Capture</b> or live capture to load EMA 5/20/50, VWAP, SuperTrend, RSI, ATR and volume.</li>
-          <li>Verified Chart Capture values now flow directly into <b>Options Workspace</b>. A bullish candle alone
-          is not a bullish structure; the core trend inputs must agree.</li>
+          <li>Keep broker data connected. TPS automatically loads completed-candle EMA 5/20/50, VWAP,
+          SuperTrend, RSI, ATR and volume evidence into <b>Options Workspace</b>.</li>
+          <li>A bullish candle alone is not a bullish structure; the automatic core trend inputs must agree.</li>
           <li>In <b>Options Workspace</b>, keep the recommended Adaptive match rule when you want the required
           checklist count, entry extension and regular-move objective to respond to the live VIX/market regime.</li>
           <li>Open <b>Options Workspace</b>, load the expiry and contract, then analyse OI/PCR. CE is considered
           for confirmed bullish structure and PE for confirmed bearish structure.</li>
           <li>Review <b>Market Environment</b>: India VIX, ATR regime, opening range, previous-day high/low,
           overnight gap, nearby economic events and the directional-versus-hedge research note.</li>
-          <li>Check the generated plan in <b>Risk Control Center</b>. Quantity uses predefined index lots:
-          NIFTY 65, BANKNIFTY 30 and SENSEX 20.</li>
+          <li>TPS automatically applies saved capital/risk limits and predefined index lots to every generated plan:
+          NIFTY 65, BANKNIFTY 30 and SENSEX 20. Change the governing limits only in <b>Settings</b>.</li>
           <li>Use <b>CAS Analysis</b> after market close to compare an F&amp;O stock's 3:00-3:15 reference VWAP,
           final cash close and front-month futures close. TPS labels this as an estimate when exchange auction
           imbalance data is unavailable through the broker feed.</li>
@@ -200,17 +200,18 @@ class AboutPage(QWidget):
           karke live data connect kijiye.</li>
           <li><b>Market Snapshot</b> me NIFTY, BANKNIFTY ya SENSEX select karke 5-minute market structure,
           support, resistance aur breakout/breakdown level check kijiye.</li>
-          <li><b>Chart Capture</b> se EMA 5/20/50, VWAP, SuperTrend, RSI, ATR aur volume values load kijiye.</li>
-          <li>Verified Chart Capture values ab seedha <b>Options Workspace</b> me evaluate hoti hain. Sirf ek bullish
-          candle ka matlab bullish market nahi hota; main trend conditions ka same direction me hona zaroori hai.</li>
+          <li>Broker data connected rakhiye. TPS completed-candle EMA 5/20/50, VWAP, SuperTrend, RSI, ATR aur
+          volume evidence ko <b>Options Workspace</b> me automatically load karega.</li>
+          <li>Sirf ek bullish candle ka matlab bullish market nahi hota; automatic main trend conditions ka same
+          direction me hona zaroori hai.</li>
           <li><b>Options Workspace</b> me recommended Adaptive match rule rakhiye. Is mode me required checklist
           count, entry extension aur regular-move objective live VIX/market regime ke hisaab se badlenge.</li>
           <li><b>Options Workspace</b> me expiry aur contract load karke OI/PCR analyse kijiye. Confirmed bullish
           structure me CE aur confirmed bearish structure me PE consider hoga.</li>
           <li><b>Market Environment</b> me India VIX, ATR regime, opening range, previous-day high/low, gap,
           economic event aur directional/hedge research note dekhiye.</li>
-          <li><b>Risk Control Center</b> me plan ka risk dekhiye. Quantity predefined lots se niklegi:
-          NIFTY 65, BANKNIFTY 30 aur SENSEX 20.</li>
+          <li>TPS har generated plan par saved capital/risk limits aur predefined lots automatically apply karega:
+          NIFTY 65, BANKNIFTY 30 aur SENSEX 20. Governing limits sirf <b>Settings</b> me badliye.</li>
           <li>Market close ke baad <b>CAS Analysis</b> me F&amp;O stock ka 3:00-3:15 reference VWAP, final cash close
           aur front-month future close compare kijiye. Broker feed me exchange auction imbalance na milne par
           TPS result ko estimate ke roop me clearly dikhayega.</li>

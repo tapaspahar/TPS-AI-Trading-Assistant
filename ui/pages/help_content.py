@@ -244,7 +244,6 @@ PAGES = (
 _CONSOLIDATED_TITLES = {
     5: "Session Checklist (Options Workspace)",
     11: "Raw Market Timeline (Post Market Analysis)",
-    17: "Closing Bias / Snapshot Fallback (Gap Probability)",
     18: "Smart Money Evidence (Powerful Engine)",
     20: "Pinned F&O Watchlist (Auto Opportunity Radar)",
     23: "Candle DNA (Powerful Engine)",
@@ -253,7 +252,7 @@ _CONSOLIDATED_TITLES = {
 }
 PAGES = tuple(
     (row[0], _CONSOLIDATED_TITLES.get(row[0], row[1]), *row[2:])
-    for row in PAGES
+    for row in PAGES if row[0] not in {3, 7, 17}
 )
 
 

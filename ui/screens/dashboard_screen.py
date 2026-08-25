@@ -7,9 +7,7 @@ from ui.widgets.navigation.sidebar import Sidebar
 from ui.pages.dashboard_page import DashboardPage
 from ui.pages.live_market_page import LiveMarketPage
 from ui.pages.options_page import OptionsPage
-from ui.pages.chart_capture_page import ChartCapturePage
 from ui.pages.journal_page import JournalPage
-from ui.pages.risk_page import RiskPage
 from ui.pages.reports_page import ReportsPage
 from ui.pages.backtest_page import BacktestPage
 from ui.pages.post_market_page import PostMarketPage
@@ -18,7 +16,6 @@ from ui.pages.settings_page import SettingsPage
 from ui.pages.equity_page import EquityPage
 from ui.pages.auto_attempt_report_page import AutoAttemptReportPage
 from ui.pages.about_help_page import AboutPage, HelpPage
-from ui.pages.next_day_bias_page import NextDayBiasPage
 from ui.pages.smart_money_page import SmartMoneyPage
 from ui.pages.cas_analysis_page import CasAnalysisPage
 from ui.pages.stock_options_watch_page import StockOptionsWatchPage
@@ -43,7 +40,6 @@ from services.self_development_decision import ensure_completed_self_development
 from services.notification_service import NotificationService
 from services.live_session import LiveSession
 from services.trend_memory_service import ensure_completed_trend_memories, get_live_trend_analogs
-from engine.decision_engine import decision_context_from_capture
 
 
 class ResponsiveStackedWidget(QStackedWidget):
@@ -84,12 +80,14 @@ class DashboardScreen(QWidget):
         self.dashboardPage = DashboardPage()
         self.liveMarketPage = LiveMarketPage()
         self.optionsPage = OptionsPage()
-        self.chartCapturePage = ChartCapturePage()
+        # Routes 3 and 7 remain reserved for backward-compatible Help links;
+        # their former manual workspaces are replaced by automatic flows.
+        self.retiredChartCaptureSlot = QWidget()
         self.journalPage = JournalPage()
         # Index 6 is intentionally reserved so every established workspace
         # keeps its public route after the retired manual AI form is removed.
         self.retiredAiPageSlot = QWidget()
-        self.riskPage = RiskPage()
+        self.retiredRiskPageSlot = QWidget()
         self.reportsPage = ReportsPage()
         self.backtestPage = BacktestPage()
         self.postMarketPage = PostMarketPage()
@@ -99,7 +97,6 @@ class DashboardScreen(QWidget):
         self.autoAttemptReportPage = AutoAttemptReportPage()
         self.aboutPage = AboutPage()
         self.helpPage = HelpPage()
-        self.nextDayBiasPage = NextDayBiasPage()
         self.smartMoneyPage = SmartMoneyPage()
         self.casAnalysisPage = CasAnalysisPage()
         self.stockOptionsWatchPage = StockOptionsWatchPage()
@@ -129,8 +126,7 @@ class DashboardScreen(QWidget):
             (self.postMarketPage, "Raw Market Timeline"),
         ))
         self.gapHub = ConsolidatedWorkspace((
-            (self.gapProbabilityPage, "3:20 + 3:40 Probability"),
-            (self.nextDayBiasPage, "Closing Bias / Snapshot Fallback"),
+            (self.gapProbabilityPage, "Automatic 3:20 + 3:40 Probability"),
         ))
         self.powerfulHub = ConsolidatedWorkspace((
             (self.powerfulEnginePage, "Combined Signal"),
@@ -143,8 +139,8 @@ class DashboardScreen(QWidget):
         ))
         retired = lambda: QWidget()
         pages = (
-            self.dashboardPage, self.liveMarketPage, self.optionsHub, self.chartCapturePage, self.journalPage,
-            retired(), self.retiredAiPageSlot, self.riskPage, self.reportsPage, self.settingsPage,
+            self.dashboardPage, self.liveMarketPage, self.optionsHub, self.retiredChartCaptureSlot, self.journalPage,
+            retired(), self.retiredAiPageSlot, self.retiredRiskPageSlot, self.reportsPage, self.settingsPage,
             self.backtestPage, retired(), self.replayPage, self.equityPage,
             self.autoAttemptReportPage, self.aboutPage, self.helpPage, retired(), retired(),
             self.casAnalysisPage, retired(), self.strategyHub, self.postMarketHub, retired(),
@@ -156,8 +152,6 @@ class DashboardScreen(QWidget):
         self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
         self.journalPage.trade_saved.connect(self.reportsPage.refresh)
         self.journalPage.trade_saved.connect(self.optionsPage.update_plan_readiness)
-        self.chartCapturePage.analysis_ready.connect(self.handle_chart_capture)
-        self.optionsPage.trade_plan_ready.connect(self.riskPage.load_trade_plan)
         self.optionsPage.trade_plan_ready.connect(lambda _plan: self.show_page(4))
         self.journalPage.open_backtesting.connect(lambda: self.show_page(10))
         self.optionsPage.paper_trade_captured.connect(lambda _plan: self.journalPage.load_trades())
@@ -174,7 +168,6 @@ class DashboardScreen(QWidget):
         self.putCallRatioPage.sentiment_changed.connect(self.notify_pcr_sentiment)
         self.helpPage.page_requested.connect(self.show_page)
         self.optionsPage.auto_attempt_saved.connect(self.autoAttemptReportPage.refresh)
-        self.optionsPage.open_chart_capture.connect(lambda: self.show_page(3))
         self.settingsPage.live_connected.connect(self.start_default_nifty)
         self.settingsPage.live_connected.connect(self.optionsPage.prepare_live_workspace)
         self.settingsPage.live_connected.connect(lambda: self.autoOpportunityPage.scan(force=True))
@@ -183,9 +176,8 @@ class DashboardScreen(QWidget):
         self.notifier.notification_sent.connect(self.notificationCenterPage.refresh)
         self.notificationCenterPage.unread_count_changed.connect(self.sidebar.set_notification_count)
         for button, index in ((self.sidebar.dashboardButton, 0), (self.sidebar.liveMarketButton, 1),
-                              (self.sidebar.optionsButton, 2), (self.sidebar.chartCaptureButton, 3),
+                              (self.sidebar.optionsButton, 2),
                               (self.sidebar.journalButton, 4),
-                              (self.sidebar.riskButton, 7),
                               (self.sidebar.reportButton, 8), (self.sidebar.settingsButton, 9),
                               (self.sidebar.backtestButton, 10), (self.sidebar.replayButton, 12),
                               (self.sidebar.equityButton, 13), (self.sidebar.autoAttemptReportButton, 14),
@@ -360,9 +352,11 @@ class DashboardScreen(QWidget):
     def show_page(self, index: int):
         requested_index = index
         aliases = {
+            3: (2, self.optionsHub, 0),
             5: (2, self.optionsHub, 0),
             11: (22, self.postMarketHub, 1),
-            17: (26, self.gapHub, 1),
+            7: (9, None, 0),
+            17: (26, self.gapHub, 0),
             18: (24, self.powerfulHub, 1),
             20: (27, self.autoOpportunityHub, 1),
             23: (24, self.powerfulHub, 2),
@@ -371,7 +365,8 @@ class DashboardScreen(QWidget):
         }
         if requested_index in aliases:
             index, hub, tab = aliases[requested_index]
-            hub.select_tab(tab)
+            if hub is not None:
+                hub.select_tab(tab)
         else:
             primary_tabs = {
                 2: self.optionsHub,
@@ -398,8 +393,6 @@ class DashboardScreen(QWidget):
             self.postMarketPage.refresh()
         elif index == 14:
             self.autoAttemptReportPage.refresh()
-        elif index == 7:
-            self.riskPage.refresh()
         elif index == 22:
             self.postMarketTpsAnalysisPage.refresh(auto_generate=True)
         elif requested_index == 25:
@@ -419,15 +412,6 @@ class DashboardScreen(QWidget):
         elif requested_index == 33 and LiveSession.connected():
             self.volatilityIntelligencePage.analyze()
         self.stack.setCurrentIndex(index)
-
-    def handle_chart_capture(self, capture):
-        """Evaluate verified chart data directly and continue to Options."""
-        try:
-            context = decision_context_from_capture(capture)
-        except (TypeError, ValueError):
-            return
-        self.optionsPage.set_chart_context(context)
-        self.show_page(2)
 
     def start_default_nifty(self):
         self.liveMarketPage.select_symbol("NIFTY")
