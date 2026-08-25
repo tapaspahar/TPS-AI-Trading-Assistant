@@ -20,6 +20,7 @@ from services.self_development_decision import (
 from services.development_validation import (
     build_counterfactual_review, build_evaluation_health, build_evidence_diagnostics,
 )
+from services.development_lifecycle import build_implementation_benefit_report
 from core.settings_store import SettingsStore
 from ui.widgets.excel_export_dialog import open_excel_export
 
@@ -32,6 +33,7 @@ class SelfDevelopmentPage(QWidget):
         self.db = Database()
         self.rows = []
         self.suggestions = []
+        self.implementation_rows = []
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         scroll = QScrollArea()
@@ -168,6 +170,37 @@ class SelfDevelopmentPage(QWidget):
         validation_layout.addWidget(self.validation_details, 1)
         tabs.addTab(validation_tab, "Validation Evidence & Replay")
 
+        implementation_tab = QWidget()
+        implementation_layout = QVBoxLayout(implementation_tab)
+        implementation_layout.setContentsMargins(8, 10, 8, 8)
+        implementation_intro = QLabel(
+            "Suggestion-to-build audit: kya suggest hua, kis release mein build hua, aur replay/paper evidence se "
+            "kya measurable fayda mila. Proof na ho toh report clearly MEASUREMENT PENDING dikhati hai."
+        )
+        implementation_intro.setWordWrap(True)
+        implementation_layout.addWidget(implementation_intro)
+        self.implementation_table = QTableWidget(0, 5)
+        self.implementation_table.setHorizontalHeaderLabels(
+            ("Suggestion", "Build status", "Release / build", "Benefit status", "Next action")
+        )
+        self.implementation_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.implementation_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.implementation_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.implementation_table.verticalHeader().setVisible(False)
+        self.implementation_table.setAlternatingRowColors(True)
+        implementation_header = self.implementation_table.horizontalHeader()
+        implementation_header.setSectionResizeMode(0, QHeaderView.Stretch)
+        for column in range(1, 5):
+            implementation_header.setSectionResizeMode(column, QHeaderView.ResizeToContents)
+        self.implementation_table.itemSelectionChanged.connect(self.show_selected_implementation)
+        implementation_layout.addWidget(self.implementation_table, 3)
+        implementation_layout.addWidget(QLabel("Selected lifecycle report — evidence, pending reason and next-release action"))
+        self.implementation_details = QPlainTextEdit()
+        self.implementation_details.setReadOnly(True)
+        self.implementation_details.setMinimumHeight(230)
+        implementation_layout.addWidget(self.implementation_details, 2)
+        tabs.addTab(implementation_tab, "Implementation & Benefit Report")
+
         right_layout.addWidget(tabs, 1)
         splitter.addWidget(right)
         splitter.setStretchFactor(0, 0)
@@ -231,6 +264,8 @@ class SelfDevelopmentPage(QWidget):
         for card in (self.coverage, self.broker_health, self.validation_samples, self.pipeline):
             card[1].setText("-")
         self.validation_details.setPlainText(message)
+        self.implementation_table.setRowCount(0)
+        self.implementation_details.setPlainText(message)
 
     def generate_selected(self):
         trade_date = self.date_input.date().toString("dd-MM-yyyy")
@@ -281,10 +316,42 @@ class SelfDevelopmentPage(QWidget):
             f"Build {row['build_id'] or '-'} | Generated: {generated} | Suggestions: {len(self.suggestions)} | Open: {open_items}"
         )
         self.refresh_validation_evidence(trade_date)
+        self.refresh_implementation_report()
         if self.suggestions:
             self.table.selectRow(0)
         else:
             self.details.setPlainText(str(row["summary_text"]))
+
+    def refresh_implementation_report(self):
+        self.implementation_rows = build_implementation_benefit_report(self.db, self.suggestions)
+        self.implementation_table.setRowCount(len(self.implementation_rows))
+        for row_index, record in enumerate(self.implementation_rows):
+            values = (
+                record["suggestion"], record["build_status"], record["release"],
+                record["benefit_status"], record["next_action"],
+            )
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(str(value))
+                item.setToolTip(str(value))
+                self.implementation_table.setItem(row_index, column, item)
+        if self.implementation_rows:
+            self.implementation_table.selectRow(0)
+        else:
+            self.implementation_details.setPlainText("Is review mein koi development suggestion save nahi hua.")
+
+    def show_selected_implementation(self):
+        index = self.implementation_table.currentRow()
+        if index < 0 or index >= len(self.implementation_rows):
+            return
+        record = self.implementation_rows[index]
+        self.implementation_details.setPlainText(
+            f"SUGGESTION\n{record['suggestion']}\n\n"
+            f"BUILD STATUS\n{record['build_status']}\nRelease/build: {record['release']}\n\n"
+            f"BENEFIT STATUS\n{record['benefit_status']}\n{record['benefit']}\n\n"
+            f"PENDING / NOT IMPLEMENTED REASON\n{record['reason']}\n\n"
+            f"NEXT RELEASE ACTION\n{record['next_action']}\n\n"
+            "Note: Cutie code present hone ko profit proof nahi maanti; benefit sirf saved replay ya paper-forward evidence se update hota hai."
+        )
 
     def show_selected_suggestion(self):
         index = self.table.currentRow()

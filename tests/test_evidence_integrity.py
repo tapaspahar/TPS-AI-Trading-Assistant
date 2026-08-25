@@ -5,7 +5,9 @@ from pathlib import Path
 
 from core.database_manager import Database
 from engine.evidence_model import EvidenceState, classify_attempt, evidence_state, unique_messages
-from services.development_lifecycle import BUILD_ID, IMPLEMENTED_FEATURES, sync_feature_lifecycle
+from services.development_lifecycle import (
+    BUILD_ID, IMPLEMENTED_FEATURES, build_implementation_benefit_report, sync_feature_lifecycle,
+)
 
 
 class EvidenceIntegrityTests(unittest.TestCase):
@@ -117,6 +119,32 @@ class EvidenceIntegrityTests(unittest.TestCase):
                 self.assertTrue(all(row["build_id"] == BUILD_ID for row in rows.values()))
                 self.assertTrue(all(row["lifecycle_state"] == "IMPLEMENTED IN BUILD" for row in rows.values()))
                 self.assertTrue(all(row["approved_at"] is None for row in rows.values()))
+            finally:
+                database.close()
+
+    def test_implementation_report_does_not_claim_unproven_benefit(self):
+        with tempfile.TemporaryDirectory() as folder:
+            database = Database(Path(folder) / "benefit.db")
+            try:
+                report = build_implementation_benefit_report(database, [{
+                    "key": "evidence_integrity", "suggestion": "Three-state evidence add karein.",
+                }])
+                self.assertEqual(report[0]["build_status"], "IMPLEMENTED IN BUILD")
+                self.assertEqual(report[0]["benefit_status"], "MEASUREMENT PENDING")
+                self.assertIn("proof nahi", report[0]["benefit"])
+            finally:
+                database.close()
+
+    def test_implementation_report_explains_unmapped_backlog(self):
+        with tempfile.TemporaryDirectory() as folder:
+            database = Database(Path(folder) / "pending.db")
+            try:
+                report = build_implementation_benefit_report(database, [{
+                    "key": "future_feature", "suggestion": "Future feature build karein.",
+                }])
+                self.assertEqual(report[0]["build_status"], "NOT IMPLEMENTED")
+                self.assertIn("verified feature mapping nahi mila", report[0]["reason"])
+                self.assertIn("Next release backlog", report[0]["next_action"])
             finally:
                 database.close()
 
