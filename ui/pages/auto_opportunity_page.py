@@ -162,8 +162,8 @@ class AutoOpportunityPage(QWidget):
         blockers = "\n• ".join(details.get("blockers") or ["None — research candidate gates passed."])
         self.detail.setText(
             f"{record['action']} {record['symbol']} | {record.get('instrument') or '-'} | Score {record['score']:.0f}/100\n"
-            f"Entry {self._price(record.get('entry'))} | Stop {self._price(record.get('stop'))} | "
-            f"Target 1 {self._price(record.get('target_1'))} | Target 2 {self._price(record.get('target_2'))}\n"
+            f"Entry price: ₹{self._price(record.get('entry'))} | Protective stop: ₹{self._price(record.get('stop'))}\n"
+            f"First target: ₹{self._price(record.get('target_1'))} | Second target: ₹{self._price(record.get('target_2'))}\n"
             f"Exit logic: {record['exit_rule']}\n\nEvidence:\n• {evidence}\n\nBlockers / caution:\n• {blockers}\n\n"
             "Suggestion completed-candle research hai; live spread/slippage aur unexpected news ko manually verify karna zaroori hai."
         )
