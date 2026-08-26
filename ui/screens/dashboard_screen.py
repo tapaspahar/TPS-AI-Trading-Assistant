@@ -362,6 +362,9 @@ class DashboardScreen(QWidget):
                    "Maximum benefit/loss is predefined; no broker order was placed.")
         if kind == "CLOSED":
             message = f"{strategy} paper monitor closed: {event.get('outcome')} | Model P&L ₹{float(event.get('pnl') or 0):,.2f}."
+        elif kind == "SESSION_REVIEW":
+            message = (f"{event.get('symbol', 'Index')} ka market-close strategy review save ho gaya. "
+                       f"Aaj ka best paper result: {strategy}. Strategy Trades page par full comparison dekhiye.")
         self.notifier.notify("strategy_trades", f"Cutie strategy {kind.lower()} — {strategy}", message)
 
     def show_page(self, index: int):

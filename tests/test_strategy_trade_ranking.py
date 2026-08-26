@@ -1,9 +1,11 @@
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 
 from core.database_manager import Database
-from ui.pages.strategy_trades_page import capturable_strategy_candidates
+from core.market_session import IST
+from ui.pages.strategy_trades_page import candidate_structure_key, capturable_strategy_candidates, strategy_capture_window
 
 
 class StrategyTradeRankingTests(unittest.TestCase):
@@ -77,6 +79,26 @@ class StrategyTradeRankingTests(unittest.TestCase):
 
         self.assertEqual(len(capturable_strategy_candidates(catalog, remaining=2)), 2)
         self.assertEqual(capturable_strategy_candidates(catalog, remaining=0), [])
+
+    def test_strategy_capture_waits_for_first_fifteen_minutes(self):
+        settings = {"market_pre_open_time": "09:00", "market_open_time": "09:15", "market_close_time": "15:30"}
+        stage, ready = strategy_capture_window(datetime(2026, 8, 26, 9, 29, tzinfo=IST), settings)
+        self.assertEqual(stage, "OBSERVING")
+        self.assertEqual(ready.strftime("%H:%M"), "09:30")
+        self.assertEqual(strategy_capture_window(datetime(2026, 8, 26, 9, 30, tzinfo=IST), settings)[0], "CHECKING")
+
+    def test_structure_key_keeps_same_combination_unique_across_candles(self):
+        candidate = {"legs": [{"action": "BUY", "option_type": "CE", "strike": 24500, "lots": 1}]}
+        self.assertEqual(candidate_structure_key(candidate), "BUY:CE:24500:1")
+
+    def test_market_close_review_is_saved_from_closed_results(self):
+        self._capture_closed("Bull Call", "Cutie Bull", "2026-08-26T09:30:00", 125, "TRENDING")
+        self._capture_closed("Iron Condor", "Cutie Range", "2026-08-26T09:35:00", -25, "TRENDING")
+        review = self.db.save_strategy_session_review(datetime.now().strftime("%d-%m-%Y"), "NIFTY", "BULLISH", "TRENDING")
+        self.assertIsNotNone(review)
+        self.assertEqual(review["total_strategies"], 2)
+        self.assertEqual(review["wins"], 1)
+        self.assertEqual(review["best_strategy"], "Cutie Bull")
 
 
 if __name__ == "__main__":

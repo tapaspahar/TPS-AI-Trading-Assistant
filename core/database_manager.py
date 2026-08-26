@@ -218,6 +218,29 @@ class Database:
             """
         )
         self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_strategy_trades_date ON strategy_trades(trade_date DESC, id DESC)")
+        self.cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS strategy_session_reviews (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                trade_date TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                generated_at TEXT NOT NULL,
+                market_direction TEXT NOT NULL,
+                market_regime TEXT NOT NULL,
+                total_strategies INTEGER NOT NULL DEFAULT 0,
+                wins INTEGER NOT NULL DEFAULT 0,
+                losses INTEGER NOT NULL DEFAULT 0,
+                flat INTEGER NOT NULL DEFAULT 0,
+                best_strategy TEXT,
+                best_pnl REAL NOT NULL DEFAULT 0,
+                worst_strategy TEXT,
+                worst_pnl REAL NOT NULL DEFAULT 0,
+                review_text TEXT NOT NULL,
+                UNIQUE(trade_date, symbol)
+            )
+            """
+        )
+        self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_strategy_reviews_date ON strategy_session_reviews(trade_date DESC, id DESC)")
         strategy_columns = {
             row["name"] for row in self.cursor.execute("PRAGMA table_info(strategy_trades)")
         }
@@ -1955,7 +1978,7 @@ class Database:
         self.connection.commit()
         return int(self.cursor.lastrowid) if self.cursor.rowcount else None
 
-    def update_strategy_trades(self, symbol: str, spot: float, candle_time: str = "", quote_rows=None) -> list[dict]:
+    def update_strategy_trades(self, symbol: str, spot: float, candle_time: str = "", quote_rows=None, force_close=False) -> list[dict]:
         """Mark open paper strategies from live executable quotes and close exits."""
         from engine.strategy_portfolio_engine import payoff_at_expiry
         now = datetime.now()
@@ -1988,6 +2011,8 @@ class Database:
                 outcome = "TARGET BENEFIT REACHED"
             elif pnl <= loss_review:
                 outcome = "LOSS REVIEW EXIT"
+            elif force_close:
+                outcome = "MARKET CLOSE EXIT"
             elif now.strftime("%H:%M") >= "15:25":
                 outcome = "TIME EXIT"
             review = ""
@@ -2007,6 +2032,54 @@ class Database:
                 self.cursor.execute("UPDATE strategy_trades SET last_spot=?, current_pnl=? WHERE id=?", (float(spot), pnl, row["id"]))
         self.connection.commit()
         return closed
+
+    def save_strategy_session_review(self, trade_date: str, symbol: str, market_direction="UNKNOWN", market_regime="UNKNOWN") -> dict | None:
+        """Persist one end-of-session review derived only from closed paper results."""
+        rows = self.cursor.execute(
+            "SELECT * FROM strategy_trades WHERE trade_date=? AND symbol=? AND status='CLOSED' ORDER BY realized_pnl DESC, id",
+            (trade_date, str(symbol).upper()),
+        ).fetchall()
+        if not rows:
+            return None
+        wins = sum(float(row["realized_pnl"] or 0) > 0 for row in rows)
+        losses = sum(float(row["realized_pnl"] or 0) < 0 for row in rows)
+        flat = len(rows) - wins - losses
+        best, worst = rows[0], rows[-1]
+        best_name = best["friendly_name"] or best["strategy_name"]
+        worst_name = worst["friendly_name"] or worst["strategy_name"]
+        review = (
+            f"Cutie closing review: {symbol} ka market {str(market_direction).upper()} direction aur "
+            f"{str(market_regime).upper()} regime me raha. {len(rows)} defined-risk paper strategies me "
+            f"{wins} profitable, {losses} loss aur {flat} flat rahe. Best: {best_name} "
+            f"(₹{float(best['realized_pnl'] or 0):,.2f}); weakest: {worst_name} "
+            f"(₹{float(worst['realized_pnl'] or 0):,.2f}). Same regime future me aaye to yeh result context hoga, entry guarantee nahi."
+        )
+        generated = datetime.now().isoformat(timespec="seconds")
+        self.cursor.execute(
+            """INSERT INTO strategy_session_reviews
+               (trade_date, symbol, generated_at, market_direction, market_regime, total_strategies,
+                wins, losses, flat, best_strategy, best_pnl, worst_strategy, worst_pnl, review_text)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(trade_date, symbol) DO UPDATE SET
+                 generated_at=excluded.generated_at, market_direction=excluded.market_direction,
+                 market_regime=excluded.market_regime, total_strategies=excluded.total_strategies,
+                 wins=excluded.wins, losses=excluded.losses, flat=excluded.flat,
+                 best_strategy=excluded.best_strategy, best_pnl=excluded.best_pnl,
+                 worst_strategy=excluded.worst_strategy, worst_pnl=excluded.worst_pnl,
+                 review_text=excluded.review_text""",
+            (trade_date, str(symbol).upper(), generated, str(market_direction).upper(), str(market_regime).upper(),
+             len(rows), wins, losses, flat, best_name, float(best["realized_pnl"] or 0),
+             worst_name, float(worst["realized_pnl"] or 0), review),
+        )
+        self.connection.commit()
+        return dict(self.cursor.execute(
+            "SELECT * FROM strategy_session_reviews WHERE trade_date=? AND symbol=?", (trade_date, str(symbol).upper())
+        ).fetchone())
+
+    def get_strategy_session_reviews(self, limit=100) -> list[sqlite3.Row]:
+        return self.cursor.execute(
+            "SELECT * FROM strategy_session_reviews ORDER BY id DESC LIMIT ?", (max(1, min(int(limit), 1000)),)
+        ).fetchall()
 
     def get_strategy_trades(self, trade_date: str | None = None, limit: int = 1000) -> list[sqlite3.Row]:
         query, values = "SELECT * FROM strategy_trades", []

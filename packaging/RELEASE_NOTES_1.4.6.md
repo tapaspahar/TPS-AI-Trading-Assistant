@@ -14,5 +14,9 @@ Release date: 26-08-2026
 - Keeps live Defined-Risk Strategies and VIX/ATR Intelligence exclusively on Option Strategies; Strategy Trades is now a dedicated captured-trade ledger.
 - Shows capture score and scenario score on every saved strategy trade.
 - Ranks strategies by actual closed-paper win rate, then sample count and total P&L, with the top rank first.
+- Observes the configured market's first 15 minutes before starting automatic strategy checking.
+- Places up to 30 unique bounded-risk strike combinations into paper-validation monitoring; repeated candles no longer duplicate the same combination.
+- Automatically closes remaining paper strategies at market close and stores a date-wise Cutie review with market direction/regime, profitable/loss counts and best/worst structures.
+- Adds a permanent market-close learning table so comparable future regimes can reference actual historical paper outcomes.
 
 TPS remains a research and paper-validation application. It does not guarantee profit or place broker orders.

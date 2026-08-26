@@ -1,14 +1,14 @@
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import (
     QGridLayout, QHBoxLayout, QLabel, QPushButton, QScrollArea, QTableWidget,
     QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from core.database_manager import Database
-from core.market_session import market_session
+from core.market_session import IST, market_session, parse_session_times
 from core.settings_store import SettingsStore
 from engine.strategy_portfolio_engine import build_strategy_catalog
 
@@ -25,6 +25,24 @@ def capturable_strategy_candidates(catalog, remaining):
     ][:max(0, int(remaining or 0))]
 
 
+def candidate_structure_key(candidate):
+    return "|".join(
+        f"{leg['action']}:{leg['option_type']}:{float(leg['strike']):g}:{int(leg.get('lots', 1))}"
+        for leg in candidate.get("legs", [])
+    )
+
+
+def strategy_capture_window(now=None, settings=None, observation_minutes=15):
+    """Return the automatic strategy-study stage for the configured session."""
+    now = now.astimezone(IST) if now and now.tzinfo else now.replace(tzinfo=IST) if now else datetime.now(IST)
+    session = market_session(now, settings)
+    if session.get("state") != "OPEN":
+        return session.get("state", "CLOSED"), None
+    _, open_clock, _ = parse_session_times(settings)
+    ready_at = datetime.combine(now.date(), open_clock, IST) + timedelta(minutes=observation_minutes)
+    return ("OBSERVING", ready_at) if now < ready_at else ("CHECKING", ready_at)
+
+
 class StrategyTradesPage(QWidget):
     """Automatic, multi-leg defined-risk paper validation ledger."""
 
@@ -35,6 +53,9 @@ class StrategyTradesPage(QWidget):
         self.db = Database()
         self.settings = SettingsStore()
         self.latest_catalog = []
+        self.latest_result = {}
+        self._finalized_session_key = ""
+        self.session_message = ""
         outer = QVBoxLayout(self); outer.setContentsMargins(0, 0, 0, 0)
         scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setFrameShape(QScrollArea.NoFrame)
         body = QWidget(); layout = QVBoxLayout(body); layout.setContentsMargins(18, 16, 18, 22); layout.setSpacing(10)
@@ -86,22 +107,37 @@ class StrategyTradesPage(QWidget):
         layout.addWidget(self.ledger)
         self.details = QLabel("Captured trade select karke every leg, saved score, payoff zone aur outcome explanation dekhiye.")
         self.details.setWordWrap(True); self.details.setMinimumHeight(110); layout.addWidget(self.details)
+        review_title = QLabel("Market-close strategy analysis — date-wise permanent learning record")
+        review_title.setObjectName("sectionTitle"); layout.addWidget(review_title)
+        self.reviews = QTableWidget(0, 9)
+        self.reviews.setHorizontalHeaderLabels(("Date", "Index", "Direction", "Regime", "Checked", "Profitable", "Loss", "Best strategy", "Best P&L"))
+        self.reviews.setEditTriggers(QTableWidget.NoEditTriggers); self.reviews.setMinimumHeight(190)
+        self.reviews.itemSelectionChanged.connect(self._review_detail); layout.addWidget(self.reviews)
+        self.review_details = QLabel("Market close ke baad Cutie ka automatic comparison yahan save hoga.")
+        self.review_details.setWordWrap(True); self.review_details.setMinimumHeight(70); layout.addWidget(self.review_details)
         layout.addStretch(); self.refresh()
+        self.session_timer = QTimer(self); self.session_timer.setInterval(30_000)
+        self.session_timer.timeout.connect(self._session_tick); self.session_timer.start()
 
     def ingest_analysis(self, result: dict):
         """Receive the same completed-candle evidence used by Option Strategies."""
         try:
+            self.latest_result = dict(result)
             self.latest_catalog = build_strategy_catalog(result, self.settings.load())
             symbol = str(result.get("symbol") or "").upper()
             spot = float(result.get("spot") or 0)
             quote_rows = (result.get("chain") or {}).get("quote_rows") or []
             closed = self.db.update_strategy_trades(symbol, spot, str(result.get("candle_time") or ""), quote_rows) if symbol and spot else []
-            session = market_session(settings=self.settings.load())
+            loaded_settings = self.settings.load()
+            session = market_session(settings=loaded_settings)
+            stage, ready_at = strategy_capture_window(settings=loaded_settings)
             captured = []
-            if session.get("state") == "OPEN":
+            if stage == "CHECKING":
                 today = datetime.now().strftime("%d-%m-%Y")
-                used = len(self.db.get_strategy_trades(today, 100))
+                saved_today = self.db.get_strategy_trades(today, 100)
+                used = len(saved_today)
                 remaining = max(0, 30 - used)
+                existing_keys = {str(row["structure_key"]) for row in saved_today}
                 source = dict(result)
                 source.update({
                     "symbol": symbol,
@@ -113,7 +149,11 @@ class StrategyTradesPage(QWidget):
                         or "UNKNOWN"
                     ).upper(),
                 })
-                for candidate in capturable_strategy_candidates(self.latest_catalog, remaining):
+                for candidate in capturable_strategy_candidates(self.latest_catalog, len(self.latest_catalog)):
+                    if len(captured) >= remaining:
+                        break
+                    if candidate_structure_key(candidate) in existing_keys:
+                        continue
                     candidate_source = dict(source)
                     aligned = bool(candidate.get("market_alignment"))
                     candidate_source.update({
@@ -123,6 +163,15 @@ class StrategyTradesPage(QWidget):
                     trade_id = self.db.save_strategy_trade(candidate, candidate_source)
                     if trade_id:
                         captured.append(candidate.get("friendly_name") or candidate["strategy"])
+                        existing_keys.add(candidate_structure_key(candidate))
+                self.session_message = (
+                    f"Checking mode active — first 15-minute observation complete. "
+                    f"Aaj ke {used + len(captured)}/30 unique strategy combinations paper monitor par hain."
+                )
+            elif stage == "OBSERVING":
+                self.session_message = f"Cutie first 15-minute market structure observe kar rahi hai. Strategy checking {ready_at.strftime('%H:%M')} IST se start hogi."
+            elif session.get("state") == "CLOSED":
+                self._finalize_session(result)
             for name in captured:
                 self.strategy_event.emit({"kind": "CAPTURED", "symbol": symbol, "strategy": name})
             for item in closed:
@@ -130,6 +179,32 @@ class StrategyTradesPage(QWidget):
             self.refresh()
         except (ValueError, TypeError, KeyError, RuntimeError) as error:
             self.summary.setText(f"Strategy paper validation unavailable: {error}")
+
+    def _session_tick(self):
+        if self.latest_result and market_session(settings=self.settings.load()).get("state") == "CLOSED":
+            self._finalize_session(self.latest_result)
+
+    def _finalize_session(self, result):
+        symbol = str(result.get("symbol") or "").upper()
+        spot = float(result.get("spot") or 0)
+        if not symbol or not spot:
+            return
+        today = datetime.now(IST).strftime("%d-%m-%Y")
+        key = f"{today}:{symbol}"
+        if key == self._finalized_session_key:
+            return
+        quote_rows = (result.get("chain") or {}).get("quote_rows") or []
+        closed = self.db.update_strategy_trades(symbol, spot, str(result.get("candle_time") or ""), quote_rows, force_close=True)
+        regime = str(result.get("market_regime") or (result.get("environment") or {}).get("regime") or "UNKNOWN").upper()
+        direction = str(result.get("bias") or result.get("market_bias") or "UNKNOWN").upper()
+        review = self.db.save_strategy_session_review(today, symbol, direction, regime)
+        if review and key != self._finalized_session_key:
+            self._finalized_session_key = key
+            self.session_message = f"Market-close review saved — {review.get('wins', 0)}/{review.get('total_strategies', 0)} strategies profitable."
+            self.strategy_event.emit({"kind": "SESSION_REVIEW", "symbol": symbol, "strategy": review.get("best_strategy") or "-"})
+        for item in closed:
+            self.strategy_event.emit({"kind": "CLOSED", "symbol": symbol, **item})
+        self.refresh()
 
     def refresh(self):
         self.live_catalog.setRowCount(len(self.latest_catalog))
@@ -179,14 +254,30 @@ class StrategyTradesPage(QWidget):
                       f"{float(item['average_model_roc'] or 0):.1f}%", item["market_regimes"] or "UNKNOWN")
             for column, value in enumerate(values): self.performance.setItem(row, column, QTableWidgetItem(str(value)))
         self.performance.resizeColumnsToContents(); self.performance.horizontalHeader().setStretchLastSection(True)
+        reviews = self.db.get_strategy_session_reviews()
+        self.reviews.setRowCount(len(reviews))
+        for row, item in enumerate(reviews):
+            values = (item["trade_date"], item["symbol"], item["market_direction"], item["market_regime"],
+                      item["total_strategies"], item["wins"], item["losses"], item["best_strategy"], f"₹{float(item['best_pnl']):,.2f}")
+            for column, value in enumerate(values): self.reviews.setItem(row, column, QTableWidgetItem(str(value)))
+            self.reviews.item(row, 0).setData(256, int(item["id"]))
+        self.reviews.resizeColumnsToContents(); self.reviews.horizontalHeader().setStretchLastSection(True)
         total = int(summary.get("total") or 0); closed = int(summary.get("closed_count") or 0); wins = int(summary.get("wins") or 0)
         self.summary.setText(
+            (self.session_message + "\n" if self.session_message else "") +
             f"Live analysed: {len(self.latest_catalog)}/30 | "
             f"Paper strategies: {total} | Open: {int(summary.get('open_count') or 0)} | Closed: {closed} | "
             f"Positive model outcomes: {wins}/{closed if closed else 0} | Realized model P&L: ₹{float(summary.get('pnl') or 0):,.2f}. "
             "Ranking sirf closed paper outcomes ke win rate par hai (tie me zyada samples, phir total P&L). "
             "Release 1.4.6 testing cap: 30 unique multi-strike strategy captures/day."
         )
+
+    def _review_detail(self):
+        row = self.reviews.currentRow()
+        if row < 0: return
+        review_id = self.reviews.item(row, 0).data(256)
+        record = next((x for x in self.db.get_strategy_session_reviews(1000) if int(x["id"]) == int(review_id)), None)
+        if record: self.review_details.setText(record["review_text"])
 
     def _ledger_detail(self):
         row = self.ledger.currentRow()
