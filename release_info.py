@@ -8,8 +8,8 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.4.7"
-LAST_UPDATED_AT = "26-08-2026 21:32:35 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.4.7 - 26-08-2026 21:32 IST"
+LAST_UPDATED_AT = "26-08-2026 21:56:30 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.4.7 - 26-08-2026 21:56 IST"
 RELEASE_NOTES = (
     "Added individual Strategy Trade reports: every closed multi-leg paper strategy now has its own STR report, detail view and date/period Excel export instead of being visible only inside aggregate counts.",
     "Connected defined-risk Strategy Trades to Post Market Analysis with separate closed/open/win/loss counts, realized model P&L, individual outcome lines and a warning for unreconciled open simulations.",
@@ -168,4 +168,5 @@ RELEASE_NOTES = (
     "Added permanent date-wise Roman Hindi 'Post Market Analysis of TPS' journal.",
     "Made TPS post-market reports generate automatically after market close with restart backfill.",
 )
+
 
