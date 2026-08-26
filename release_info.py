@@ -8,8 +8,8 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.4.6"
-LAST_UPDATED_AT = "26-08-2026 14:48:48 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.4.6 - 26-08-2026 14:48 IST"
+LAST_UPDATED_AT = "26-08-2026 18:19:09 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.4.6 - 26-08-2026 18:19 IST"
 RELEASE_NOTES = (
     "Restored the Strategy Trades live comparison board with up to 30 current-market defined-risk candidates ranked by model score, market fit, scenario-positive coverage and payoff evidence; actual win rate remains a separate closed-paper metric.",
     "Expanded paper validation to retain eligible counterfactual strategy candidates alongside primary market-aligned candidates, while keeping unbounded or risk-ineligible structures comparison-only.",
