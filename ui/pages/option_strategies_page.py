@@ -83,6 +83,8 @@ class OptionStrategiesPage(QWidget):
         # five-minute market bucket, so this does not increase broker traffic.
         self.timer = QTimer(self); self.timer.setInterval(10_000); self.timer.timeout.connect(self._auto_tick)
         self.running = False; self.last_result = None; self.last_monitor_state = None
+        self._analysis_generation = 0
+        self._analysis_timeout_ms = 90_000
         self._last_auto_bucket = None
         self._last_suggestion_signature = None
         self.settings_store = SettingsStore()
@@ -178,16 +180,44 @@ class OptionStrategiesPage(QWidget):
             self.status.setText(cutie_says("Broker data connected nahi hai. Pehle Settings se supported broker connect kijiye."))
             return
         self.running = True; self.run.setEnabled(False)
+        self._analysis_generation += 1
+        generation = self._analysis_generation
         symbol = self.index.currentText(); self.status.setText(cutie_says(f"Main {symbol} ke completed candles, VIX aur live defined-risk spreads analyze kar rahi hoon..."))
-        Thread(target=self._worker, args=(symbol,), daemon=True).start()
+        Thread(target=self._worker, args=(symbol, generation), daemon=True).start()
+        QTimer.singleShot(self._analysis_timeout_ms, lambda: self._analysis_watchdog(generation, symbol))
 
-    def _worker(self, symbol):
+    def _worker(self, symbol, generation):
         try:
-            self.loaded.emit(OptionStrategyService(LiveSession.client).analyze(symbol))
-        except (RuntimeError, ValueError, KeyError, TypeError, IndexError) as error:
-            self.failed.emit(str(error))
+            result = OptionStrategyService(LiveSession.client).analyze(symbol)
+            if generation == self._analysis_generation:
+                self.loaded.emit(result)
+        except Exception as error:  # Broker SDKs use several provider-specific exception types.
+            if generation == self._analysis_generation:
+                message = str(error).strip() or f"{type(error).__name__} while loading broker strategy data"
+                self.failed.emit(message)
+
+    def _analysis_watchdog(self, generation, symbol):
+        """Recover the page when a broker request never returns.
+
+        The provider thread is intentionally not killed.  Its late result is
+        ignored through the generation token, while the next five-minute
+        bucket remains free to start a fresh analysis.
+        """
+        if not self.running or generation != self._analysis_generation:
+            return
+        self._analysis_generation += 1
+        self.running = False
+        self.run.setEnabled(True)
+        self.status.setText(cutie_says(
+            f"{symbol} strategy data 90 seconds me complete nahi hua. Request release kar di hai; "
+            "next 5-minute cycle me main automatically dobara try karungi."
+        ))
 
     def show_result(self, result):
+        # Release the scheduler before rendering.  Even if a malformed broker
+        # response later exposes a UI-field issue, auto mode must never remain
+        # permanently stuck in the analyzing state.
+        self.running = False; self.run.setEnabled(True)
         self.last_result = result
         self.cards["strategy"].set_value(f"{result['state']}\n{result['strategy']}")
         self.cards["bias"].set_value(f"{result['bias']}\nConfidence {result.get('confidence', 0)}%")
@@ -266,7 +296,6 @@ class OptionStrategiesPage(QWidget):
         self._notify_strategy_candidate(result)
         if self.active_plan:
             self.show_monitor_result(monitor_strategy_plan(self.active_plan, result))
-        self.running = False; self.run.setEnabled(True)
 
     def _notify_strategy_candidate(self, result):
         """Notify a new actionable review candidate, never a guaranteed trade."""

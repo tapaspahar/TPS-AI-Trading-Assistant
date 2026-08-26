@@ -58,6 +58,34 @@ class OptionStrategiesAutoModeTests(unittest.TestCase):
         self.assertEqual(first, same)
         self.assertNotEqual(first, next_bucket)
 
+    @patch("ui.pages.option_strategies_page.OptionStrategyService")
+    def test_unexpected_provider_exception_releases_scheduler(self, service):
+        service.return_value.analyze.side_effect = ConnectionError("provider request failed")
+        messages = []
+        self.page.failed.connect(messages.append)
+        self.page.running = True
+        self.page.run.setEnabled(False)
+        self.page._analysis_generation = 3
+
+        self.page._worker("NIFTY", 3)
+        self.app.processEvents()
+
+        self.assertEqual(messages, ["provider request failed"])
+        self.assertFalse(self.page.running)
+        self.assertTrue(self.page.run.isEnabled())
+
+    def test_watchdog_releases_hung_analysis_and_rejects_late_result(self):
+        self.page.running = True
+        self.page.run.setEnabled(False)
+        self.page._analysis_generation = 7
+
+        self.page._analysis_watchdog(7, "NIFTY")
+
+        self.assertFalse(self.page.running)
+        self.assertTrue(self.page.run.isEnabled())
+        self.assertEqual(self.page._analysis_generation, 8)
+        self.assertIn("90 seconds", self.page.status.text())
+
     @patch("ui.pages.option_strategies_page.market_session", return_value={"state": "OPEN"})
     @patch("ui.pages.option_strategies_page.NotificationService.instance")
     def test_candidate_notification_is_not_repeated(self, notification_instance, _session):

@@ -8,9 +8,10 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.4.6"
-LAST_UPDATED_AT = "26-08-2026 12:00:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.4.6 - 26-08-2026 12:00 IST"
+LAST_UPDATED_AT = "26-08-2026 13:20:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.4.6 - 26-08-2026 13:20 IST"
 RELEASE_NOTES = (
+    "Recovered Option Strategies from provider hangs and unexpected broker-SDK errors with a 90-second watchdog, generation-safe late-result rejection and automatic next-cycle retry; Strategy Trades now resumes receiving successful upstream analyses instead of remaining blank indefinitely.",
     "Separated Strategy Trades from Option Strategies: live Defined-Risk and VIX/ATR analysis stays on Option Strategies, while Strategy Trades now shows only captured trades, saved capture/scenario scores and outcomes.",
     "Rebuilt the Strategy Trades leaderboard to rank actual closed paper results by win rate first, then sample count and total P&L, with the top-ranked strategy shown first.",
     "Added Strategy Trades: an automatic multi-leg defined-risk paper ledger connected to live Option Strategies analysis and the Trade Journal.",
