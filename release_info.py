@@ -8,8 +8,8 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.4.8"
-LAST_UPDATED_AT = "26-08-2026 23:19:26 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.4.8 - 26-08-2026 23:19 IST"
+LAST_UPDATED_AT = "26-08-2026 23:42:06 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.4.8 - 26-08-2026 23:42 IST"
 RELEASE_NOTES = (
     "Added a saved daily combined target-profit and maximum-loss guard on Option Strategies; when either paper limit is reached, all open Strategy Trades close at their latest verified model P&L and further captures lock for that trading date.",
     "Added live daily Strategy Trades P&L, target, loss-limit and guard-state visibility while preserving the 30-strategy testing cap and keeping this workflow paper-only with no broker orders or guaranteed profit.",
@@ -170,5 +170,3 @@ RELEASE_NOTES = (
     "Added permanent date-wise Roman Hindi 'Post Market Analysis of TPS' journal.",
     "Made TPS post-market reports generate automatically after market close with restart backfill.",
 )
-
-
