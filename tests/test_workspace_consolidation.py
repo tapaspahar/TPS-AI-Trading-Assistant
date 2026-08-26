@@ -93,6 +93,16 @@ class WorkspaceConsolidationTests(unittest.TestCase):
                 self.screen.show_page(route)
                 self.assertEqual(hub.tabs.currentIndex(), 0)
 
+    def test_strategy_trades_is_a_separate_page_not_an_option_strategy_tab(self):
+        labels = tuple(self.screen.strategyHub.tabs.tabText(i) for i in range(self.screen.strategyHub.tabs.count()))
+        self.assertEqual(labels, ("Defined-Risk Strategies", "VIX / ATR Intelligence"))
+
+        self.screen.show_page(34)
+
+        self.assertEqual(self.screen.stack.currentIndex(), 34)
+        self.assertIs(self.screen.stack.currentWidget(), self.screen.strategyTradesPage)
+        self.assertTrue(self.screen.sidebar.strategyTradesButton.isChecked())
+
     def test_header_settings_shortcut_opens_settings_page(self):
         self.screen.show_page(0)
         self.screen.header.settingsButton.click()

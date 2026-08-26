@@ -122,7 +122,6 @@ class DashboardScreen(QWidget):
         self.strategyHub = ConsolidatedWorkspace((
             (self.optionStrategiesPage, "Defined-Risk Strategies"),
             (self.volatilityIntelligencePage, "VIX / ATR Intelligence"),
-            (self.strategyTradesPage, "Strategy Trades"),
         ))
         self.postMarketHub = ConsolidatedWorkspace((
             (self.postMarketTpsAnalysisPage, "Daily TPS Analysis"),
@@ -149,6 +148,7 @@ class DashboardScreen(QWidget):
             self.casAnalysisPage, retired(), self.strategyHub, self.postMarketHub, retired(),
             self.powerfulHub, retired(), self.gapHub, self.autoOpportunityHub, self.trendMemoryPage,
             self.scalperPage, self.notificationCenterPage, self.selfDevelopmentPage, self.recoveryCenterPage, retired(),
+            self.strategyTradesPage,
         )
         for page in pages:
             self.stack.addWidget(page)
@@ -377,7 +377,6 @@ class DashboardScreen(QWidget):
             23: (24, self.powerfulHub, 2),
             25: (2, self.optionsHub, 1),
             33: (21, self.strategyHub, 1),
-            34: (21, self.strategyHub, 2),
         }
         if requested_index in aliases:
             index, hub, tab = aliases[requested_index]
@@ -395,7 +394,7 @@ class DashboardScreen(QWidget):
             hub = primary_tabs.get(requested_index)
             if hub is not None:
                 hub.select_tab(0)
-        self.sidebar.set_active(requested_index if requested_index == 34 else index)
+        self.sidebar.set_active(index)
         if index == 0:
             self.dashboardPage.refresh()
         elif index == 8:
