@@ -53,8 +53,12 @@ def _analyse(name, family, bias, legs, spot, expected_move, note, bounded_profit
     profit_zone = "No positive scenario in tested range"
     if profitable:
         profit_zone = f"{min(profitable):,.2f} to {max(profitable):,.2f} settlement zone"
+    debit = sum((1 if leg["action"] == "BUY" else -1) * float(leg["price"]) * int(leg["quantity"]) for leg in legs)
+    capital_required = max_loss if debit <= 0 else max(max_loss, debit)
     return {"strategy": name, "family": family, "bias": bias, "legs": legs,
             "max_profit": round(max_profit, 2), "max_loss": round(max_loss, 2),
+            "entry_cashflow": round(-debit, 2), "capital_required": round(capital_required, 2),
+            "return_on_capital": round(max_profit / capital_required * 100, 1) if capital_required else 0,
             "payoff_ratio": ratio, "scenario_profitable_percent": win_ratio,
             "breakevens": breakevens, "profit_zone": profit_zone,
             "scenario_low": round(points[0], 2), "scenario_high": round(points[-1], 2),
@@ -75,9 +79,20 @@ def build_strategy_catalog(result, settings=None):
     atm_i = min(range(len(strikes)), key=lambda i: abs(strikes[i] - spot))
     if atm_i < 2 or atm_i + 2 >= len(strikes):
         return []
-    k2l, kl, ka, kh, k2h = strikes[atm_i - 2:atm_i + 3]
     q = lambda strike, kind: _quote(rows, strike, kind)
     candidates = []
+    aliases = {
+        "Bull Call Debit Spread": "Cutie Rocket Shield",
+        "Bear Put Debit Spread": "Cutie Downhill Guard",
+        "Bull Put Credit Spread": "Cutie Green Floor",
+        "Bear Call Credit Spread": "Cutie Red Roof",
+        "Iron Condor": "Cutie Peace Zone",
+        "Iron Butterfly": "Cutie Pin Master",
+        "Long Call Butterfly": "Cutie Bullseye Up",
+        "Long Put Butterfly": "Cutie Bullseye Down",
+        "Long Straddle": "Cutie Big Move Hunter",
+        "Long Strangle": "Cutie Wide Move Hunter",
+    }
 
     def add(name, family, bias, specs, note, bounded_profit=True):
         selected = [(action, q(strike, kind), lots) for action, strike, kind, lots in specs]
@@ -86,18 +101,41 @@ def build_strategy_catalog(result, settings=None):
         item = _analyse(name, family, bias, [_leg(a, r, n) for a, r, n in selected], spot,
                         chain.get("expected_move") or result.get("expected_daily_range"), note, bounded_profit)
         if item:
+            item["friendly_name"] = aliases.get(name, name)
+            item["structure_key"] = "|".join(
+                f"{leg['action']}:{leg['option_type']}:{leg['strike']:g}:{leg['lots']}" for leg in item["legs"]
+            )
             candidates.append(item)
 
-    add("Bull Call Debit Spread", "DIRECTIONAL", "BULLISH", [("BUY", ka, "CE", 1), ("SELL", kh, "CE", 1)], "Bullish move; debit is the predefined maximum loss.")
-    add("Bear Put Debit Spread", "DIRECTIONAL", "BEARISH", [("BUY", ka, "PE", 1), ("SELL", kl, "PE", 1)], "Bearish move; debit is the predefined maximum loss.")
-    add("Bull Put Credit Spread", "DIRECTIONAL INCOME", "BULLISH", [("BUY", k2l, "PE", 1), ("SELL", kl, "PE", 1)], "Profits when settlement stays above the short put; long put caps loss.")
-    add("Bear Call Credit Spread", "DIRECTIONAL INCOME", "BEARISH", [("SELL", kh, "CE", 1), ("BUY", k2h, "CE", 1)], "Profits when settlement stays below the short call; long call caps loss.")
-    add("Iron Condor", "RANGE INCOME", "RANGE / MIXED", [("BUY", k2l, "PE", 1), ("SELL", kl, "PE", 1), ("SELL", kh, "CE", 1), ("BUY", k2h, "CE", 1)], "Defined range income; both tails are hedged.")
-    add("Iron Butterfly", "TIGHT RANGE", "RANGE / MIXED", [("BUY", kl, "PE", 1), ("SELL", ka, "PE", 1), ("SELL", ka, "CE", 1), ("BUY", kh, "CE", 1)], "Highest expiry payoff near ATM; both wings cap loss.")
-    add("Long Call Butterfly", "BULLISH TARGET", "BULLISH", [("BUY", kl, "CE", 1), ("SELL", ka, "CE", 2), ("BUY", kh, "CE", 1)], "Defined-risk bullish target structure around ATM.")
-    add("Long Put Butterfly", "BEARISH TARGET", "BEARISH", [("BUY", kh, "PE", 1), ("SELL", ka, "PE", 2), ("BUY", kl, "PE", 1)], "Defined-risk bearish target structure around ATM.")
-    add("Long Straddle", "VOLATILITY", "LARGE MOVE", [("BUY", ka, "CE", 1), ("BUY", ka, "PE", 1)], "Defined loss equals both premiums; profit is unbounded and the displayed benefit is scenario-only.", False)
-    add("Long Strangle", "VOLATILITY", "LARGE MOVE", [("BUY", kh, "CE", 1), ("BUY", kl, "PE", 1)], "Lower-cost defined-risk volatility structure; profit is unbounded and the displayed benefit is scenario-only.", False)
+    # Explore multiple liquid strike widths instead of treating one ATM shape
+    # as representative. Keep the search bounded for a responsive live UI.
+    low = max(1, atm_i - 4); high = min(len(strikes) - 1, atm_i + 4)
+    centres = range(max(1, atm_i - 2), min(len(strikes) - 1, atm_i + 3))
+    for centre in centres:
+        ka = strikes[centre]
+        for wing in (1, 2):
+            if centre - wing < 0 or centre + wing >= len(strikes):
+                continue
+            kl, kh = strikes[centre - wing], strikes[centre + wing]
+            add("Bull Call Debit Spread", "DIRECTIONAL", "BULLISH", [("BUY", ka, "CE", 1), ("SELL", kh, "CE", 1)], "Bullish move; debit is the predefined maximum loss.")
+            add("Bear Put Debit Spread", "DIRECTIONAL", "BEARISH", [("BUY", ka, "PE", 1), ("SELL", kl, "PE", 1)], "Bearish move; debit is the predefined maximum loss.")
+            add("Long Call Butterfly", "BULLISH TARGET", "BULLISH", [("BUY", kl, "CE", 1), ("SELL", ka, "CE", 2), ("BUY", kh, "CE", 1)], "Defined-risk bullish target structure around the middle strike.")
+            add("Long Put Butterfly", "BEARISH TARGET", "BEARISH", [("BUY", kh, "PE", 1), ("SELL", ka, "PE", 2), ("BUY", kl, "PE", 1)], "Defined-risk bearish target structure around the middle strike.")
+        add("Long Straddle", "VOLATILITY", "LARGE MOVE", [("BUY", ka, "CE", 1), ("BUY", ka, "PE", 1)], "Defined loss equals both premiums; scenario benefit is not capped.", False)
+    # Credit and range structures need an additional hedge strike beyond each short leg.
+    for short_i in range(low, min(atm_i + 1, high)):
+        add("Bull Put Credit Spread", "DIRECTIONAL INCOME", "BULLISH", [("BUY", strikes[short_i - 1], "PE", 1), ("SELL", strikes[short_i], "PE", 1)], "Settlement above the short put benefits; long put defines maximum loss.")
+    for short_i in range(max(atm_i + 1, low), high):
+        add("Bear Call Credit Spread", "DIRECTIONAL INCOME", "BEARISH", [("SELL", strikes[short_i], "CE", 1), ("BUY", strikes[short_i + 1], "CE", 1)], "Settlement below the short call benefits; long call defines maximum loss.")
+    for distance in (1, 2, 3):
+        if atm_i - distance - 1 < 0 or atm_i + distance + 1 >= len(strikes):
+            continue
+        lp, sp, sc, lc = strikes[atm_i-distance-1], strikes[atm_i-distance], strikes[atm_i+distance], strikes[atm_i+distance+1]
+        add("Iron Condor", "RANGE INCOME", "RANGE / MIXED", [("BUY", lp, "PE", 1), ("SELL", sp, "PE", 1), ("SELL", sc, "CE", 1), ("BUY", lc, "CE", 1)], "Defined range income; both tails are hedged.")
+    if atm_i > 0 and atm_i + 1 < len(strikes):
+        kl, ka, kh = strikes[atm_i-1], strikes[atm_i], strikes[atm_i+1]
+        add("Iron Butterfly", "TIGHT RANGE", "RANGE / MIXED", [("BUY", kl, "PE", 1), ("SELL", ka, "PE", 1), ("SELL", ka, "CE", 1), ("BUY", kh, "CE", 1)], "Highest expiry payoff near ATM; both wings cap loss.")
+        add("Long Strangle", "VOLATILITY", "LARGE MOVE", [("BUY", kh, "CE", 1), ("BUY", kl, "PE", 1)], "Lower-cost defined-risk volatility structure; scenario benefit is not capped.", False)
 
     active_bias = str(result.get("bias") or "RANGE / MIXED")
     risk_cap = float(settings.get("capital", 100000)) * float(settings.get("risk_percent", 1)) / 100
@@ -114,4 +152,5 @@ def build_strategy_catalog(result, settings=None):
             if not item["bounded_profit"] else
             "Watch only: market bias or configured risk cap does not align."
         )
-    return sorted(candidates, key=lambda x: (x["eligible"], x["market_alignment"], x["rank_score"]), reverse=True)
+    unique = {item["structure_key"]: item for item in candidates}
+    return sorted(unique.values(), key=lambda x: (x["eligible"], x["market_alignment"], x["rank_score"], -x["capital_required"]), reverse=True)[:30]

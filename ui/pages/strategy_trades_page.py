@@ -43,23 +43,23 @@ class StrategyTradesPage(QWidget):
 
         catalog_title = QLabel("Live strategy comparison / backtest candidates")
         catalog_title.setObjectName("sectionTitle"); layout.addWidget(catalog_title)
-        self.catalog = QTableWidget(0, 9)
-        self.catalog.setHorizontalHeaderLabels(("Rank", "Strategy", "Bias", "Max/scenario benefit", "Max loss", "Profit zone", "Scenario coverage", "Gate", "Reason"))
+        self.catalog = QTableWidget(0, 12)
+        self.catalog.setHorizontalHeaderLabels(("Rank", "Cutie name", "Structure", "Bias", "Estimated fund", "Max benefit", "Max loss", "Model ROC", "Profit zone", "Scenario coverage", "Gate", "Reason"))
         self.catalog.setEditTriggers(QTableWidget.NoEditTriggers); self.catalog.setMinimumHeight(260)
         self.catalog.itemSelectionChanged.connect(self._catalog_detail)
         layout.addWidget(self.catalog)
 
         ledger_title = QLabel("Captured strategy trades — automatic result history")
         ledger_title.setObjectName("sectionTitle"); layout.addWidget(ledger_title)
-        self.ledger = QTableWidget(0, 12)
-        self.ledger.setHorizontalHeaderLabels(("Date/time", "Index", "Strategy", "Bias", "Entry spot", "Last spot", "Max benefit", "Max loss", "Model P&L", "Status", "Outcome", "Expiry"))
+        self.ledger = QTableWidget(0, 15)
+        self.ledger.setHorizontalHeaderLabels(("Date/time", "Index", "Cutie name", "Structure", "Regime", "Bias", "Entry spot", "Last spot", "Estimated fund", "Max benefit", "Max loss", "Model P&L", "Status", "Outcome", "Expiry"))
         self.ledger.setEditTriggers(QTableWidget.NoEditTriggers); self.ledger.setMinimumHeight(310)
         self.ledger.itemSelectionChanged.connect(self._ledger_detail)
         layout.addWidget(self.ledger)
         performance_title = QLabel("Forward-validation leaderboard — actual captured paper outcomes")
         performance_title.setObjectName("sectionTitle"); layout.addWidget(performance_title)
-        self.performance = QTableWidget(0, 5)
-        self.performance.setHorizontalHeaderLabels(("Strategy", "Closed samples", "Positive outcomes", "Average P&L", "Total P&L"))
+        self.performance = QTableWidget(0, 7)
+        self.performance.setHorizontalHeaderLabels(("Cutie name / structure", "Market regime", "Closed samples", "Positive outcomes", "Average P&L", "Total P&L", "Avg model ROC"))
         self.performance.setEditTriggers(QTableWidget.NoEditTriggers); self.performance.setMinimumHeight(190)
         layout.addWidget(self.performance)
         self.details = QLabel("Select a strategy to see every leg, payoff zone and outcome explanation.")
@@ -79,13 +79,22 @@ class StrategyTradesPage(QWidget):
             if session.get("state") == "OPEN":
                 today = datetime.now().strftime("%d-%m-%Y")
                 used = len(self.db.get_strategy_trades(today, 100))
-                remaining = max(0, 20 - used)
+                remaining = max(0, 30 - used)
                 source = dict(result)
-                source.update({"symbol": symbol, "spot": spot})
+                source.update({
+                    "symbol": symbol,
+                    "spot": spot,
+                    "market_regime": str(
+                        result.get("market_regime")
+                        or (result.get("environment") or {}).get("regime")
+                        or result.get("bias")
+                        or "UNKNOWN"
+                    ).upper(),
+                })
                 for candidate in [c for c in self.latest_catalog if c.get("eligible") and c.get("market_aligned")][:remaining]:
                     trade_id = self.db.save_strategy_trade(candidate, source)
                     if trade_id:
-                        captured.append(candidate["strategy"])
+                        captured.append(candidate.get("friendly_name") or candidate["strategy"])
             for name in captured:
                 self.strategy_event.emit({"kind": "CAPTURED", "symbol": symbol, "strategy": name})
             for item in closed:
@@ -98,8 +107,9 @@ class StrategyTradesPage(QWidget):
         self.catalog.setRowCount(len(self.latest_catalog))
         for row, item in enumerate(self.latest_catalog):
             values = (
-                f"{item.get('rank_score', 0):.0f}/100", item["strategy"], item["bias"],
-                f"₹{item['max_profit']:,.0f}", f"₹{item['max_loss']:,.0f}", item.get("profit_zone") or "-",
+                f"{item.get('rank_score', 0):.0f}/100", item.get("friendly_name") or item["strategy"], item["strategy"], item["bias"],
+                f"₹{item.get('capital_required', 0):,.0f} est.", f"₹{item['max_profit']:,.0f}", f"₹{item['max_loss']:,.0f}",
+                f"{item.get('return_on_capital', 0):.1f}%", item.get("profit_zone") or "-",
                 f"{item.get('scenario_profitable_percent', 0):.0f}% (model scenarios)",
                 "PAPER ELIGIBLE" if item.get("eligible") and item.get("market_aligned") else "WATCH",
                 item.get("suitability", ""),
@@ -113,9 +123,10 @@ class StrategyTradesPage(QWidget):
         self.ledger.setRowCount(len(rows))
         for row, item in enumerate(rows):
             values = (
-                f"{item['trade_date']} {str(item['captured_at'])[11:19]}", item["symbol"], item["strategy_name"], item["bias"],
-                f"{float(item['entry_spot']):,.2f}", f"{float(item['last_spot']):,.2f}", f"₹{float(item['max_profit']):,.0f}",
-                f"₹{float(item['max_loss']):,.0f}", f"₹{float(item['current_pnl']):,.0f}", item["status"], item["outcome"], item["expiry"],
+                f"{item['trade_date']} {str(item['captured_at'])[11:19]}", item["symbol"],
+                item["friendly_name"] or item["strategy_name"], item["strategy_name"], item["market_regime"] or "UNKNOWN", item["bias"],
+                f"{float(item['entry_spot']):,.2f}", f"{float(item['last_spot']):,.2f}", f"₹{float(item['capital_required']):,.0f} est.",
+                f"₹{float(item['max_profit']):,.0f}", f"₹{float(item['max_loss']):,.0f}", f"₹{float(item['current_pnl']):,.0f}", item["status"], item["outcome"], item["expiry"],
             )
             for column, value in enumerate(values): self.ledger.setItem(row, column, QTableWidgetItem(str(value)))
             self.ledger.item(row, 0).setData(256, int(item["id"]))
@@ -124,15 +135,17 @@ class StrategyTradesPage(QWidget):
         self.performance.setRowCount(len(performance))
         for row, item in enumerate(performance):
             samples = int(item["samples"] or 0); wins = int(item["wins"] or 0)
-            values = (item["strategy_name"], samples, f"{wins}/{samples} ({wins * 100 / samples:.1f}%)" if samples else "0/0",
-                      f"₹{float(item['average_pnl'] or 0):,.2f}", f"₹{float(item['total_pnl'] or 0):,.2f}")
+            values = (f"{item['friendly_name']} / {item['strategy_name']}", item["market_regime"], samples,
+                      f"{wins}/{samples} ({wins * 100 / samples:.1f}%)" if samples else "0/0",
+                      f"₹{float(item['average_pnl'] or 0):,.2f}", f"₹{float(item['total_pnl'] or 0):,.2f}",
+                      f"{float(item['average_model_roc'] or 0):.1f}%")
             for column, value in enumerate(values): self.performance.setItem(row, column, QTableWidgetItem(str(value)))
         self.performance.resizeColumnsToContents(); self.performance.horizontalHeader().setStretchLastSection(True)
         total = int(summary.get("total") or 0); closed = int(summary.get("closed_count") or 0); wins = int(summary.get("wins") or 0)
         self.summary.setText(
             f"Paper strategies: {total} | Open: {int(summary.get('open_count') or 0)} | Closed: {closed} | "
             f"Positive model outcomes: {wins}/{closed if closed else 0} | Realized model P&L: ₹{float(summary.get('pnl') or 0):,.2f}. "
-            "Release 1.4.6 testing cap: 20 unique strategy captures/day."
+            "Release 1.4.6 testing cap: 30 unique multi-strike strategy captures/day."
         )
 
     def _catalog_detail(self):
@@ -141,9 +154,10 @@ class StrategyTradesPage(QWidget):
         item = self.latest_catalog[row]
         legs = "\n".join(f"• {x['action']} {x['quantity']} {x['option_type']} {x['strike']:,.0f} @ ₹{x['price']:,.2f}" for x in item["legs"])
         self.details.setText(
-            f"{item['strategy']} | {item['family']} | Rank {item['rank_score']:.0f}/100\n{legs}\n"
+            f"{item.get('friendly_name')} ({item['strategy']}) | {item['family']} | Rank {item['rank_score']:.0f}/100\n{legs}\n"
+            f"Estimated defined-risk fund ₹{item.get('capital_required', 0):,.2f} | Entry cashflow ₹{item.get('entry_cashflow', 0):,.2f} | Model ROC {item.get('return_on_capital', 0):.1f}%\n"
             f"Breakeven(s): {', '.join(f'{x:,.2f}' for x in item.get('breakevens', [])) or '-'} | Profit zone: {item.get('profit_zone')}\n"
-            f"{item.get('explanation')}\nSuitability: {item.get('suitability')}"
+            f"{item.get('explanation')}\nSuitability: {item.get('suitability')}\nBroker ka final margin, spread aur charges live order se pehle verify karein."
         )
 
     def _ledger_detail(self):
@@ -155,7 +169,9 @@ class StrategyTradesPage(QWidget):
         legs = json.loads(record["legs_json"] or "[]")
         leg_text = "\n".join(f"• {x['action']} {x.get('quantity', 0)} {x['option_type']} {float(x['strike']):,.0f} @ ₹{float(x['price']):,.2f}" for x in legs)
         self.details.setText(
-            f"{record['strategy_name']} — {record['status']} / {record['outcome']}\n{leg_text}\n"
+            f"{record['friendly_name'] or record['strategy_name']} ({record['strategy_name']}) — {record['status']} / {record['outcome']}\n{leg_text}\n"
+            f"Saved regime: {record['market_regime'] or 'UNKNOWN'} | Estimated defined-risk fund ₹{float(record['capital_required']):,.2f} | Model ROC {float(record['return_on_capital']):.1f}%\n"
             f"Profit zone: {record['profit_zone']} | Maximum benefit ₹{float(record['max_profit']):,.2f} | Maximum defined loss ₹{float(record['max_loss']):,.2f}\n"
-            f"Entry explanation: {record['explanation'] or '-'}\nOutcome review: {record['result_review'] or 'Monitoring; automatic review will be saved at exit.'}"
+            f"Entry explanation: {record['explanation'] or '-'}\nOutcome review: {record['result_review'] or 'Monitoring; automatic review will be saved at exit.'}\n"
+            "Fund estimate payoff risk par based hai; broker ka final blocked margin alag ho sakta hai."
         )

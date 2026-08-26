@@ -13,8 +13,9 @@ FOOTER_UPDATE_TEXT = "Software Update v1.4.6 - 26-08-2026 12:00 IST"
 RELEASE_NOTES = (
     "Added Strategy Trades: an automatic multi-leg defined-risk paper ledger connected to live Option Strategies analysis and the Trade Journal.",
     "Added ten strategy comparisons covering directional spreads, credit spreads, iron structures, butterflies and volatility structures; only fully bounded payoff candidates are auto-captured.",
+    "Expanded Strategy Trades to compare up to 30 strike combinations with friendly Cutie names, estimated defined-risk fund, entry cashflow, model ROC and market-regime outcome grouping.",
     "Added executable bid/ask mark-to-market, automatic benefit/loss-review/time exits, permanent outcome explanations and a forward-validation leaderboard by strategy.",
-    "Added a 20-unique-strategy-trades-per-day testing cap and candle/structure deduplication; no broker order is placed and no profit is guaranteed.",
+    "Added a 30-unique-strategy-trades-per-day testing cap and candle/structure deduplication; no broker order is placed and no profit is guaranteed.",
     "Added an AI Development Center Implementation & Benefit Report that links every saved suggestion to its verified build/release, lifecycle evidence, measured replay or paper-forward benefit, pending reason and explicit next-release action.",
     "Preserved each feature's original implementation provenance across later refreshes and prevented code presence alone from being reported as a proven benefit.",
     "Removed redundant manual Chart Capture, standalone Risk Calculator and snapshot-based Next-Day Bias screens from the primary workflow; legacy links now open their automatic replacements.",

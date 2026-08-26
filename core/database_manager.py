@@ -218,6 +218,18 @@ class Database:
             """
         )
         self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_strategy_trades_date ON strategy_trades(trade_date DESC, id DESC)")
+        strategy_columns = {
+            row["name"] for row in self.cursor.execute("PRAGMA table_info(strategy_trades)")
+        }
+        for column, definition in {
+            "friendly_name": "TEXT",
+            "capital_required": "REAL NOT NULL DEFAULT 0",
+            "entry_cashflow": "REAL NOT NULL DEFAULT 0",
+            "return_on_capital": "REAL NOT NULL DEFAULT 0",
+            "market_regime": "TEXT",
+        }.items():
+            if column not in strategy_columns:
+                self.cursor.execute(f"ALTER TABLE strategy_trades ADD COLUMN {column} {definition}")
         self.cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS trade_outcome_reviews (
@@ -1924,14 +1936,18 @@ class Database:
         )
         self.cursor.execute(
             """INSERT OR IGNORE INTO strategy_trades
-               (captured_at, trade_date, candle_time, symbol, expiry, strategy_name, family, bias,
+               (captured_at, trade_date, candle_time, symbol, expiry, strategy_name, friendly_name, family, bias,
                 structure_key, legs_json, entry_spot, last_spot, max_profit, max_loss,
+                capital_required, entry_cashflow, return_on_capital, market_regime,
                 breakevens_json, profit_zone, scenario_win_rate, rank_score, explanation, source_json)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (now, datetime.now().strftime("%d-%m-%Y"), candle, str(source.get("symbol") or ""),
-             str(source.get("expiry") or ""), candidate["strategy"], candidate["family"], candidate["bias"],
+             str(source.get("expiry") or ""), candidate["strategy"], candidate.get("friendly_name") or candidate["strategy"],
+             candidate["family"], candidate["bias"],
              structure_key, json.dumps(candidate.get("legs") or [], default=str), float(source.get("spot") or 0),
              float(source.get("spot") or 0), float(candidate["max_profit"]), float(candidate["max_loss"]),
+             float(candidate.get("capital_required") or 0), float(candidate.get("entry_cashflow") or 0),
+             float(candidate.get("return_on_capital") or 0), str(source.get("market_regime") or "UNKNOWN"),
              json.dumps(candidate.get("breakevens") or []), candidate.get("profit_zone", ""),
              float(candidate.get("scenario_profitable_percent") or 0), float(candidate.get("rank_score") or 0),
              candidate.get("explanation", ""), json.dumps(source, default=str)),
@@ -1976,7 +1992,8 @@ class Database:
                 outcome = "TIME EXIT"
             review = ""
             if outcome:
-                review = (f"{row['strategy_name']} automatically closed as {outcome}. "
+                display_name = row["friendly_name"] or row["strategy_name"]
+                review = (f"{display_name} ({row['strategy_name']}) automatically closed as {outcome}. "
                           f"Market moved from {float(row['entry_spot']):,.2f} to {float(spot):,.2f}; "
                           f"{'executable quote mark' if complete_mark else 'expiry-scenario fallback'} P&L ₹{pnl:,.2f}. " +
                           ("The saved payoff thesis worked in this observation." if pnl > 0 else
@@ -1985,7 +2002,7 @@ class Database:
                     "UPDATE strategy_trades SET last_spot=?, current_pnl=?, realized_pnl=?, status='CLOSED', outcome=?, exit_at=?, result_review=? WHERE id=?",
                     (float(spot), pnl, pnl, outcome, now.isoformat(timespec="seconds"), review, row["id"]),
                 )
-                closed.append({"id": row["id"], "strategy": row["strategy_name"], "outcome": outcome, "pnl": pnl})
+                closed.append({"id": row["id"], "strategy": display_name, "outcome": outcome, "pnl": pnl})
             else:
                 self.cursor.execute("UPDATE strategy_trades SET last_spot=?, current_pnl=? WHERE id=?", (float(spot), pnl, row["id"]))
         self.connection.commit()
@@ -2011,12 +2028,14 @@ class Database:
     def get_strategy_performance(self) -> list[sqlite3.Row]:
         """Aggregate only closed forward-paper outcomes; never present scenarios as backtests."""
         return self.cursor.execute(
-            """SELECT strategy_name, COUNT(*) samples,
+            """SELECT strategy_name, COALESCE(friendly_name, strategy_name) friendly_name,
+                      COALESCE(market_regime, 'UNKNOWN') market_regime, COUNT(*) samples,
                       SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) wins,
                       ROUND(AVG(realized_pnl), 2) average_pnl,
-                      ROUND(SUM(realized_pnl), 2) total_pnl
+                      ROUND(SUM(realized_pnl), 2) total_pnl,
+                      ROUND(AVG(return_on_capital), 2) average_model_roc
                FROM strategy_trades WHERE status='CLOSED'
-               GROUP BY strategy_name ORDER BY total_pnl DESC, samples DESC"""
+               GROUP BY strategy_name, friendly_name, market_regime ORDER BY total_pnl DESC, samples DESC"""
         ).fetchall()
 
     def get_paper_outcome_quality(self, limit: int = 500) -> list[dict]:

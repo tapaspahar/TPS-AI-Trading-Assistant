@@ -19,8 +19,19 @@ class StrategyPortfolioEngineTests(unittest.TestCase):
     def test_catalog_contains_many_defined_risk_structures(self):
         catalog = build_strategy_catalog(self._result(), {"capital": 100000, "risk_percent": 10})
         self.assertGreaterEqual(len(catalog), 10)
+        self.assertLessEqual(len(catalog), 30)
         self.assertTrue(all(item["defined_risk"] for item in catalog))
         self.assertTrue(any(item["strategy"] == "Iron Condor" for item in catalog))
+        self.assertTrue(all(item.get("friendly_name") for item in catalog))
+        self.assertTrue(all(item.get("capital_required", 0) > 0 for item in catalog))
+        self.assertTrue(all("return_on_capital" in item for item in catalog))
+        self.assertGreater(len({item["structure_key"] for item in catalog}), 10)
+
+    def test_multiple_strike_combinations_are_compared(self):
+        catalog = build_strategy_catalog(self._result(), {"capital": 100000, "risk_percent": 10})
+        bullish_spreads = [item for item in catalog if item["strategy"] == "Bull Call Debit Spread"]
+        self.assertGreaterEqual(len(bullish_spreads), 2)
+        self.assertGreaterEqual(len({item["structure_key"] for item in bullish_spreads}), 2)
 
     def test_unbounded_profit_structures_are_comparison_only(self):
         catalog = build_strategy_catalog(self._result(), {"capital": 100000, "risk_percent": 10})

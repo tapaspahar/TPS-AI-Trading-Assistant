@@ -67,13 +67,13 @@ class JournalPage(QWidget):
         strategy_title.setObjectName("sectionTitle")
         layout.addWidget(strategy_title)
         strategy_note = QLabel(
-            "Multi-leg paper strategies are recorded here with their strategy name, predefined maximum benefit/loss and automatic result."
+            "Cutie ke multi-leg paper strategies yahan friendly name, estimated fund, predefined maximum benefit/loss aur automatic result ke saath record hote hain."
         )
         strategy_note.setWordWrap(True); layout.addWidget(strategy_note)
-        self.strategy_table = QTableWidget(0, 11)
+        self.strategy_table = QTableWidget(0, 14)
         self.strategy_table.setHorizontalHeaderLabels((
-            "Date", "Index", "Strategy name", "Bias", "Entry spot", "Max benefit",
-            "Max loss", "Model P&L", "Status", "Outcome", "Expiry",
+            "Date", "Index", "Cutie name", "Structure", "Regime", "Bias", "Entry spot", "Estimated fund",
+            "Max benefit", "Max loss", "Model P&L", "Status", "Outcome", "Expiry",
         ))
         self.strategy_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.strategy_table.setMinimumHeight(250)
@@ -109,8 +109,9 @@ class JournalPage(QWidget):
         self.strategy_table.setRowCount(len(strategies))
         for row, item in enumerate(strategies):
             values = (
-                item["trade_date"], item["symbol"], item["strategy_name"], item["bias"],
-                f"{float(item['entry_spot']):,.2f}", f"₹{float(item['max_profit']):,.2f}",
+                item["trade_date"], item["symbol"], item["friendly_name"] or item["strategy_name"], item["strategy_name"],
+                item["market_regime"] or "UNKNOWN", item["bias"], f"{float(item['entry_spot']):,.2f}",
+                f"₹{float(item['capital_required']):,.2f} est.", f"₹{float(item['max_profit']):,.2f}",
                 f"₹{float(item['max_loss']):,.2f}", f"₹{float(item['current_pnl']):,.2f}",
                 item["status"], item["outcome"], item["expiry"],
             )
