@@ -20,6 +20,7 @@ from ui.pages.smart_money_page import SmartMoneyPage
 from ui.pages.cas_analysis_page import CasAnalysisPage
 from ui.pages.stock_options_watch_page import StockOptionsWatchPage
 from ui.pages.option_strategies_page import OptionStrategiesPage
+from ui.pages.strategy_trades_page import StrategyTradesPage
 from ui.pages.post_market_tps_analysis_page import PostMarketTpsAnalysisPage
 from ui.pages.pre_candle_page import PreCandlePage
 from ui.pages.powerful_engine_page import PowerfulEnginePage
@@ -101,6 +102,7 @@ class DashboardScreen(QWidget):
         self.casAnalysisPage = CasAnalysisPage()
         self.stockOptionsWatchPage = StockOptionsWatchPage()
         self.optionStrategiesPage = OptionStrategiesPage()
+        self.strategyTradesPage = StrategyTradesPage()
         self.postMarketTpsAnalysisPage = PostMarketTpsAnalysisPage()
         self.preCandlePage = PreCandlePage()
         self.powerfulEnginePage = PowerfulEnginePage()
@@ -120,6 +122,7 @@ class DashboardScreen(QWidget):
         self.strategyHub = ConsolidatedWorkspace((
             (self.optionStrategiesPage, "Defined-Risk Strategies"),
             (self.volatilityIntelligencePage, "VIX / ATR Intelligence"),
+            (self.strategyTradesPage, "Strategy Trades"),
         ))
         self.postMarketHub = ConsolidatedWorkspace((
             (self.postMarketTpsAnalysisPage, "Daily TPS Analysis"),
@@ -162,6 +165,8 @@ class DashboardScreen(QWidget):
         self.optionsPage.paper_trade_captured.connect(self.notify_trade_capture)
         self.optionsPage.paper_trade_closed.connect(self.notify_trade_closed)
         self.optionsPage.auto_paper_status.connect(self.notify_auto_attempt)
+        self.optionStrategiesPage.loaded.connect(self.strategyTradesPage.ingest_analysis)
+        self.strategyTradesPage.strategy_event.connect(self.notify_strategy_trade)
         self.liveMarketPage.guard_alert.connect(self.notify_market_guard)
         self.liveMarketPage.structure_received.connect(self.notify_market_structure)
         self.liveMarketPage.level_alert.connect(self.notify_support_resistance)
@@ -186,6 +191,7 @@ class DashboardScreen(QWidget):
         for button, index in ((self.sidebar.casAnalysisButton, 19),):
             button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
         self.sidebar.optionStrategiesButton.clicked.connect(lambda _checked=False: self.show_page(21))
+        self.sidebar.strategyTradesButton.clicked.connect(lambda _checked=False: self.show_page(34))
         self.sidebar.postMarketTpsAnalysisButton.clicked.connect(lambda _checked=False: self.show_page(22))
         self.sidebar.powerfulEngineButton.clicked.connect(lambda _checked=False: self.show_page(24))
         self.sidebar.gapProbabilityButton.clicked.connect(lambda _checked=False: self.show_page(26))
@@ -349,6 +355,15 @@ class DashboardScreen(QWidget):
             f"SL {result.get('stop', 0):,.2f} | T1 {result.get('target1', 0):,.2f} | Score {result.get('score')}/100. Paper/research alert only.",
         )
 
+    def notify_strategy_trade(self, event):
+        kind = event.get("kind", "UPDATED")
+        strategy = event.get("strategy", "Defined-risk strategy")
+        message = (f"{event.get('symbol', 'Index')} {strategy} paper strategy captured for validation. "
+                   "Maximum benefit/loss is predefined; no broker order was placed.")
+        if kind == "CLOSED":
+            message = f"{strategy} paper monitor closed: {event.get('outcome')} | Model P&L ₹{float(event.get('pnl') or 0):,.2f}."
+        self.notifier.notify("strategy_trades", f"Cutie strategy {kind.lower()} — {strategy}", message)
+
     def show_page(self, index: int):
         requested_index = index
         aliases = {
@@ -362,6 +377,7 @@ class DashboardScreen(QWidget):
             23: (24, self.powerfulHub, 2),
             25: (2, self.optionsHub, 1),
             33: (21, self.strategyHub, 1),
+            34: (21, self.strategyHub, 2),
         }
         if requested_index in aliases:
             index, hub, tab = aliases[requested_index]
@@ -379,7 +395,7 @@ class DashboardScreen(QWidget):
             hub = primary_tabs.get(requested_index)
             if hub is not None:
                 hub.select_tab(0)
-        self.sidebar.set_active(index)
+        self.sidebar.set_active(requested_index if requested_index == 34 else index)
         if index == 0:
             self.dashboardPage.refresh()
         elif index == 8:
@@ -411,6 +427,8 @@ class DashboardScreen(QWidget):
             self.selfDevelopmentPage.refresh(auto_generate=True)
         elif requested_index == 33 and LiveSession.connected():
             self.volatilityIntelligencePage.analyze()
+        elif requested_index == 34:
+            self.strategyTradesPage.refresh()
         self.stack.setCurrentIndex(index)
 
     def start_default_nifty(self):

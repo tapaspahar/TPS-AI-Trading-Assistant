@@ -1,6 +1,6 @@
 APP_NAME = "TPS AI Trading Assistant"
 
-VERSION = "1.4.5"
+VERSION = "1.4.6"
 
 THEME = "Dark"
 

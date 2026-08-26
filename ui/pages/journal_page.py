@@ -62,6 +62,22 @@ class JournalPage(QWidget):
         self.selected_details.setWordWrap(True)
         self.selected_details.setMinimumHeight(80)
         layout.addWidget(self.selected_details)
+
+        strategy_title = QLabel("Automatic Defined-Risk Strategy Trades")
+        strategy_title.setObjectName("sectionTitle")
+        layout.addWidget(strategy_title)
+        strategy_note = QLabel(
+            "Multi-leg paper strategies are recorded here with their strategy name, predefined maximum benefit/loss and automatic result."
+        )
+        strategy_note.setWordWrap(True); layout.addWidget(strategy_note)
+        self.strategy_table = QTableWidget(0, 11)
+        self.strategy_table.setHorizontalHeaderLabels((
+            "Date", "Index", "Strategy name", "Bias", "Entry spot", "Max benefit",
+            "Max loss", "Model P&L", "Status", "Outcome", "Expiry",
+        ))
+        self.strategy_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.strategy_table.setMinimumHeight(250)
+        layout.addWidget(self.strategy_table)
         self.load_trades()
 
     def load_trades(self) -> None:
@@ -89,6 +105,19 @@ class JournalPage(QWidget):
             f"Automatic records: {len(data)} | Closed: {closed} | Open/monitoring: {len(data) - closed}. "
             "New records and exits are written by the auto-paper engine only."
         )
+        strategies = self.db.get_strategy_trades(limit=1000)
+        self.strategy_table.setRowCount(len(strategies))
+        for row, item in enumerate(strategies):
+            values = (
+                item["trade_date"], item["symbol"], item["strategy_name"], item["bias"],
+                f"{float(item['entry_spot']):,.2f}", f"₹{float(item['max_profit']):,.2f}",
+                f"₹{float(item['max_loss']):,.2f}", f"₹{float(item['current_pnl']):,.2f}",
+                item["status"], item["outcome"], item["expiry"],
+            )
+            for column, value in enumerate(values):
+                self.strategy_table.setItem(row, column, QTableWidgetItem(str(value)))
+        self.strategy_table.resizeColumnsToContents()
+        self.strategy_table.horizontalHeader().setStretchLastSection(True)
 
     def load_selected_trade(self) -> None:
         row = self.table.currentRow()

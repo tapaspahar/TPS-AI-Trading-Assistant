@@ -1,16 +1,20 @@
 """Application release metadata kept in one place."""
 
 APP_NAME = "TPS AI Trading Assistant"
-VERSION = "1.4.5"
-DISPLAY_VERSION = "Release 1.4.5"
-RELEASE_DATE = "25-08-2026"
+VERSION = "1.4.6"
+DISPLAY_VERSION = "Release 1.4.6"
+RELEASE_DATE = "26-08-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
-SOFTWARE_UPDATE_VERSION = "v1.4.5"
-LAST_UPDATED_AT = "25-08-2026 18:30:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.4.5 - 25-08-2026 18:30 IST"
+SOFTWARE_UPDATE_VERSION = "v1.4.6"
+LAST_UPDATED_AT = "26-08-2026 12:00:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.4.6 - 26-08-2026 12:00 IST"
 RELEASE_NOTES = (
+    "Added Strategy Trades: an automatic multi-leg defined-risk paper ledger connected to live Option Strategies analysis and the Trade Journal.",
+    "Added ten strategy comparisons covering directional spreads, credit spreads, iron structures, butterflies and volatility structures; only fully bounded payoff candidates are auto-captured.",
+    "Added executable bid/ask mark-to-market, automatic benefit/loss-review/time exits, permanent outcome explanations and a forward-validation leaderboard by strategy.",
+    "Added a 20-unique-strategy-trades-per-day testing cap and candle/structure deduplication; no broker order is placed and no profit is guaranteed.",
     "Added an AI Development Center Implementation & Benefit Report that links every saved suggestion to its verified build/release, lifecycle evidence, measured replay or paper-forward benefit, pending reason and explicit next-release action.",
     "Preserved each feature's original implementation provenance across later refreshes and prevented code presence alone from being reported as a proven benefit.",
     "Removed redundant manual Chart Capture, standalone Risk Calculator and snapshot-based Next-Day Bias screens from the primary workflow; legacy links now open their automatic replacements.",

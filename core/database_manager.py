@@ -185,6 +185,41 @@ class Database:
         )
         self.cursor.execute(
             """
+            CREATE TABLE IF NOT EXISTS strategy_trades (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                captured_at TEXT NOT NULL,
+                trade_date TEXT NOT NULL,
+                candle_time TEXT NOT NULL,
+                symbol TEXT NOT NULL,
+                expiry TEXT,
+                strategy_name TEXT NOT NULL,
+                family TEXT NOT NULL,
+                bias TEXT NOT NULL,
+                structure_key TEXT NOT NULL,
+                legs_json TEXT NOT NULL,
+                entry_spot REAL NOT NULL,
+                last_spot REAL NOT NULL,
+                max_profit REAL NOT NULL,
+                max_loss REAL NOT NULL,
+                breakevens_json TEXT NOT NULL,
+                profit_zone TEXT NOT NULL,
+                scenario_win_rate REAL NOT NULL,
+                rank_score REAL NOT NULL,
+                status TEXT NOT NULL DEFAULT 'OPEN',
+                outcome TEXT NOT NULL DEFAULT 'MONITORING',
+                current_pnl REAL NOT NULL DEFAULT 0,
+                realized_pnl REAL NOT NULL DEFAULT 0,
+                exit_at TEXT,
+                explanation TEXT NOT NULL,
+                result_review TEXT,
+                source_json TEXT NOT NULL,
+                UNIQUE(symbol, candle_time, structure_key)
+            )
+            """
+        )
+        self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_strategy_trades_date ON strategy_trades(trade_date DESC, id DESC)")
+        self.cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS trade_outcome_reviews (
                 trade_id INTEGER PRIMARY KEY,
                 generated_at TEXT NOT NULL,
@@ -1877,6 +1912,111 @@ class Database:
         return self.cursor.execute(
             "SELECT * FROM trades WHERE trade_date = ? ORDER BY trade_time ASC, id ASC",
             (trade_date,),
+        ).fetchall()
+
+    def save_strategy_trade(self, candidate: dict, source: dict) -> int | None:
+        """Capture one deduplicated multi-leg strategy for paper validation."""
+        now = datetime.now().isoformat(timespec="seconds")
+        candle = str(source.get("candle_time") or now)
+        structure_key = "|".join(
+            f"{leg['action']}:{leg['option_type']}:{float(leg['strike']):g}:{int(leg.get('lots', 1))}"
+            for leg in candidate.get("legs", [])
+        )
+        self.cursor.execute(
+            """INSERT OR IGNORE INTO strategy_trades
+               (captured_at, trade_date, candle_time, symbol, expiry, strategy_name, family, bias,
+                structure_key, legs_json, entry_spot, last_spot, max_profit, max_loss,
+                breakevens_json, profit_zone, scenario_win_rate, rank_score, explanation, source_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (now, datetime.now().strftime("%d-%m-%Y"), candle, str(source.get("symbol") or ""),
+             str(source.get("expiry") or ""), candidate["strategy"], candidate["family"], candidate["bias"],
+             structure_key, json.dumps(candidate.get("legs") or [], default=str), float(source.get("spot") or 0),
+             float(source.get("spot") or 0), float(candidate["max_profit"]), float(candidate["max_loss"]),
+             json.dumps(candidate.get("breakevens") or []), candidate.get("profit_zone", ""),
+             float(candidate.get("scenario_profitable_percent") or 0), float(candidate.get("rank_score") or 0),
+             candidate.get("explanation", ""), json.dumps(source, default=str)),
+        )
+        self.connection.commit()
+        return int(self.cursor.lastrowid) if self.cursor.rowcount else None
+
+    def update_strategy_trades(self, symbol: str, spot: float, candle_time: str = "", quote_rows=None) -> list[dict]:
+        """Mark open paper strategies from live executable quotes and close exits."""
+        from engine.strategy_portfolio_engine import payoff_at_expiry
+        now = datetime.now()
+        closed = []
+        rows = self.cursor.execute(
+            "SELECT * FROM strategy_trades WHERE status='OPEN' AND symbol=? ORDER BY id", (str(symbol).upper(),)
+        ).fetchall()
+        for row in rows:
+            legs = json.loads(row["legs_json"] or "[]")
+            live = {(str(q.get("symbol") or ""), str(q.get("option_type") or ""), float(q.get("strike") or 0)): q
+                    for q in (quote_rows or [])}
+            pnl = 0.0
+            complete_mark = bool(live)
+            for leg in legs:
+                quote = live.get((str(leg.get("symbol") or ""), str(leg["option_type"]), float(leg["strike"])))
+                if not quote:
+                    complete_mark = False
+                    break
+                exit_price = float(quote.get("bid") or quote.get("ltp") or 0) if leg["action"] == "BUY" else float(quote.get("ask") or quote.get("ltp") or 0)
+                if exit_price <= 0:
+                    complete_mark = False
+                    break
+                multiplier = 1 if leg["action"] == "BUY" else -1
+                pnl += (exit_price - float(leg["price"])) * int(leg["quantity"]) * multiplier
+            pnl = round(pnl, 2) if complete_mark else payoff_at_expiry(legs, float(spot))
+            target = max(1.0, float(row["max_profit"]) * .50)
+            loss_review = -max(1.0, float(row["max_loss"]) * .50)
+            outcome = None
+            if pnl >= target:
+                outcome = "TARGET BENEFIT REACHED"
+            elif pnl <= loss_review:
+                outcome = "LOSS REVIEW EXIT"
+            elif now.strftime("%H:%M") >= "15:25":
+                outcome = "TIME EXIT"
+            review = ""
+            if outcome:
+                review = (f"{row['strategy_name']} automatically closed as {outcome}. "
+                          f"Market moved from {float(row['entry_spot']):,.2f} to {float(spot):,.2f}; "
+                          f"{'executable quote mark' if complete_mark else 'expiry-scenario fallback'} P&L ₹{pnl:,.2f}. " +
+                          ("The saved payoff thesis worked in this observation." if pnl > 0 else
+                           "The payoff thesis did not work; retain this result for future regime comparison."))
+                self.cursor.execute(
+                    "UPDATE strategy_trades SET last_spot=?, current_pnl=?, realized_pnl=?, status='CLOSED', outcome=?, exit_at=?, result_review=? WHERE id=?",
+                    (float(spot), pnl, pnl, outcome, now.isoformat(timespec="seconds"), review, row["id"]),
+                )
+                closed.append({"id": row["id"], "strategy": row["strategy_name"], "outcome": outcome, "pnl": pnl})
+            else:
+                self.cursor.execute("UPDATE strategy_trades SET last_spot=?, current_pnl=? WHERE id=?", (float(spot), pnl, row["id"]))
+        self.connection.commit()
+        return closed
+
+    def get_strategy_trades(self, trade_date: str | None = None, limit: int = 1000) -> list[sqlite3.Row]:
+        query, values = "SELECT * FROM strategy_trades", []
+        if trade_date:
+            query += " WHERE trade_date=?"; values.append(trade_date)
+        query += " ORDER BY id DESC LIMIT ?"; values.append(max(1, min(int(limit), 5000)))
+        return self.cursor.execute(query, values).fetchall()
+
+    def get_strategy_trade_summary(self) -> dict:
+        row = self.cursor.execute(
+            """SELECT COUNT(*) total, SUM(status='OPEN') open_count, SUM(status='CLOSED') closed_count,
+                      SUM(CASE WHEN status='CLOSED' AND realized_pnl>0 THEN 1 ELSE 0 END) wins,
+                      SUM(CASE WHEN status='CLOSED' AND realized_pnl<=0 THEN 1 ELSE 0 END) losses,
+                      COALESCE(SUM(CASE WHEN status='CLOSED' THEN realized_pnl ELSE 0 END),0) pnl
+               FROM strategy_trades"""
+        ).fetchone()
+        return dict(row)
+
+    def get_strategy_performance(self) -> list[sqlite3.Row]:
+        """Aggregate only closed forward-paper outcomes; never present scenarios as backtests."""
+        return self.cursor.execute(
+            """SELECT strategy_name, COUNT(*) samples,
+                      SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) wins,
+                      ROUND(AVG(realized_pnl), 2) average_pnl,
+                      ROUND(SUM(realized_pnl), 2) total_pnl
+               FROM strategy_trades WHERE status='CLOSED'
+               GROUP BY strategy_name ORDER BY total_pnl DESC, samples DESC"""
         ).fetchall()
 
     def get_paper_outcome_quality(self, limit: int = 500) -> list[dict]:

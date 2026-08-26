@@ -46,6 +46,7 @@ class Sidebar(QFrame):
         self.powerfulEngineButton = nav("Powerful Engine")
         self.casAnalysisButton = nav("CAS Analysis")
         self.optionStrategiesButton = nav("Option Strategies")
+        self.strategyTradesButton = nav("Strategy Trades")
         self.gapProbabilityButton = nav("3:20 + 3:40 Gap Probability")
         self.autoOpportunityButton = nav("Auto Opportunity Radar")
         self.trendMemoryButton = nav("Trend Memory Monitor")
@@ -59,7 +60,7 @@ class Sidebar(QFrame):
             self.notificationCenterButton, self.recoveryCenterButton, self.journalButton,
             self.reportButton, self.backtestButton, self.replayButton,
             self.postMarketTpsAnalysisButton, self.selfDevelopmentButton, self.casAnalysisButton,
-            self.optionStrategiesButton, self.gapProbabilityButton, self.scalperButton, self.trendMemoryButton,
+            self.optionStrategiesButton, self.strategyTradesButton, self.gapProbabilityButton, self.scalperButton, self.trendMemoryButton,
             self.powerfulEngineButton, self.settingsButton, self.aboutButton, self.helpButton,
         )
         # Stack page numbers intentionally remain stable even when the visual
@@ -89,6 +90,7 @@ class Sidebar(QFrame):
             30: self.notificationCenterButton,
             31: self.selfDevelopmentButton,
             32: self.recoveryCenterButton,
+            34: self.strategyTradesButton,
         }
         self.menu_group = QButtonGroup(self)
         self.menu_group.setExclusive(True)

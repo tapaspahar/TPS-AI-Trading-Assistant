@@ -160,6 +160,8 @@ class AboutPage(QWidget):
           <li>Use <b>Option Strategies</b> to review a VIX/regime-aware limited-risk structure. TPS may suggest a
           Bull Call Debit Spread, Bear Put Debit Spread or Defined-Risk Iron Condor, and shows every leg plus
           one-lot maximum profit/loss. WAIT means the live payoff is not clean enough.</li>
+          <li>Use <b>Strategy Trades</b> beside Option Strategies for automatic multi-strategy paper capture,
+          live bid/ask monitoring, outcome explanations and the forward-validation leaderboard. It never places an order.</li>
           <li>Use <b>3:20 + 3:40 Gap Probability</b> for two separate next-session records. TPS can capture the
           selected index near 3:20 PM for actionable decision-support and recalculate after 3:40 PM as a closing
           confirmation. It labels the view CONFIRMED or CHANGED and verifies both stages against the next saved open.</li>
@@ -220,6 +222,8 @@ class AboutPage(QWidget):
           <li><b>Option Strategies</b> me VIX aur market regime ke hisaab se limited-risk structure review kijiye.
           TPS Bull Call Debit Spread, Bear Put Debit Spread ya Defined-Risk Iron Condor suggest kar sakta hai aur
           har leg ke saath one-lot maximum profit/loss dikhayega. WAIT ka matlab clean payoff abhi nahi bana.</li>
+          <li><b>Strategy Trades</b> me multiple fully-hedged structures ka automatic paper capture, live bid/ask
+          monitoring, result explanation aur strategy-wise forward-validation leaderboard dekhiye. Koi broker order place nahi hota.</li>
           <li><b>3:20 + 3:40 Gap Probability</b> me selected index ka 3:20 actionable snapshot aur 3:40 closing
           confirmation alag save hota hai. TPS CONFIRMED ya CHANGED dikhakar dono ko agle saved open se verify karega.</li>
           <li><b>Trade Journal</b> me entry, stop loss, target, actual exit aur review notes record kijiye.</li>

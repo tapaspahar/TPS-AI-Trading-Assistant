@@ -39,7 +39,8 @@ class WorkspaceConsolidationTests(unittest.TestCase):
 
     def test_sidebar_contains_only_primary_workspaces(self):
         labels = "\n".join(button.text() for button in self.screen.sidebar.buttons)
-        self.assertEqual(len(self.screen.sidebar.buttons), 23)
+        self.assertEqual(len(self.screen.sidebar.buttons), 24)
+        self.assertIn("Strategy Trades", labels)
         for retired_label in (
             "Checklist",
             "Stock Options Watch",
