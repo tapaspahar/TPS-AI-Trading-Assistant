@@ -1,6 +1,8 @@
 import unittest
 
-from engine.strategy_portfolio_engine import build_strategy_catalog, payoff_at_expiry
+from engine.strategy_portfolio_engine import (
+    build_strategy_catalog, fund_requirement_profile, payoff_at_expiry,
+)
 
 
 class StrategyPortfolioEngineTests(unittest.TestCase):
@@ -46,6 +48,25 @@ class StrategyPortfolioEngineTests(unittest.TestCase):
         ]
         self.assertEqual(payoff_at_expiry(legs, 90), -30)
         self.assertEqual(payoff_at_expiry(legs, 120), 70)
+
+    def test_debit_spread_separates_premium_from_broker_margin(self):
+        legs = [
+            {"action": "BUY", "price": 5, "quantity": 10},
+            {"action": "SELL", "price": 2, "quantity": 10},
+        ]
+        profile = fund_requirement_profile(legs, 30)
+        self.assertEqual(profile["net_premium_payable"], 30)
+        self.assertEqual(profile["payoff_risk_reserve"], 30)
+        self.assertIsNone(profile["broker_margin_required"])
+        self.assertTrue(profile["requires_broker_margin_quote"])
+
+    def test_long_options_are_premium_only_before_charges(self):
+        profile = fund_requirement_profile(
+            [{"action": "BUY", "price": 12.5, "quantity": 20}], 250
+        )
+        self.assertEqual(profile["net_premium_payable"], 250)
+        self.assertFalse(profile["requires_broker_margin_quote"])
+        self.assertIn("PREMIUM-ONLY", profile["broker_margin_status"])
 
 
 if __name__ == "__main__":

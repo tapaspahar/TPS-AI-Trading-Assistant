@@ -51,7 +51,7 @@ class StrategyTradesPage(QWidget):
         ledger_title = QLabel("Captured strategy trades — automatic result history")
         ledger_title.setObjectName("sectionTitle"); layout.addWidget(ledger_title)
         self.ledger = QTableWidget(0, 17)
-        self.ledger.setHorizontalHeaderLabels(("Date/time", "Index", "Cutie name", "Structure", "Capture score", "Scenario score", "Regime", "Bias", "Entry spot", "Last spot", "Estimated fund", "Max benefit", "Max loss", "Model P&L", "Status", "Outcome", "Expiry"))
+        self.ledger.setHorizontalHeaderLabels(("Date/time", "Index", "Cutie name", "Structure", "Capture score", "Scenario score", "Regime", "Bias", "Entry spot", "Last spot", "Payoff risk reserve", "Max benefit", "Max loss", "Model P&L", "Status", "Outcome", "Expiry"))
         self.ledger.setEditTriggers(QTableWidget.NoEditTriggers); self.ledger.setMinimumHeight(310)
         self.ledger.itemSelectionChanged.connect(self._ledger_detail)
         layout.addWidget(self.ledger)
@@ -106,7 +106,7 @@ class StrategyTradesPage(QWidget):
                 item["friendly_name"] or item["strategy_name"], item["strategy_name"],
                 f"{float(item['rank_score'] or 0):.0f}/100", f"{float(item['scenario_win_rate'] or 0):.0f}%",
                 item["market_regime"] or "UNKNOWN", item["bias"],
-                f"{float(item['entry_spot']):,.2f}", f"{float(item['last_spot']):,.2f}", f"₹{float(item['capital_required']):,.0f} est.",
+                f"{float(item['entry_spot']):,.2f}", f"{float(item['last_spot']):,.2f}", f"₹{float(item['capital_required']):,.0f} risk",
                 f"₹{float(item['max_profit']):,.0f}", f"₹{float(item['max_loss']):,.0f}", f"₹{float(item['current_pnl']):,.0f}", item["status"], item["outcome"], item["expiry"],
             )
             for column, value in enumerate(values): self.ledger.setItem(row, column, QTableWidgetItem(str(value)))
@@ -138,10 +138,21 @@ class StrategyTradesPage(QWidget):
         if not record: return
         legs = json.loads(record["legs_json"] or "[]")
         leg_text = "\n".join(f"• {x['action']} {x.get('quantity', 0)} {x['option_type']} {float(x['strike']):,.0f} @ ₹{float(x['price']):,.2f}" for x in legs)
+        cashflow = float(record["entry_cashflow"] or 0)
+        premium_text = (
+            f"Net premium received ₹{cashflow:,.2f}"
+            if cashflow > 0 else f"Net premium payable ₹{abs(cashflow):,.2f}"
+        )
+        has_short = any(str(x.get("action")).upper() == "SELL" for x in legs)
+        broker_text = (
+            "Broker blocked margin: NOT FETCHED — basket/SPAN calculator quote required"
+            if has_short else "Account cash before charges: net premium payable; keep charges/execution buffer"
+        )
         self.details.setText(
             f"{record['friendly_name'] or record['strategy_name']} ({record['strategy_name']}) — {record['status']} / {record['outcome']}\n{leg_text}\n"
-            f"Saved regime: {record['market_regime'] or 'UNKNOWN'} | Estimated defined-risk fund ₹{float(record['capital_required']):,.2f} | Model ROC {float(record['return_on_capital']):.1f}%\n"
+            f"Saved regime: {record['market_regime'] or 'UNKNOWN'} | {premium_text} | Payoff risk reserve ₹{float(record['capital_required']):,.2f}\n"
+            f"{broker_text}\n"
             f"Profit zone: {record['profit_zone']} | Maximum benefit ₹{float(record['max_profit']):,.2f} | Maximum defined loss ₹{float(record['max_loss']):,.2f}\n"
             f"Entry explanation: {record['explanation'] or '-'}\nOutcome review: {record['result_review'] or 'Monitoring; automatic review will be saved at exit.'}\n"
-            "Fund estimate payoff risk par based hai; broker ka final blocked margin alag ho sakta hai."
+            "Important: payoff maximum loss aur trading-account blocked margin alag figures hain."
         )

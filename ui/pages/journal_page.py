@@ -67,12 +67,12 @@ class JournalPage(QWidget):
         strategy_title.setObjectName("sectionTitle")
         layout.addWidget(strategy_title)
         strategy_note = QLabel(
-            "Cutie ke multi-leg paper strategies yahan friendly name, estimated fund, predefined maximum benefit/loss aur automatic result ke saath record hote hain."
+            "Cutie ke multi-leg paper strategies yahan friendly name, payoff risk reserve, predefined maximum benefit/loss aur automatic result ke saath record hote hain. Exact broker margin sirf broker quote se milta hai."
         )
         strategy_note.setWordWrap(True); layout.addWidget(strategy_note)
         self.strategy_table = QTableWidget(0, 14)
         self.strategy_table.setHorizontalHeaderLabels((
-            "Date", "Index", "Cutie name", "Structure", "Regime", "Bias", "Entry spot", "Estimated fund",
+            "Date", "Index", "Cutie name", "Structure", "Regime", "Bias", "Entry spot", "Payoff risk reserve",
             "Max benefit", "Max loss", "Model P&L", "Status", "Outcome", "Expiry",
         ))
         self.strategy_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -111,7 +111,7 @@ class JournalPage(QWidget):
             values = (
                 item["trade_date"], item["symbol"], item["friendly_name"] or item["strategy_name"], item["strategy_name"],
                 item["market_regime"] or "UNKNOWN", item["bias"], f"{float(item['entry_spot']):,.2f}",
-                f"₹{float(item['capital_required']):,.2f} est.", f"₹{float(item['max_profit']):,.2f}",
+                f"₹{float(item['capital_required']):,.2f} risk", f"₹{float(item['max_profit']):,.2f}",
                 f"₹{float(item['max_loss']):,.2f}", f"₹{float(item['current_pnl']):,.2f}",
                 item["status"], item["outcome"], item["expiry"],
             )

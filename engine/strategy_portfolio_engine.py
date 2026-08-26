@@ -30,6 +30,39 @@ def payoff_at_expiry(legs, settlement):
     return round(total, 2)
 
 
+def fund_requirement_profile(legs, maximum_loss):
+    """Separate payoff funding from an exchange/broker margin quote.
+
+    Premium cash-flow and expiry maximum loss can be calculated from the
+    captured option quotes.  SPAN/exposure margin cannot: it also depends on
+    the broker, product, existing portfolio and execution order.  Never label
+    the payoff reserve as an exact account-margin requirement.
+    """
+    net_debit = sum(
+        (1 if leg["action"] == "BUY" else -1)
+        * float(leg["price"])
+        * int(leg["quantity"])
+        for leg in legs
+    )
+    has_short_leg = any(leg["action"] == "SELL" for leg in legs)
+    premium_payable = max(0.0, net_debit)
+    premium_receivable = max(0.0, -net_debit)
+    risk_reserve = max(0.0, float(maximum_loss or 0))
+    return {
+        "net_premium_payable": round(premium_payable, 2),
+        "net_premium_receivable": round(premium_receivable, 2),
+        "payoff_risk_reserve": round(risk_reserve, 2),
+        "broker_margin_required": None,
+        "broker_margin_status": (
+            "NOT FETCHED — broker basket/SPAN margin quote required"
+            if has_short_leg
+            else "PREMIUM-ONLY — add brokerage, taxes and execution buffer"
+        ),
+        "requires_broker_margin_quote": has_short_leg,
+        "fund_estimate_basis": "PAYOFF RISK RESERVE, NOT BROKER BLOCKED MARGIN",
+    }
+
+
 def _analyse(name, family, bias, legs, spot, expected_move, note, bounded_profit=True):
     if not legs or any(float(x.get("price") or 0) <= 0 for x in legs):
         return None
@@ -53,8 +86,12 @@ def _analyse(name, family, bias, legs, spot, expected_move, note, bounded_profit
     profit_zone = "No positive scenario in tested range"
     if profitable:
         profit_zone = f"{min(profitable):,.2f} to {max(profitable):,.2f} settlement zone"
-    debit = sum((1 if leg["action"] == "BUY" else -1) * float(leg["price"]) * int(leg["quantity"]) for leg in legs)
-    capital_required = max_loss if debit <= 0 else max(max_loss, debit)
+    funding = fund_requirement_profile(legs, max_loss)
+    debit = funding["net_premium_payable"] - funding["net_premium_receivable"]
+    # Retain this legacy field for database compatibility and ranking.  Its
+    # meaning is now explicit: a payoff risk reserve, never an exact broker
+    # margin promise.
+    capital_required = funding["payoff_risk_reserve"]
     return {"strategy": name, "family": family, "bias": bias, "legs": legs,
             "max_profit": round(max_profit, 2), "max_loss": round(max_loss, 2),
             "entry_cashflow": round(-debit, 2), "capital_required": round(capital_required, 2),
@@ -62,7 +99,8 @@ def _analyse(name, family, bias, legs, spot, expected_move, note, bounded_profit
             "payoff_ratio": ratio, "scenario_profitable_percent": win_ratio,
             "breakevens": breakevens, "profit_zone": profit_zone,
             "scenario_low": round(points[0], 2), "scenario_high": round(points[-1], 2),
-            "explanation": note, "defined_risk": True, "bounded_profit": bounded_profit}
+            "explanation": note, "defined_risk": True, "bounded_profit": bounded_profit,
+            **funding}
 
 
 def build_strategy_catalog(result, settings=None):
