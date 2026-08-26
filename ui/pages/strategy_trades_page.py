@@ -28,12 +28,12 @@ class StrategyTradesPage(QWidget):
         body = QWidget(); layout = QVBoxLayout(body); layout.setContentsMargins(18, 16, 18, 22); layout.setSpacing(10)
         scroll.setWidget(body); outer.addWidget(scroll)
 
-        title = QLabel("Strategy Trades — Defined-Risk Paper Validation")
+        title = QLabel("Strategy Trades — Captured Multi-Leg Performance")
         title.setObjectName("pageTitle"); layout.addWidget(title)
         intro = QLabel(
-            "Cutie live option-chain se multiple fully-hedged structures compare karke eligible candidates ko "
-            "automatic paper ledger mein capture karti hai. Maximum benefit/loss expiry-payoff model hai; profit "
-            "guaranteed nahi hai aur koi broker order place nahi hota. Uncovered option selling allowed nahi hai."
+            "Live defined-risk analysis aur VIX/ATR intelligence Option Strategies page par hai. Yeh page sirf "
+            "automatically captured strategy trades, unke saved scores, outcomes aur actual closed-paper win-rate "
+            "ranking dikhata hai. Top-performing strategy sabse upar rahegi; koi broker order place nahi hota."
         )
         intro.setWordWrap(True); layout.addWidget(intro)
         controls = QHBoxLayout()
@@ -41,28 +41,21 @@ class StrategyTradesPage(QWidget):
         controls.addWidget(refresh); layout.addLayout(controls)
         self.summary = QLabel("Waiting for Option Strategies analysis..."); self.summary.setWordWrap(True); layout.addWidget(self.summary)
 
-        catalog_title = QLabel("Live strategy comparison / backtest candidates")
-        catalog_title.setObjectName("sectionTitle"); layout.addWidget(catalog_title)
-        self.catalog = QTableWidget(0, 12)
-        self.catalog.setHorizontalHeaderLabels(("Rank", "Cutie name", "Structure", "Bias", "Estimated fund", "Max benefit", "Max loss", "Model ROC", "Profit zone", "Scenario coverage", "Gate", "Reason"))
-        self.catalog.setEditTriggers(QTableWidget.NoEditTriggers); self.catalog.setMinimumHeight(260)
-        self.catalog.itemSelectionChanged.connect(self._catalog_detail)
-        layout.addWidget(self.catalog)
+        performance_title = QLabel("Strategy ranking — actual closed paper win rate (top rank first)")
+        performance_title.setObjectName("sectionTitle"); layout.addWidget(performance_title)
+        self.performance = QTableWidget(0, 9)
+        self.performance.setHorizontalHeaderLabels(("Rank", "Cutie name / structure", "Closed trades", "Wins", "Win rate", "Average P&L", "Total P&L", "Avg capture ROC", "Observed regimes"))
+        self.performance.setEditTriggers(QTableWidget.NoEditTriggers); self.performance.setMinimumHeight(220)
+        layout.addWidget(self.performance)
 
         ledger_title = QLabel("Captured strategy trades — automatic result history")
         ledger_title.setObjectName("sectionTitle"); layout.addWidget(ledger_title)
-        self.ledger = QTableWidget(0, 15)
-        self.ledger.setHorizontalHeaderLabels(("Date/time", "Index", "Cutie name", "Structure", "Regime", "Bias", "Entry spot", "Last spot", "Estimated fund", "Max benefit", "Max loss", "Model P&L", "Status", "Outcome", "Expiry"))
+        self.ledger = QTableWidget(0, 17)
+        self.ledger.setHorizontalHeaderLabels(("Date/time", "Index", "Cutie name", "Structure", "Capture score", "Scenario score", "Regime", "Bias", "Entry spot", "Last spot", "Estimated fund", "Max benefit", "Max loss", "Model P&L", "Status", "Outcome", "Expiry"))
         self.ledger.setEditTriggers(QTableWidget.NoEditTriggers); self.ledger.setMinimumHeight(310)
         self.ledger.itemSelectionChanged.connect(self._ledger_detail)
         layout.addWidget(self.ledger)
-        performance_title = QLabel("Forward-validation leaderboard — actual captured paper outcomes")
-        performance_title.setObjectName("sectionTitle"); layout.addWidget(performance_title)
-        self.performance = QTableWidget(0, 7)
-        self.performance.setHorizontalHeaderLabels(("Cutie name / structure", "Market regime", "Closed samples", "Positive outcomes", "Average P&L", "Total P&L", "Avg model ROC"))
-        self.performance.setEditTriggers(QTableWidget.NoEditTriggers); self.performance.setMinimumHeight(190)
-        layout.addWidget(self.performance)
-        self.details = QLabel("Select a strategy to see every leg, payoff zone and outcome explanation.")
+        self.details = QLabel("Captured trade select karke every leg, saved score, payoff zone aur outcome explanation dekhiye.")
         self.details.setWordWrap(True); self.details.setMinimumHeight(110); layout.addWidget(self.details)
         layout.addStretch(); self.refresh()
 
@@ -99,23 +92,9 @@ class StrategyTradesPage(QWidget):
                 self.strategy_event.emit({"kind": "CAPTURED", "symbol": symbol, "strategy": name})
             for item in closed:
                 self.strategy_event.emit({"kind": "CLOSED", "symbol": symbol, **item})
-            self._fill_catalog(); self.refresh()
+            self.refresh()
         except (ValueError, TypeError, KeyError, RuntimeError) as error:
             self.summary.setText(f"Strategy paper validation unavailable: {error}")
-
-    def _fill_catalog(self):
-        self.catalog.setRowCount(len(self.latest_catalog))
-        for row, item in enumerate(self.latest_catalog):
-            values = (
-                f"{item.get('rank_score', 0):.0f}/100", item.get("friendly_name") or item["strategy"], item["strategy"], item["bias"],
-                f"₹{item.get('capital_required', 0):,.0f} est.", f"₹{item['max_profit']:,.0f}", f"₹{item['max_loss']:,.0f}",
-                f"{item.get('return_on_capital', 0):.1f}%", item.get("profit_zone") or "-",
-                f"{item.get('scenario_profitable_percent', 0):.0f}% (model scenarios)",
-                "PAPER ELIGIBLE" if item.get("eligible") and item.get("market_aligned") else "WATCH",
-                item.get("suitability", ""),
-            )
-            for column, value in enumerate(values): self.catalog.setItem(row, column, QTableWidgetItem(str(value)))
-        self.catalog.resizeColumnsToContents(); self.catalog.horizontalHeader().setStretchLastSection(True)
 
     def refresh(self):
         rows = self.db.get_strategy_trades(limit=1000)
@@ -124,7 +103,9 @@ class StrategyTradesPage(QWidget):
         for row, item in enumerate(rows):
             values = (
                 f"{item['trade_date']} {str(item['captured_at'])[11:19]}", item["symbol"],
-                item["friendly_name"] or item["strategy_name"], item["strategy_name"], item["market_regime"] or "UNKNOWN", item["bias"],
+                item["friendly_name"] or item["strategy_name"], item["strategy_name"],
+                f"{float(item['rank_score'] or 0):.0f}/100", f"{float(item['scenario_win_rate'] or 0):.0f}%",
+                item["market_regime"] or "UNKNOWN", item["bias"],
                 f"{float(item['entry_spot']):,.2f}", f"{float(item['last_spot']):,.2f}", f"₹{float(item['capital_required']):,.0f} est.",
                 f"₹{float(item['max_profit']):,.0f}", f"₹{float(item['max_loss']):,.0f}", f"₹{float(item['current_pnl']):,.0f}", item["status"], item["outcome"], item["expiry"],
             )
@@ -135,29 +116,18 @@ class StrategyTradesPage(QWidget):
         self.performance.setRowCount(len(performance))
         for row, item in enumerate(performance):
             samples = int(item["samples"] or 0); wins = int(item["wins"] or 0)
-            values = (f"{item['friendly_name']} / {item['strategy_name']}", item["market_regime"], samples,
-                      f"{wins}/{samples} ({wins * 100 / samples:.1f}%)" if samples else "0/0",
+            values = (row + 1, f"{item['friendly_name']} / {item['strategy_name']}", samples, wins,
+                      f"{float(item['win_rate'] or 0):.1f}%",
                       f"₹{float(item['average_pnl'] or 0):,.2f}", f"₹{float(item['total_pnl'] or 0):,.2f}",
-                      f"{float(item['average_model_roc'] or 0):.1f}%")
+                      f"{float(item['average_model_roc'] or 0):.1f}%", item["market_regimes"] or "UNKNOWN")
             for column, value in enumerate(values): self.performance.setItem(row, column, QTableWidgetItem(str(value)))
         self.performance.resizeColumnsToContents(); self.performance.horizontalHeader().setStretchLastSection(True)
         total = int(summary.get("total") or 0); closed = int(summary.get("closed_count") or 0); wins = int(summary.get("wins") or 0)
         self.summary.setText(
             f"Paper strategies: {total} | Open: {int(summary.get('open_count') or 0)} | Closed: {closed} | "
             f"Positive model outcomes: {wins}/{closed if closed else 0} | Realized model P&L: ₹{float(summary.get('pnl') or 0):,.2f}. "
+            "Ranking sirf closed paper outcomes ke win rate par hai (tie me zyada samples, phir total P&L). "
             "Release 1.4.6 testing cap: 30 unique multi-strike strategy captures/day."
-        )
-
-    def _catalog_detail(self):
-        row = self.catalog.currentRow()
-        if row < 0 or row >= len(self.latest_catalog): return
-        item = self.latest_catalog[row]
-        legs = "\n".join(f"• {x['action']} {x['quantity']} {x['option_type']} {x['strike']:,.0f} @ ₹{x['price']:,.2f}" for x in item["legs"])
-        self.details.setText(
-            f"{item.get('friendly_name')} ({item['strategy']}) | {item['family']} | Rank {item['rank_score']:.0f}/100\n{legs}\n"
-            f"Estimated defined-risk fund ₹{item.get('capital_required', 0):,.2f} | Entry cashflow ₹{item.get('entry_cashflow', 0):,.2f} | Model ROC {item.get('return_on_capital', 0):.1f}%\n"
-            f"Breakeven(s): {', '.join(f'{x:,.2f}' for x in item.get('breakevens', [])) or '-'} | Profit zone: {item.get('profit_zone')}\n"
-            f"{item.get('explanation')}\nSuitability: {item.get('suitability')}\nBroker ka final margin, spread aur charges live order se pehle verify karein."
         )
 
     def _ledger_detail(self):

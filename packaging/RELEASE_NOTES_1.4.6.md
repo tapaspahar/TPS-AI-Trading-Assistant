@@ -11,5 +11,8 @@ Release date: 26-08-2026
 - Adds friendly Cutie strategy names, estimated defined-risk capital, entry cashflow and model return-on-capital.
 - Groups forward outcomes by market regime so TPS can learn which structure worked in comparable conditions.
 - Records the friendly strategy name and fund estimate in Strategy Trades and Trade Journal.
+- Keeps live Defined-Risk Strategies and VIX/ATR Intelligence exclusively on Option Strategies; Strategy Trades is now a dedicated captured-trade ledger.
+- Shows capture score and scenario score on every saved strategy trade.
+- Ranks strategies by actual closed-paper win rate, then sample count and total P&L, with the top rank first.
 
 TPS remains a research and paper-validation application. It does not guarantee profit or place broker orders.

@@ -160,9 +160,9 @@ class AboutPage(QWidget):
           <li>Use <b>Option Strategies</b> to review a VIX/regime-aware limited-risk structure. TPS may suggest a
           Bull Call Debit Spread, Bear Put Debit Spread or Defined-Risk Iron Condor, and shows every leg plus
           one-lot maximum profit/loss. WAIT means the live payoff is not clean enough.</li>
-          <li>Use <b>Strategy Trades</b> beside Option Strategies to compare up to 30 strike combinations, see Cutie's
-          friendly strategy name, estimated defined-risk fund and model ROC, then review automatic paper capture,
-          live bid/ask outcomes and the market-regime leaderboard. Broker margin may differ; it never places an order.</li>
+          <li>Use <b>Strategy Trades</b> only for automatically captured multi-leg trades and their permanent outcomes.
+          It shows saved capture/scenario scores and ranks actual closed paper results by win rate with the top strategy
+          first. Live Defined-Risk and VIX/ATR analysis remains on Option Strategies; no broker order is placed.</li>
           <li>Use <b>3:20 + 3:40 Gap Probability</b> for two separate next-session records. TPS can capture the
           selected index near 3:20 PM for actionable decision-support and recalculate after 3:40 PM as a closing
           confirmation. It labels the view CONFIRMED or CHANGED and verifies both stages against the next saved open.</li>
@@ -223,9 +223,9 @@ class AboutPage(QWidget):
           <li><b>Option Strategies</b> me VIX aur market regime ke hisaab se limited-risk structure review kijiye.
           TPS Bull Call Debit Spread, Bear Put Debit Spread ya Defined-Risk Iron Condor suggest kar sakta hai aur
           har leg ke saath one-lot maximum profit/loss dikhayega. WAIT ka matlab clean payoff abhi nahi bana.</li>
-          <li><b>Strategy Trades</b> me 30 tak alag strike combinations, Cutie ka friendly strategy naam, estimated
-          defined-risk fund aur model ROC compare kijiye. Automatic paper capture, live bid/ask result aur market-regime
-          leaderboard permanent record hota hai. Broker ka final margin alag ho sakta hai; koi order place nahi hota.</li>
+          <li><b>Strategy Trades</b> me sirf automatically captured multi-leg trades aur unke permanent results dekhiye.
+          Har trade ka capture/scenario score save hota hai aur closed paper win rate ke hisaab se top strategy sabse
+          upar rank hoti hai. Live Defined-Risk aur VIX/ATR analysis Option Strategies me hi rahega.</li>
           <li><b>3:20 + 3:40 Gap Probability</b> me selected index ka 3:20 actionable snapshot aur 3:40 closing
           confirmation alag save hota hai. TPS CONFIRMED ya CHANGED dikhakar dono ko agle saved open se verify karega.</li>
           <li><b>Trade Journal</b> me entry, stop loss, target, actual exit aur review notes record kijiye.</li>

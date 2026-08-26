@@ -2026,16 +2026,19 @@ class Database:
         return dict(row)
 
     def get_strategy_performance(self) -> list[sqlite3.Row]:
-        """Aggregate only closed forward-paper outcomes; never present scenarios as backtests."""
+        """Rank strategies by actual closed-paper win rate; never mix model scenarios with outcomes."""
         return self.cursor.execute(
             """SELECT strategy_name, COALESCE(friendly_name, strategy_name) friendly_name,
-                      COALESCE(market_regime, 'UNKNOWN') market_regime, COUNT(*) samples,
+                      GROUP_CONCAT(DISTINCT COALESCE(market_regime, 'UNKNOWN')) market_regimes,
+                      COUNT(*) samples,
                       SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) wins,
+                      ROUND(100.0 * SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) / COUNT(*), 2) win_rate,
                       ROUND(AVG(realized_pnl), 2) average_pnl,
                       ROUND(SUM(realized_pnl), 2) total_pnl,
                       ROUND(AVG(return_on_capital), 2) average_model_roc
                FROM strategy_trades WHERE status='CLOSED'
-               GROUP BY strategy_name, friendly_name, market_regime ORDER BY total_pnl DESC, samples DESC"""
+               GROUP BY strategy_name, friendly_name
+               ORDER BY win_rate DESC, samples DESC, total_pnl DESC, strategy_name ASC"""
         ).fetchall()
 
     def get_paper_outcome_quality(self, limit: int = 500) -> list[dict]:
