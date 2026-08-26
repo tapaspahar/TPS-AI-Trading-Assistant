@@ -155,3 +155,20 @@ class SettingsStoreTests(unittest.TestCase):
             self.assertEqual(saved["paper_trade_cooldown_minutes"], 30)
             self.assertTrue(saved["event_feed_fail_closed"])
             self.assertEqual(saved["minimum_rr_ratio"], 2)
+
+    def test_strategy_daily_limits_and_lock_state_persist(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = SettingsStore(Path(directory) / "settings.json")
+            settings = store.load()
+            settings.update({
+                "strategy_daily_target_profit": 2500.0,
+                "strategy_daily_max_loss": 1200.0,
+                "strategy_daily_limit_state": {
+                    "date": "26-08-2026", "status": "DAILY TARGET HIT", "hit_pnl": 2510.0,
+                },
+            })
+            saved = store.save(settings)
+            restored = store.load()
+            self.assertEqual(saved["strategy_daily_target_profit"], 2500.0)
+            self.assertEqual(restored["strategy_daily_max_loss"], 1200.0)
+            self.assertEqual(restored["strategy_daily_limit_state"]["status"], "DAILY TARGET HIT")

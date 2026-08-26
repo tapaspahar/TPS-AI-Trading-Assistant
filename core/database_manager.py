@@ -2033,6 +2033,44 @@ class Database:
         self.connection.commit()
         return closed
 
+    def get_strategy_daily_pnl(self, trade_date: str) -> dict:
+        """Return combined realised plus current open paper-strategy P&L."""
+        row = self.cursor.execute(
+            """SELECT COUNT(*) total,
+                      SUM(CASE WHEN status='OPEN' THEN 1 ELSE 0 END) open_count,
+                      SUM(CASE WHEN status='CLOSED' THEN 1 ELSE 0 END) closed_count,
+                      COALESCE(SUM(CASE WHEN status='CLOSED' THEN realized_pnl ELSE current_pnl END), 0) combined_pnl
+               FROM strategy_trades WHERE trade_date=?""",
+            (trade_date,),
+        ).fetchone()
+        return dict(row)
+
+    def close_strategy_trades_for_daily_limit(self, trade_date: str, outcome: str) -> list[dict]:
+        """Close all open paper strategies at their latest verified marks."""
+        now = datetime.now().isoformat(timespec="seconds")
+        rows = self.cursor.execute(
+            "SELECT * FROM strategy_trades WHERE trade_date=? AND status='OPEN' ORDER BY id",
+            (trade_date,),
+        ).fetchall()
+        closed = []
+        for row in rows:
+            pnl = round(float(row["current_pnl"] or 0), 2)
+            display_name = row["friendly_name"] or row["strategy_name"]
+            review = (
+                f"{display_name} ({row['strategy_name']}) automatically closed as {outcome}. "
+                f"Latest verified paper mark P&L ₹{pnl:,.2f}. The combined daily strategy guard "
+                "closed every open simulation and blocked fresh captures for this trading date. "
+                "This is paper validation only; no broker order was placed."
+            )
+            self.cursor.execute(
+                """UPDATE strategy_trades SET realized_pnl=current_pnl, status='CLOSED',
+                          outcome=?, exit_at=?, result_review=? WHERE id=?""",
+                (outcome, now, review, row["id"]),
+            )
+            closed.append({"id": row["id"], "strategy": display_name, "outcome": outcome, "pnl": pnl})
+        self.connection.commit()
+        return closed
+
     def save_strategy_session_review(self, trade_date: str, symbol: str, market_direction="UNKNOWN", market_regime="UNKNOWN") -> dict | None:
         """Persist one end-of-session review derived only from closed paper results."""
         rows = self.cursor.execute(

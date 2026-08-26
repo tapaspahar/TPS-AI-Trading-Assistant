@@ -37,7 +37,7 @@ class RecoveryCenterPage(QWidget):
         self.scroll_area.setWidget(content)
         outer.addWidget(self.scroll_area)
 
-        title = QLabel("Overtrading Protection & Paper Validation Center — Release 1.4.7")
+        title = QLabel("Overtrading Protection & Paper Validation Center — Release 1.4.8")
         title.setObjectName("pageTitle")
         layout.addWidget(title)
         intro = QLabel(

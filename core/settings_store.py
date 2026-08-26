@@ -68,6 +68,12 @@ DEFAULT_SETTINGS = {
     # A user-approved, read-only strategy monitor survives software restarts.
     # It contains plan legs only, never broker credentials or an order token.
     "active_option_strategy_plan": None,
+    # Combined paper-strategy day guard. Zero keeps either limit disabled.
+    # The dated state prevents an app restart from reopening captures after a
+    # target or maximum-loss exit; a new trading date starts ACTIVE again.
+    "strategy_daily_target_profit": 0.0,
+    "strategy_daily_max_loss": 0.0,
+    "strategy_daily_limit_state": {},
     "notifications_enabled": True,
     "notification_sound": True,
     "notification_preferences": {
@@ -194,6 +200,9 @@ class SettingsStore:
             "ui_style": str(settings.get("ui_style", current["ui_style"])).lower(),
             "broker_provider": str(settings.get("broker_provider", current["broker_provider"])).lower(),
             "active_option_strategy_plan": settings.get("active_option_strategy_plan", current["active_option_strategy_plan"]),
+            "strategy_daily_target_profit": max(0.0, float(settings.get("strategy_daily_target_profit", current["strategy_daily_target_profit"]))),
+            "strategy_daily_max_loss": max(0.0, float(settings.get("strategy_daily_max_loss", current["strategy_daily_max_loss"]))),
+            "strategy_daily_limit_state": dict(settings.get("strategy_daily_limit_state", current["strategy_daily_limit_state"]) or {}),
             "notifications_enabled": bool(settings.get("notifications_enabled", current["notifications_enabled"])),
             "notification_sound": bool(settings.get("notification_sound", current["notification_sound"])),
             "notification_preferences": {

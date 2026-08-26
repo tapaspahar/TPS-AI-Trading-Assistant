@@ -153,11 +153,19 @@ class StrategyTradesPage(QWidget):
             quote_rows = (result.get("chain") or {}).get("quote_rows") or []
             closed = self.db.update_strategy_trades(symbol, spot, str(result.get("candle_time") or ""), quote_rows) if symbol and spot else []
             loaded_settings = self.settings.load()
+            today = datetime.now(IST).strftime("%d-%m-%Y")
+            limit_closed, daily_guard = self._apply_daily_strategy_guard(today, loaded_settings)
+            closed.extend(limit_closed)
             session = market_session(settings=loaded_settings)
             stage, ready_at = strategy_capture_window(settings=loaded_settings)
             captured = []
-            if stage == "CHECKING":
-                today = datetime.now().strftime("%d-%m-%Y")
+            if daily_guard != "ACTIVE":
+                daily = self.db.get_strategy_daily_pnl(today)
+                self.session_message = (
+                    f"Daily strategy guard {daily_guard} — combined paper P&L ₹{float(daily['combined_pnl']):,.2f}. "
+                    "All open simulations closed; aaj fresh strategy capture band hai."
+                )
+            elif stage == "CHECKING":
                 saved_today = self.db.get_strategy_trades(today, 100)
                 used = len(saved_today)
                 remaining = max(0, 30 - used)
@@ -203,6 +211,33 @@ class StrategyTradesPage(QWidget):
             self.refresh()
         except (ValueError, TypeError, KeyError, RuntimeError) as error:
             self.summary.setText(f"Strategy paper validation unavailable: {error}")
+
+    def _apply_daily_strategy_guard(self, trade_date, loaded_settings):
+        """Persist and enforce the combined daily paper target/loss guard."""
+        state = dict(loaded_settings.get("strategy_daily_limit_state") or {})
+        if state.get("trade_date") != trade_date:
+            state = {"trade_date": trade_date, "status": "ACTIVE"}
+            loaded_settings["strategy_daily_limit_state"] = state
+            self.settings.save(loaded_settings)
+        status = str(state.get("status") or "ACTIVE")
+        if status != "ACTIVE":
+            return [], status
+        daily = self.db.get_strategy_daily_pnl(trade_date)
+        pnl = float(daily.get("combined_pnl") or 0)
+        target = float(loaded_settings.get("strategy_daily_target_profit") or 0)
+        max_loss = float(loaded_settings.get("strategy_daily_max_loss") or 0)
+        outcome = ""
+        if target > 0 and pnl >= target:
+            outcome = "DAILY TARGET HIT"
+        elif max_loss > 0 and pnl <= -max_loss:
+            outcome = "DAILY LOSS LIMIT HIT"
+        if not outcome:
+            return [], "ACTIVE"
+        closed = self.db.close_strategy_trades_for_daily_limit(trade_date, outcome)
+        state.update({"status": outcome, "hit_at": datetime.now(IST).isoformat(timespec="seconds"), "hit_pnl": pnl})
+        loaded_settings["strategy_daily_limit_state"] = state
+        self.settings.save(loaded_settings)
+        return closed, outcome
 
     def _session_tick(self):
         if self.latest_result and market_session(settings=self.settings.load()).get("state") == "CLOSED":
@@ -313,6 +348,13 @@ class StrategyTradesPage(QWidget):
             self.reviews.item(row, 0).setData(256, int(item["id"]))
         self.reviews.resizeColumnsToContents(); self.reviews.horizontalHeader().setStretchLastSection(True)
         total = int(summary.get("total") or 0); closed = int(summary.get("closed_count") or 0); wins = int(summary.get("wins") or 0)
+        today = datetime.now(IST).strftime("%d-%m-%Y")
+        daily = self.db.get_strategy_daily_pnl(today)
+        guard_settings = SettingsStore().load()
+        guard_state = dict(guard_settings.get("strategy_daily_limit_state") or {})
+        target = float(guard_settings.get("strategy_daily_target_profit") or 0)
+        max_loss = float(guard_settings.get("strategy_daily_max_loss") or 0)
+        guard_label = str(guard_state.get("status") or "ACTIVE") if guard_state.get("date") == today else "ACTIVE"
         self.summary.setText(
             (self.session_message + "\n" if self.session_message else "") +
             f"Live analysed: {len(self.latest_catalog)}/30 | "
@@ -320,7 +362,10 @@ class StrategyTradesPage(QWidget):
             f"Positive model outcomes: {wins}/{closed if closed else 0} | Realized model P&L: ₹{float(summary.get('pnl') or 0):,.2f}. "
             "Ranking sirf closed paper outcomes ke win rate par hai (tie me zyada samples, phir total P&L). "
             f"Individual closed reports: {len(closed_rows)} | "
-            "Release 1.4.7 testing cap: 30 unique multi-strike strategy captures/day."
+            f"Today's combined strategy P&L: ₹{float(daily.get('combined_pnl') or 0):,.2f} | "
+            f"Daily target: {'₹' + format(target, ',.2f') if target > 0 else 'OFF'} | "
+            f"Daily max loss: {'₹' + format(max_loss, ',.2f') if max_loss > 0 else 'OFF'} | Guard: {guard_label}. "
+            "Release 1.4.8 testing cap: 30 unique multi-strike strategy captures/day."
         )
 
     def _strategy_detail_text(self, record) -> str:

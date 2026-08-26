@@ -127,6 +127,48 @@ class StrategyTradeRankingTests(unittest.TestCase):
         self.assertEqual(len(reviews), 1)
         self.assertEqual(reviews[0]["total_strategies"], 1)
 
+    def test_daily_strategy_pnl_combines_closed_and_open_marks(self):
+        today = datetime.now().strftime("%d-%m-%Y")
+        self._capture_closed("Closed Winner", "Cutie Winner", "2026-08-26T09:30:00", 125)
+        candidate = {
+            "strategy": "Open Spread", "friendly_name": "Cutie Open", "family": "DIRECTIONAL", "bias": "BULLISH",
+            "legs": [{"action": "BUY", "option_type": "CE", "strike": 200, "lots": 1}],
+            "max_profit": 100, "max_loss": 50, "capital_required": 50, "entry_cashflow": -50,
+            "return_on_capital": 20, "breakevens": [205], "profit_zone": "ABOVE 205",
+            "scenario_profitable_percent": 60, "rank_score": 75, "explanation": "test",
+        }
+        trade_id = self.db.save_strategy_trade(candidate, {
+            "symbol": "NIFTY", "spot": 200, "expiry": "TEST", "candle_time": "2026-08-26T09:35:00",
+        })
+        self.db.cursor.execute("UPDATE strategy_trades SET current_pnl=? WHERE id=?", (-25, trade_id))
+        self.db.connection.commit()
+        daily = self.db.get_strategy_daily_pnl(today)
+        self.assertEqual(daily["open_count"], 1)
+        self.assertEqual(daily["closed_count"], 1)
+        self.assertEqual(float(daily["combined_pnl"]), 100.0)
+
+    def test_daily_limit_closes_every_open_strategy_at_latest_mark(self):
+        today = datetime.now().strftime("%d-%m-%Y")
+        for index in range(2):
+            candidate = {
+                "strategy": f"Spread {index}", "friendly_name": f"Cutie {index}", "family": "DIRECTIONAL", "bias": "BULLISH",
+                "legs": [{"action": "BUY", "option_type": "CE", "strike": 300 + index, "lots": 1}],
+                "max_profit": 100, "max_loss": 50, "capital_required": 50, "entry_cashflow": -50,
+                "return_on_capital": 20, "breakevens": [305], "profit_zone": "ABOVE",
+                "scenario_profitable_percent": 60, "rank_score": 75, "explanation": "test",
+            }
+            trade_id = self.db.save_strategy_trade(candidate, {
+                "symbol": "NIFTY", "spot": 300, "expiry": "TEST", "candle_time": f"2026-08-26T09:{40 + index * 5}:00",
+            })
+            self.db.cursor.execute("UPDATE strategy_trades SET current_pnl=? WHERE id=?", (75 + index, trade_id))
+        self.db.connection.commit()
+        events = self.db.close_strategy_trades_for_daily_limit(today, "DAILY TARGET HIT")
+        self.assertEqual(len(events), 2)
+        rows = self.db.get_strategy_trades(today)
+        self.assertTrue(all(row["status"] == "CLOSED" for row in rows))
+        self.assertTrue(all(row["outcome"] == "DAILY TARGET HIT" for row in rows))
+        self.assertEqual(sum(float(row["realized_pnl"]) for row in rows), 151.0)
+
 
 if __name__ == "__main__":
     unittest.main()
