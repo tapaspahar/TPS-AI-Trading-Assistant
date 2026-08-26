@@ -27,6 +27,7 @@ class StrategyPortfolioEngineTests(unittest.TestCase):
         self.assertTrue(all(item.get("friendly_name") for item in catalog))
         self.assertTrue(all(item.get("capital_required", 0) > 0 for item in catalog))
         self.assertTrue(all("return_on_capital" in item for item in catalog))
+        self.assertTrue(all("market_alignment" in item for item in catalog))
         self.assertGreater(len({item["structure_key"] for item in catalog}), 10)
 
     def test_multiple_strike_combinations_are_compared(self):

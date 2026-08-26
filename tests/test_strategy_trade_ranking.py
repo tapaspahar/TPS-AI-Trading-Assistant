@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from core.database_manager import Database
+from ui.pages.strategy_trades_page import capturable_strategy_candidates
 
 
 class StrategyTradeRankingTests(unittest.TestCase):
@@ -55,6 +56,26 @@ class StrategyTradeRankingTests(unittest.TestCase):
         self.assertEqual(int(ranking[0]["samples"]), 2)
         self.assertIn("TRENDING", ranking[0]["market_regimes"])
         self.assertIn("RANGE", ranking[0]["market_regimes"])
+
+    def test_eligible_market_aligned_candidate_reaches_capture_pipeline(self):
+        aligned = {"strategy": "Bull Call Debit Spread", "eligible": True, "market_alignment": True}
+        wrong_side = {"strategy": "Bear Put Debit Spread", "eligible": True, "market_alignment": False}
+        comparison_only = {"strategy": "Long Straddle", "eligible": False, "market_alignment": True}
+
+        captured = capturable_strategy_candidates(
+            [wrong_side, comparison_only, aligned], remaining=30
+        )
+
+        self.assertEqual(captured, [aligned])
+
+    def test_capture_pipeline_respects_daily_remaining_limit(self):
+        catalog = [
+            {"strategy": f"Strategy {index}", "eligible": True, "market_alignment": True}
+            for index in range(3)
+        ]
+
+        self.assertEqual(len(capturable_strategy_candidates(catalog, remaining=2)), 2)
+        self.assertEqual(capturable_strategy_candidates(catalog, remaining=0), [])
 
 
 if __name__ == "__main__":

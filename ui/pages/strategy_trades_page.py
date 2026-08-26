@@ -13,6 +13,14 @@ from core.settings_store import SettingsStore
 from engine.strategy_portfolio_engine import build_strategy_catalog
 
 
+def capturable_strategy_candidates(catalog, remaining):
+    """Return only eligible candidates aligned with the current market evidence."""
+    return [
+        candidate for candidate in catalog
+        if candidate.get("eligible") and candidate.get("market_alignment")
+    ][:max(0, int(remaining or 0))]
+
+
 class StrategyTradesPage(QWidget):
     """Automatic, multi-leg defined-risk paper validation ledger."""
 
@@ -84,7 +92,7 @@ class StrategyTradesPage(QWidget):
                         or "UNKNOWN"
                     ).upper(),
                 })
-                for candidate in [c for c in self.latest_catalog if c.get("eligible") and c.get("market_aligned")][:remaining]:
+                for candidate in capturable_strategy_candidates(self.latest_catalog, remaining):
                     trade_id = self.db.save_strategy_trade(candidate, source)
                     if trade_id:
                         captured.append(candidate.get("friendly_name") or candidate["strategy"])
