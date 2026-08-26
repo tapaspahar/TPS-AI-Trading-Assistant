@@ -2076,6 +2076,56 @@ class Database:
             "SELECT * FROM strategy_session_reviews WHERE trade_date=? AND symbol=?", (trade_date, str(symbol).upper())
         ).fetchone())
 
+    def finalize_open_strategy_sessions(self, trade_date: str) -> list[dict]:
+        """Close every remaining paper strategy and persist one review per symbol.
+
+        This is an end-of-session reconciliation fallback. It uses each symbol's
+        last saved mark and never sends a broker order.
+        """
+        groups = self.cursor.execute(
+            """SELECT symbol, MAX(last_spot) AS last_spot
+               FROM strategy_trades WHERE trade_date=? AND status='OPEN'
+               GROUP BY symbol""",
+            (trade_date,),
+        ).fetchall()
+        results = []
+        for group in groups:
+            symbol = str(group["symbol"] or "").upper()
+            spot = float(group["last_spot"] or 0)
+            if not symbol or spot <= 0:
+                continue
+            closed = self.update_strategy_trades(symbol, spot, force_close=True)
+            source = self.cursor.execute(
+                """SELECT bias, market_regime FROM strategy_trades
+                   WHERE trade_date=? AND symbol=? ORDER BY id DESC LIMIT 1""",
+                (trade_date, symbol),
+            ).fetchone()
+            review = self.save_strategy_session_review(
+                trade_date, symbol,
+                str(source["bias"] or "UNKNOWN") if source else "UNKNOWN",
+                str(source["market_regime"] or "UNKNOWN") if source else "UNKNOWN",
+            )
+            results.append({"symbol": symbol, "closed": closed, "review": review})
+        # Also backfill a missing review when trades were already closed by the
+        # normal 15:25 exit before the review timer ran.
+        symbols = self.cursor.execute(
+            "SELECT DISTINCT symbol FROM strategy_trades WHERE trade_date=? AND status='CLOSED'", (trade_date,)
+        ).fetchall()
+        reviewed = {str(row["symbol"]) for row in self.get_strategy_session_reviews(5000) if str(row["trade_date"]) == trade_date}
+        for item in symbols:
+            symbol = str(item["symbol"] or "").upper()
+            if symbol and symbol not in reviewed:
+                source = self.cursor.execute(
+                    "SELECT bias, market_regime FROM strategy_trades WHERE trade_date=? AND symbol=? ORDER BY id DESC LIMIT 1",
+                    (trade_date, symbol),
+                ).fetchone()
+                review = self.save_strategy_session_review(
+                    trade_date, symbol,
+                    str(source["bias"] or "UNKNOWN"), str(source["market_regime"] or "UNKNOWN"),
+                )
+                results.append({"symbol": symbol, "closed": [], "review": review})
+        return results
+
     def get_strategy_session_reviews(self, limit=100) -> list[sqlite3.Row]:
         return self.cursor.execute(
             "SELECT * FROM strategy_session_reviews ORDER BY id DESC LIMIT ?", (max(1, min(int(limit), 1000)),)

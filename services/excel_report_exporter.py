@@ -37,6 +37,7 @@ REPORTS = (
     ReportDefinition("evaluation_health", "Evaluation Slot Health", "Evaluation Health", "evaluation_slots", "trade_date", "id"),
     ReportDefinition("broker_telemetry", "Broker Reliability Telemetry", "Broker Telemetry", "broker_request_telemetry", "completed_at", "id"),
     ReportDefinition("counterfactual_reviews", "Counterfactual Reviews", "Counterfactual Reviews", "counterfactual_reviews", "trade_date", "id"),
+    ReportDefinition("strategy_trades", "Individual Strategy Trade Reports", "Strategy Trade Reports", "strategy_trades", "trade_date", "id"),
 )
 
 

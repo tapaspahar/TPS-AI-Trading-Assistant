@@ -100,6 +100,33 @@ class StrategyTradeRankingTests(unittest.TestCase):
         self.assertEqual(review["wins"], 1)
         self.assertEqual(review["best_strategy"], "Cutie Bull")
 
+    def test_market_close_reconciliation_closes_open_rows_and_backfills_review(self):
+        candidate = {
+            "strategy": "Bull Call Debit Spread", "friendly_name": "Cutie Rocket Shield",
+            "family": "DIRECTIONAL", "bias": "BULLISH",
+            "legs": [{"action": "BUY", "option_type": "CE", "strike": 100, "lots": 1, "quantity": 65, "price": 10}],
+            "max_profit": 100, "max_loss": 50, "capital_required": 50,
+            "entry_cashflow": -50, "return_on_capital": 20, "breakevens": [105],
+            "profit_zone": "ABOVE 105", "scenario_profitable_percent": 60,
+            "rank_score": 75, "explanation": "test",
+        }
+        today = datetime.now().strftime("%d-%m-%Y")
+        self.db.save_strategy_trade(candidate, {
+            "symbol": "NIFTY", "spot": 100, "expiry": "TEST",
+            "candle_time": "2026-08-26T09:30:00", "market_regime": "TRENDING",
+        })
+
+        result = self.db.finalize_open_strategy_sessions(today)
+
+        self.assertEqual(len(result), 1)
+        trade = self.db.get_strategy_trades(today)[0]
+        self.assertEqual(trade["status"], "CLOSED")
+        self.assertIn(trade["outcome"], {"MARKET CLOSE EXIT", "LOSS REVIEW EXIT", "TARGET BENEFIT REACHED"})
+        self.assertTrue(trade["exit_at"])
+        reviews = self.db.get_strategy_session_reviews()
+        self.assertEqual(len(reviews), 1)
+        self.assertEqual(reviews[0]["total_strategies"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

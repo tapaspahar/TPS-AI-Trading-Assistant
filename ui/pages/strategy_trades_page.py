@@ -11,6 +11,7 @@ from core.database_manager import Database
 from core.market_session import IST, market_session, parse_session_times
 from core.settings_store import SettingsStore
 from engine.strategy_portfolio_engine import build_strategy_catalog
+from ui.widgets.excel_export_dialog import open_excel_export
 
 
 def capturable_strategy_candidates(catalog, remaining):
@@ -71,7 +72,9 @@ class StrategyTradesPage(QWidget):
         intro.setWordWrap(True); layout.addWidget(intro)
         controls = QHBoxLayout()
         refresh = QPushButton("Refresh Strategy Trades"); refresh.clicked.connect(self.refresh)
-        controls.addWidget(refresh); layout.addLayout(controls)
+        export = QPushButton("Export Individual Reports to Excel")
+        export.clicked.connect(lambda: open_excel_export(self, self.db, "strategy_trades"))
+        controls.addWidget(refresh); controls.addWidget(export); layout.addLayout(controls)
         self.summary = QLabel("Waiting for Option Strategies analysis..."); self.summary.setWordWrap(True); layout.addWidget(self.summary)
 
         live_title = QLabel("Live analysed strategies — current market comparison (maximum 30)")
@@ -97,6 +100,27 @@ class StrategyTradesPage(QWidget):
         self.performance.setHorizontalHeaderLabels(("Rank", "Cutie name / structure", "Closed trades", "Wins", "Win rate", "Average P&L", "Total P&L", "Avg capture ROC", "Observed regimes"))
         self.performance.setEditTriggers(QTableWidget.NoEditTriggers); self.performance.setMinimumHeight(220)
         layout.addWidget(self.performance)
+
+        closed_title = QLabel("Individual closed strategy reports — every closed trade is one separate report")
+        closed_title.setObjectName("sectionTitle"); layout.addWidget(closed_title)
+        closed_note = QLabel(
+            "Example: ranking me Closed trades 10 ka matlab neeche us strategy ki 10 alag reports hain. "
+            "Har row ka apna entry, exit, P&L, result aur review hai."
+        )
+        closed_note.setWordWrap(True); layout.addWidget(closed_note)
+        self.closed_reports = QTableWidget(0, 14)
+        self.closed_reports.setHorizontalHeaderLabels((
+            "Report ID", "Trading date", "Close time", "Index", "Cutie name", "Structure",
+            "Entry spot", "Exit spot", "Realized P&L", "Result", "Regime", "Bias",
+            "Capture score", "Expiry",
+        ))
+        self.closed_reports.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.closed_reports.setMinimumHeight(300)
+        self.closed_reports.itemSelectionChanged.connect(self._closed_report_detail)
+        layout.addWidget(self.closed_reports)
+        self.closed_details = QLabel("Kisi closed report ko select karke complete legs aur outcome review dekhiye.")
+        self.closed_details.setWordWrap(True); self.closed_details.setMinimumHeight(120)
+        layout.addWidget(self.closed_details)
 
         ledger_title = QLabel("Captured strategy trades — automatic result history")
         ledger_title.setObjectName("sectionTitle"); layout.addWidget(ledger_title)
@@ -183,6 +207,16 @@ class StrategyTradesPage(QWidget):
     def _session_tick(self):
         if self.latest_result and market_session(settings=self.settings.load()).get("state") == "CLOSED":
             self._finalize_session(self.latest_result)
+            today = datetime.now(IST).strftime("%d-%m-%Y")
+            reconciled = self.db.finalize_open_strategy_sessions(today)
+            if reconciled:
+                closed_count = sum(len(item.get("closed") or []) for item in reconciled)
+                symbols = ", ".join(item["symbol"] for item in reconciled)
+                self.session_message = (
+                    f"Market-close reconciliation complete — {closed_count} remaining simulations closed; "
+                    f"date-wise reviews refreshed for {symbols}."
+                )
+                self.refresh()
 
     def _finalize_session(self, result):
         symbol = str(result.get("symbol") or "").upper()
@@ -254,6 +288,22 @@ class StrategyTradesPage(QWidget):
                       f"{float(item['average_model_roc'] or 0):.1f}%", item["market_regimes"] or "UNKNOWN")
             for column, value in enumerate(values): self.performance.setItem(row, column, QTableWidgetItem(str(value)))
         self.performance.resizeColumnsToContents(); self.performance.horizontalHeader().setStretchLastSection(True)
+        closed_rows = [item for item in rows if str(item["status"]).upper() == "CLOSED"]
+        self.closed_reports.setRowCount(len(closed_rows))
+        for row, item in enumerate(closed_rows):
+            values = (
+                f"STR-{int(item['id']):05d}", item["trade_date"], str(item["exit_at"] or "")[11:19] or "-",
+                item["symbol"], item["friendly_name"] or item["strategy_name"], item["strategy_name"],
+                f"{float(item['entry_spot'] or 0):,.2f}", f"{float(item['last_spot'] or 0):,.2f}",
+                f"₹{float(item['realized_pnl'] or 0):,.2f}", item["outcome"],
+                item["market_regime"] or "UNKNOWN", item["bias"] or "UNKNOWN",
+                f"{float(item['rank_score'] or 0):.0f}/100", item["expiry"],
+            )
+            for column, value in enumerate(values):
+                self.closed_reports.setItem(row, column, QTableWidgetItem(str(value)))
+            self.closed_reports.item(row, 0).setData(256, int(item["id"]))
+        self.closed_reports.resizeColumnsToContents()
+        self.closed_reports.horizontalHeader().setStretchLastSection(True)
         reviews = self.db.get_strategy_session_reviews()
         self.reviews.setRowCount(len(reviews))
         for row, item in enumerate(reviews):
@@ -269,8 +319,35 @@ class StrategyTradesPage(QWidget):
             f"Paper strategies: {total} | Open: {int(summary.get('open_count') or 0)} | Closed: {closed} | "
             f"Positive model outcomes: {wins}/{closed if closed else 0} | Realized model P&L: ₹{float(summary.get('pnl') or 0):,.2f}. "
             "Ranking sirf closed paper outcomes ke win rate par hai (tie me zyada samples, phir total P&L). "
-            "Release 1.4.6 testing cap: 30 unique multi-strike strategy captures/day."
+            f"Individual closed reports: {len(closed_rows)} | "
+            "Release 1.4.7 testing cap: 30 unique multi-strike strategy captures/day."
         )
+
+    def _strategy_detail_text(self, record) -> str:
+        legs = json.loads(record["legs_json"] or "[]")
+        leg_text = "\n".join(f"• {x['action']} {x.get('quantity', 0)} {x['option_type']} {float(x['strike']):,.0f} @ ₹{float(x['price']):,.2f}" for x in legs)
+        cashflow = float(record["entry_cashflow"] or 0)
+        premium_text = f"Net premium received ₹{cashflow:,.2f}" if cashflow > 0 else f"Net premium payable ₹{abs(cashflow):,.2f}"
+        has_short = any(str(x.get("action")).upper() == "SELL" for x in legs)
+        broker_text = "Broker blocked margin: NOT FETCHED — basket/SPAN calculator quote required" if has_short else "Account cash before charges: net premium payable; keep charges/execution buffer"
+        return (
+            f"Report STR-{int(record['id']):05d} | {record['trade_date']} | {record['friendly_name'] or record['strategy_name']} "
+            f"({record['strategy_name']}) — {record['status']} / {record['outcome']}\n{leg_text}\n"
+            f"Entry {float(record['entry_spot'] or 0):,.2f} | Exit/last {float(record['last_spot'] or 0):,.2f} | "
+            f"Realized P&L ₹{float(record['realized_pnl'] or 0):,.2f}\n"
+            f"Saved regime: {record['market_regime'] or 'UNKNOWN'} | {premium_text} | Payoff risk reserve ₹{float(record['capital_required']):,.2f}\n"
+            f"{broker_text}\nProfit zone: {record['profit_zone']} | Maximum benefit ₹{float(record['max_profit']):,.2f} | "
+            f"Maximum defined loss ₹{float(record['max_loss']):,.2f}\n"
+            f"Entry explanation: {record['explanation'] or '-'}\nOutcome review: {record['result_review'] or 'Review pending.'}\n"
+            "Important: payoff maximum loss aur trading-account blocked margin alag figures hain."
+        )
+
+    def _closed_report_detail(self):
+        row = self.closed_reports.currentRow()
+        if row < 0 or not self.closed_reports.item(row, 0): return
+        trade_id = self.closed_reports.item(row, 0).data(256)
+        record = next((x for x in self.db.get_strategy_trades(limit=5000) if int(x["id"]) == int(trade_id)), None)
+        if record: self.closed_details.setText(self._strategy_detail_text(record))
 
     def _review_detail(self):
         row = self.reviews.currentRow()
@@ -285,23 +362,4 @@ class StrategyTradesPage(QWidget):
         trade_id = self.ledger.item(row, 0).data(256)
         record = next((x for x in self.db.get_strategy_trades(limit=5000) if int(x["id"]) == int(trade_id)), None)
         if not record: return
-        legs = json.loads(record["legs_json"] or "[]")
-        leg_text = "\n".join(f"• {x['action']} {x.get('quantity', 0)} {x['option_type']} {float(x['strike']):,.0f} @ ₹{float(x['price']):,.2f}" for x in legs)
-        cashflow = float(record["entry_cashflow"] or 0)
-        premium_text = (
-            f"Net premium received ₹{cashflow:,.2f}"
-            if cashflow > 0 else f"Net premium payable ₹{abs(cashflow):,.2f}"
-        )
-        has_short = any(str(x.get("action")).upper() == "SELL" for x in legs)
-        broker_text = (
-            "Broker blocked margin: NOT FETCHED — basket/SPAN calculator quote required"
-            if has_short else "Account cash before charges: net premium payable; keep charges/execution buffer"
-        )
-        self.details.setText(
-            f"{record['friendly_name'] or record['strategy_name']} ({record['strategy_name']}) — {record['status']} / {record['outcome']}\n{leg_text}\n"
-            f"Saved regime: {record['market_regime'] or 'UNKNOWN'} | {premium_text} | Payoff risk reserve ₹{float(record['capital_required']):,.2f}\n"
-            f"{broker_text}\n"
-            f"Profit zone: {record['profit_zone']} | Maximum benefit ₹{float(record['max_profit']):,.2f} | Maximum defined loss ₹{float(record['max_loss']):,.2f}\n"
-            f"Entry explanation: {record['explanation'] or '-'}\nOutcome review: {record['result_review'] or 'Monitoring; automatic review will be saved at exit.'}\n"
-            "Important: payoff maximum loss aur trading-account blocked margin alag figures hain."
-        )
+        self.details.setText(self._strategy_detail_text(record))

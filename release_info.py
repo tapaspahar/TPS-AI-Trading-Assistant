@@ -1,16 +1,19 @@
 """Application release metadata kept in one place."""
 
 APP_NAME = "TPS AI Trading Assistant"
-VERSION = "1.4.6"
-DISPLAY_VERSION = "Release 1.4.6"
+VERSION = "1.4.7"
+DISPLAY_VERSION = "Release 1.4.7"
 RELEASE_DATE = "26-08-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
-SOFTWARE_UPDATE_VERSION = "v1.4.6"
-LAST_UPDATED_AT = "26-08-2026 18:19:09 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.4.6 - 26-08-2026 18:19 IST"
+SOFTWARE_UPDATE_VERSION = "v1.4.7"
+LAST_UPDATED_AT = "26-08-2026 21:32:35 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.4.7 - 26-08-2026 21:32 IST"
 RELEASE_NOTES = (
+    "Added individual Strategy Trade reports: every closed multi-leg paper strategy now has its own STR report, detail view and date/period Excel export instead of being visible only inside aggregate counts.",
+    "Connected defined-risk Strategy Trades to Post Market Analysis with separate closed/open/win/loss counts, realized model P&L, individual outcome lines and a warning for unreconciled open simulations.",
+    "Added market-close strategy reconciliation so remaining open paper strategies are closed from their last verified saved mark and a missing date-wise session review is backfilled without placing a broker order.",
     "Restored the Strategy Trades live comparison board with up to 30 current-market defined-risk candidates ranked by model score, market fit, scenario-positive coverage and payoff evidence; actual win rate remains a separate closed-paper metric.",
     "Expanded paper validation to retain eligible counterfactual strategy candidates alongside primary market-aligned candidates, while keeping unbounded or risk-ineligible structures comparison-only.",
     "Made release packaging stamp the footer from the computer's actual local build time so Software Update time is no longer manually guessed or confused with the live clock.",

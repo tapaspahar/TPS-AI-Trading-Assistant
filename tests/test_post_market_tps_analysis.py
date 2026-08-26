@@ -141,3 +141,35 @@ class PostMarketTpsAnalysisTests(unittest.TestCase):
             self.assertEqual(database.get_post_market_tps_analysis("10-08-2026")["id"], first_id)
             self.assertEqual(database.get_post_market_source_dates(), ["10-08-2026"])
             database.close()
+
+    def test_each_closed_strategy_is_written_as_a_separate_post_market_report(self):
+        with TemporaryDirectory() as directory:
+            database = Database(Path(directory) / "strategy-post-market.db")
+            candidate = {
+                "strategy": "Bull Call Debit Spread", "friendly_name": "Cutie Rocket Shield",
+                "family": "DIRECTIONAL", "bias": "BULLISH",
+                "legs": [{"action": "BUY", "option_type": "CE", "strike": 100, "lots": 1}],
+                "max_profit": 100, "max_loss": 50, "capital_required": 50,
+                "entry_cashflow": -50, "return_on_capital": 20, "breakevens": [105],
+                "profit_zone": "ABOVE 105", "scenario_profitable_percent": 60,
+                "rank_score": 75, "explanation": "test",
+            }
+            for index in range(2):
+                trade_id = database.save_strategy_trade(candidate, {
+                    "symbol": "NIFTY", "spot": 100, "expiry": "TEST",
+                    "candle_time": f"2026-08-26T09:{30 + index * 5}:00", "market_regime": "TRENDING",
+                })
+                database.cursor.execute(
+                    "UPDATE strategy_trades SET trade_date='10-08-2026', status='CLOSED', "
+                    "outcome='MARKET CLOSE EXIT', realized_pnl=? WHERE id=?", (-10 - index, trade_id),
+                )
+            database.connection.commit()
+
+            analysis = generate_and_save_post_market_analysis(database, "10-08-2026")
+
+            self.assertEqual(analysis["metrics"]["source_strategy_trade_count"], 2)
+            self.assertEqual(analysis["metrics"]["strategy_closed"], 2)
+            self.assertIn("STR-00001", analysis["summary_text"])
+            self.assertIn("STR-00002", analysis["summary_text"])
+            self.assertIn("2 separate reports", analysis["summary_text"])
+            database.close()

@@ -83,6 +83,12 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
     attempts = database.get_auto_trade_attempts(trade_date, limit=5000)
     trades = database.get_trades_for_date(trade_date)
     snapshots = database.get_market_snapshots(trade_date)
+    strategy_trades = database.get_strategy_trades(trade_date, limit=5000)
+    strategy_closed = [row for row in strategy_trades if str(row["status"]).upper() == "CLOSED"]
+    strategy_open = [row for row in strategy_trades if str(row["status"]).upper() == "OPEN"]
+    strategy_wins = [row for row in strategy_closed if float(row["realized_pnl"] or 0) > 0]
+    strategy_losses = [row for row in strategy_closed if float(row["realized_pnl"] or 0) < 0]
+    strategy_pnl = round(sum(float(row["realized_pnl"] or 0) for row in strategy_closed), 2)
 
     evaluated = [row for row in attempts if row["outcome"] in ("STRATEGY REJECT", "SAFETY BLOCK", "CANDIDATE", "CAPTURED", "NO TRADE", "TRADE CAPTURED")]
     captured = [row for row in attempts if row["outcome"] in ("CAPTURED", "TRADE CAPTURED")]
@@ -245,10 +251,34 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
     else:
         lines.append("Is date par koi saved automatic trade attempt nahi mila.")
 
+    lines.extend(["", "6. Defined-risk strategy paper reports"])
+    if strategy_trades:
+        lines.append(
+            f"Strategy Trades ne {len(strategy_trades)} alag paper reports save kiye: {len(strategy_closed)} closed, "
+            f"{len(strategy_open)} abhi open, {len(strategy_wins)} profitable aur {len(strategy_losses)} loss. "
+            f"Closed strategies ka total model P&L ₹{strategy_pnl:,.2f} raha."
+        )
+        by_name = Counter(str(row["friendly_name"] or row["strategy_name"]) for row in strategy_closed)
+        if by_name:
+            lines.append("Closed report breakup: " + "; ".join(f"{name} ({count} separate reports)" for name, count in by_name.most_common()) + ".")
+        for row in sorted(strategy_closed, key=lambda value: str(value["exit_at"] or value["captured_at"] or "")):
+            lines.append(
+                f"- STR-{int(row['id']):05d} {row['symbol']} {row['friendly_name'] or row['strategy_name']}: "
+                f"{row['outcome']}, realized model P&L ₹{float(row['realized_pnl'] or 0):,.2f}."
+            )
+        if strategy_open:
+            lines.append(
+                "Warning: market-close report ke samay open strategy simulations bachi hui hain: "
+                + ", ".join(f"STR-{int(row['id']):05d} {row['symbol']}" for row in strategy_open[:10])
+                + (" ..." if len(strategy_open) > 10 else "") + ". Inka closing evidence reconcile hona chahiye."
+            )
+    else:
+        lines.append("Is date par defined-risk Strategy Trades ka koi paper report save nahi hua.")
+
     lines.extend(
         [
             "",
-            "6. TPS ka post-market conclusion",
+            "7. TPS ka post-market conclusion",
             "Aaj 'trade nahi mila' ka matlab sirf market me opportunity nahi thi, aisa maanna sahi nahi hoga. "
             "TPS ke saved evidence me strategy rejection aur monitoring gaps dono ko alag dekhna zaroori hai.",
             "Agli review me best rejected candles ko actual chart ke saath compare karein. Safety rule ko sirf ek din ke result par loose na karein; pehle repeated evidence aur forward-test outcome dekhein.",
@@ -261,6 +291,7 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
         "source_attempt_count": len(attempts),
         "source_trade_count": len(trades),
         "source_snapshot_count": len(snapshots),
+        "source_strategy_trade_count": len(strategy_trades),
         "latest_checked_at": max((str(row["checked_at"]) for row in attempts), default=""),
         "evaluated": len(evaluated),
         "captured": len(captured),
@@ -284,6 +315,11 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
         "target_hits": sum(str(row["outcome"]).upper() == "TARGET HIT" for row in trades),
         "stop_hits": sum("STOP" in str(row["outcome"]).upper() for row in trades),
         "net_pnl": round(sum(float(row["pnl"] or 0) for row in trades), 2),
+        "strategy_closed": len(strategy_closed),
+        "strategy_open": len(strategy_open),
+        "strategy_wins": len(strategy_wins),
+        "strategy_losses": len(strategy_losses),
+        "strategy_pnl": strategy_pnl,
     }
     return {
         "trade_date": trade_date,
@@ -300,17 +336,18 @@ def generate_and_save_post_market_analysis(database: Database, trade_date: str, 
     return analysis
 
 
-def _source_signature(database: Database, trade_date: str) -> tuple[int, int, int, str, int, int]:
+def _source_signature(database: Database, trade_date: str) -> tuple[int, int, int, int, str, int, int]:
     attempts = database.get_auto_trade_attempts(trade_date, limit=5000)
     trades = database.get_trades_for_date(trade_date)
     snapshots = database.get_market_snapshots(trade_date)
+    strategy_trades = database.get_strategy_trades(trade_date, limit=5000)
     latest = max((str(row["checked_at"]) for row in attempts), default="")
     evidence_total = evidence_known = 0
     for row in attempts:
         completeness = _json(row["source_completeness_json"], {})
         evidence_total += int(completeness.get("total") or 0)
         evidence_known += int(completeness.get("known") or 0)
-    return len(attempts), len(trades), len(snapshots), latest, evidence_total, evidence_known
+    return len(attempts), len(trades), len(snapshots), len(strategy_trades), latest, evidence_total, evidence_known
 
 
 def ensure_completed_post_market_reports(
@@ -340,7 +377,7 @@ def ensure_completed_post_market_reports(
         if day > current.date() or (day == current.date() and current.time() < report_time):
             continue
         signature = _source_signature(database, trade_date)
-        if not any(signature[:3]) and trade_date != current_trade_date:
+        if not any(signature[:4]) and trade_date != current_trade_date:
             continue
         existing = database.get_post_market_tps_analysis(trade_date)
         stale = existing is None
@@ -353,6 +390,7 @@ def ensure_completed_post_market_reports(
                 int(metrics.get("source_attempt_count", -1)),
                 int(metrics.get("source_trade_count", -1)),
                 int(metrics.get("source_snapshot_count", -1)),
+                int(metrics.get("source_strategy_trade_count", -1)),
                 str(metrics.get("latest_checked_at", "")),
                 int(metrics.get("structured_evidence_total", -1)),
                 int(metrics.get("structured_evidence_known", -1)),
