@@ -8,6 +8,18 @@ $SetupPath = Join-Path $ReleaseDir "TPS-AI-Trading-Assistant-Setup-$Version.exe"
 $PortablePath = Join-Path $ReleaseDir "TPS-AI-Trading-Assistant-Portable-$Version.zip"
 $ChecksumPath = Join-Path $ReleaseDir "SHA256SUMS-$Version.txt"
 
+# Stamp release metadata from the computer's actual local clock immediately
+# before validation/build. The footer is build time, not a live application clock.
+$BuildNow = Get-Date
+$UpdatedAt = $BuildNow.ToString("dd-MM-yyyy HH:mm:ss") + " IST"
+$FooterTime = $BuildNow.ToString("dd-MM-yyyy HH:mm") + " IST"
+$ReleaseInfoPath = Join-Path $ProjectRoot "release_info.py"
+$ReleaseInfo = Get-Content -LiteralPath $ReleaseInfoPath -Raw
+$ReleaseInfo = [regex]::Replace($ReleaseInfo, '(?m)^LAST_UPDATED_AT = .+$', 'LAST_UPDATED_AT = "' + $UpdatedAt + '"')
+$ReleaseInfo = [regex]::Replace($ReleaseInfo, '(?m)^FOOTER_UPDATE_TEXT = .+$', 'FOOTER_UPDATE_TEXT = "Software Update v' + $Version + ' - ' + $FooterTime + '"')
+Set-Content -LiteralPath $ReleaseInfoPath -Value $ReleaseInfo -Encoding utf8
+Write-Host "Release metadata stamped at $UpdatedAt"
+
 python -m unittest discover -s tests
 if ($LASTEXITCODE -ne 0) { throw "Tests failed." }
 

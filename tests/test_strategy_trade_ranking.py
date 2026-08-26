@@ -57,7 +57,7 @@ class StrategyTradeRankingTests(unittest.TestCase):
         self.assertIn("TRENDING", ranking[0]["market_regimes"])
         self.assertIn("RANGE", ranking[0]["market_regimes"])
 
-    def test_eligible_market_aligned_candidate_reaches_capture_pipeline(self):
+    def test_all_eligible_candidates_reach_paper_validation_pipeline(self):
         aligned = {"strategy": "Bull Call Debit Spread", "eligible": True, "market_alignment": True}
         wrong_side = {"strategy": "Bear Put Debit Spread", "eligible": True, "market_alignment": False}
         comparison_only = {"strategy": "Long Straddle", "eligible": False, "market_alignment": True}
@@ -66,7 +66,8 @@ class StrategyTradeRankingTests(unittest.TestCase):
             [wrong_side, comparison_only, aligned], remaining=30
         )
 
-        self.assertEqual(captured, [aligned])
+        self.assertEqual(captured, [wrong_side, aligned])
+        self.assertNotIn(comparison_only, captured)
 
     def test_capture_pipeline_respects_daily_remaining_limit(self):
         catalog = [

@@ -14,10 +14,14 @@ from engine.strategy_portfolio_engine import build_strategy_catalog
 
 
 def capturable_strategy_candidates(catalog, remaining):
-    """Return only eligible candidates aligned with the current market evidence."""
+    """Return bounded-risk candidates for paper validation, best-ranked first.
+
+    Market-aligned rows are the primary study; eligible opposite-regime rows are
+    retained as counterfactual evidence so the validation page does not go blank.
+    """
     return [
         candidate for candidate in catalog
-        if candidate.get("eligible") and candidate.get("market_alignment")
+        if candidate.get("eligible")
     ][:max(0, int(remaining or 0))]
 
 
@@ -48,6 +52,23 @@ class StrategyTradesPage(QWidget):
         refresh = QPushButton("Refresh Strategy Trades"); refresh.clicked.connect(self.refresh)
         controls.addWidget(refresh); layout.addLayout(controls)
         self.summary = QLabel("Waiting for Option Strategies analysis..."); self.summary.setWordWrap(True); layout.addWidget(self.summary)
+
+        live_title = QLabel("Live analysed strategies — current market comparison (maximum 30)")
+        live_title.setObjectName("sectionTitle"); layout.addWidget(live_title)
+        self.live_catalog = QTableWidget(0, 11)
+        self.live_catalog.setHorizontalHeaderLabels((
+            "Rank", "Cutie name / structure", "Market fit", "Model score",
+            "Scenario-positive coverage", "Payoff ratio", "Risk reserve",
+            "Maximum benefit", "Maximum loss", "Bias", "Suitability",
+        ))
+        self.live_catalog.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.live_catalog.setMinimumHeight(270)
+        layout.addWidget(self.live_catalog)
+        live_note = QLabel(
+            "Scenario-positive coverage model ke tested expiry-price points ka percentage hai; "
+            "ye actual win rate ya guaranteed profit nahi hai. Actual win rate sirf closed paper outcomes se banta hai."
+        )
+        live_note.setWordWrap(True); layout.addWidget(live_note)
 
         performance_title = QLabel("Strategy ranking — actual closed paper win rate (top rank first)")
         performance_title.setObjectName("sectionTitle"); layout.addWidget(performance_title)
@@ -93,7 +114,13 @@ class StrategyTradesPage(QWidget):
                     ).upper(),
                 })
                 for candidate in capturable_strategy_candidates(self.latest_catalog, remaining):
-                    trade_id = self.db.save_strategy_trade(candidate, source)
+                    candidate_source = dict(source)
+                    aligned = bool(candidate.get("market_alignment"))
+                    candidate_source.update({
+                        "strategy_market_alignment": aligned,
+                        "strategy_validation_track": "PRIMARY" if aligned else "COUNTERFACTUAL",
+                    })
+                    trade_id = self.db.save_strategy_trade(candidate, candidate_source)
                     if trade_id:
                         captured.append(candidate.get("friendly_name") or candidate["strategy"])
             for name in captured:
@@ -105,6 +132,28 @@ class StrategyTradesPage(QWidget):
             self.summary.setText(f"Strategy paper validation unavailable: {error}")
 
     def refresh(self):
+        self.live_catalog.setRowCount(len(self.latest_catalog))
+        for row, item in enumerate(self.latest_catalog):
+            aligned = bool(item.get("market_alignment"))
+            eligible = bool(item.get("eligible"))
+            values = (
+                row + 1,
+                f"{item.get('friendly_name') or item.get('strategy')} / {item.get('strategy')}",
+                "PRIMARY MATCH" if aligned else "COUNTERFACTUAL",
+                f"{float(item.get('rank_score') or 0):.0f}/100",
+                f"{float(item.get('scenario_profitable_percent') or 0):.1f}%",
+                f"{float(item.get('payoff_ratio') or 0):.2f}",
+                f"₹{float(item.get('capital_required') or 0):,.0f}",
+                f"₹{float(item.get('max_profit') or 0):,.0f}",
+                f"₹{float(item.get('max_loss') or 0):,.0f}",
+                item.get("bias") or "UNKNOWN",
+                ("PAPER ELIGIBLE — " if eligible else "COMPARISON ONLY — ") + str(item.get("suitability") or ""),
+            )
+            for column, value in enumerate(values):
+                self.live_catalog.setItem(row, column, QTableWidgetItem(str(value)))
+        self.live_catalog.resizeColumnsToContents()
+        self.live_catalog.horizontalHeader().setStretchLastSection(True)
+
         rows = self.db.get_strategy_trades(limit=1000)
         summary = self.db.get_strategy_trade_summary()
         self.ledger.setRowCount(len(rows))
@@ -132,6 +181,7 @@ class StrategyTradesPage(QWidget):
         self.performance.resizeColumnsToContents(); self.performance.horizontalHeader().setStretchLastSection(True)
         total = int(summary.get("total") or 0); closed = int(summary.get("closed_count") or 0); wins = int(summary.get("wins") or 0)
         self.summary.setText(
+            f"Live analysed: {len(self.latest_catalog)}/30 | "
             f"Paper strategies: {total} | Open: {int(summary.get('open_count') or 0)} | Closed: {closed} | "
             f"Positive model outcomes: {wins}/{closed if closed else 0} | Realized model P&L: ₹{float(summary.get('pnl') or 0):,.2f}. "
             "Ranking sirf closed paper outcomes ke win rate par hai (tie me zyada samples, phir total P&L). "

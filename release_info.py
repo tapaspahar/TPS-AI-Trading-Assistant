@@ -8,9 +8,12 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.4.6"
-LAST_UPDATED_AT = "26-08-2026 14:45:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.4.6 - 26-08-2026 14:45 IST"
+LAST_UPDATED_AT = "26-08-2026 14:48:48 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.4.6 - 26-08-2026 14:48 IST"
 RELEASE_NOTES = (
+    "Restored the Strategy Trades live comparison board with up to 30 current-market defined-risk candidates ranked by model score, market fit, scenario-positive coverage and payoff evidence; actual win rate remains a separate closed-paper metric.",
+    "Expanded paper validation to retain eligible counterfactual strategy candidates alongside primary market-aligned candidates, while keeping unbounded or risk-ineligible structures comparison-only.",
+    "Made release packaging stamp the footer from the computer's actual local build time so Software Update time is no longer manually guessed or confused with the live clock.",
     "Fixed the Strategy Trades capture pipeline to consume the portfolio engine's canonical market-alignment evidence; eligible aligned multi-leg strategies now persist to the ledger and ranking instead of disappearing after analysis.",
     "Moved Strategy Trades out of the Option Strategies tab container into a genuinely independent sidebar page; Defined-Risk and VIX/ATR analysis remain together while captured multi-leg performance has its own clean workspace.",
     "Recovered Option Strategies from provider hangs and unexpected broker-SDK errors with a 90-second watchdog, generation-safe late-result rejection and automatic next-cycle retry; Strategy Trades now resumes receiving successful upstream analyses instead of remaining blank indefinitely.",
