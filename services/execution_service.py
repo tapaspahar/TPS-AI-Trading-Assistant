@@ -17,6 +17,9 @@ class OrderRequest:
     quantity: int
     limit_price: float
     product_type: str = "INTRADAY"
+    target_price: float = 0.0
+    stop_price: float = 0.0
+    time_exit: str = ""
 
 
 class ExecutionService:
@@ -36,7 +39,10 @@ class ExecutionService:
     def arm(self, phrase: str):
         if phrase.strip().upper() != self.UNLOCK_PHRASE:
             raise ValueError(f'Type exactly: {self.UNLOCK_PHRASE}')
-        if not bool(self.settings_store.load().get("real_execution_enabled", False)):
+        settings = self.settings_store.load()
+        if str(settings.get("execution_mode", "REAL")).upper() != "REAL":
+            raise RuntimeError("Order mode is PAPER. Select REAL in Settings before arming.")
+        if not bool(settings.get("real_execution_enabled", False)):
             raise RuntimeError("Real execution is disabled in saved safety settings.")
         self._kill_switch = False
         self._armed = True
@@ -53,9 +59,53 @@ class ExecutionService:
         raw = f"{order.exchange}|{order.symbol_token}|{order.trading_symbol}|{order.side}|{order.quantity}|{order.limit_price:.2f}"
         return hashlib.sha256(raw.encode()).hexdigest()
 
+    @staticmethod
+    def exit_price(entry: float, side: str, basis: str, value: float, purpose: str) -> float:
+        """Calculate a planned exit without submitting a broker-side exit order."""
+        entry, value = float(entry), float(value)
+        side, basis, purpose = side.upper(), basis.upper(), purpose.upper()
+        if entry <= 0 or value <= 0 or side not in {"BUY", "SELL"} or purpose not in {"TARGET", "STOP"}:
+            raise ValueError("Entry, side and exit value are invalid.")
+        if basis == "PRICE":
+            result = value
+        else:
+            move = value if basis == "AMOUNT" else entry * value / 100.0
+            favorable = (side == "BUY" and purpose == "TARGET") or (side == "SELL" and purpose == "STOP")
+            result = entry + move if favorable else entry - move
+        if result <= 0:
+            raise ValueError("Calculated exit price must be positive.")
+        if side == "BUY" and ((purpose == "TARGET" and result <= entry) or (purpose == "STOP" and result >= entry)):
+            raise ValueError("BUY target must be above entry and stop below entry.")
+        if side == "SELL" and ((purpose == "TARGET" and result >= entry) or (purpose == "STOP" and result <= entry)):
+            raise ValueError("SELL target must be below entry and stop above entry.")
+        return round(result, 2)
+
+    def stage_paper(self, order: OrderRequest) -> dict:
+        failures = self.validate_plan(order, require_exits=True)
+        audit_id = self.database.create_execution_audit(
+            order.__dict__, self.fingerprint(order), "REJECTED" if failures else "PAPER_PLAN", "; ".join(failures)
+        )
+        if failures:
+            raise RuntimeError("; ".join(failures))
+        return {"audit_id": audit_id, "status": "PAPER_PLAN"}
+
+    @staticmethod
+    def validate_plan(order: OrderRequest, require_exits: bool = False) -> list[str]:
+        failures = []
+        if not order.trading_symbol.strip(): failures.append("Trading symbol is required")
+        if order.side.upper() not in {"BUY", "SELL"}: failures.append("Side must be BUY or SELL")
+        if order.quantity <= 0: failures.append("Quantity must be positive")
+        if order.limit_price <= 0: failures.append("Entry price must be positive")
+        if require_exits and (order.target_price <= 0 or order.stop_price <= 0):
+            failures.append("Target and stop must be calculated")
+        elif (order.target_price > 0) != (order.stop_price > 0):
+            failures.append("Target and stop must both be supplied")
+        return failures
+
     def validate(self, order: OrderRequest, confirmation: str) -> list[str]:
         settings = self.settings_store.load()
-        failures = []
+        failures = self.validate_plan(order)
+        if str(settings.get("execution_mode", "REAL")).upper() != "REAL": failures.append("Order mode is PAPER")
         if not self.armed: failures.append("Execution session is locked")
         if confirmation.strip().upper() != "PLACE LIMIT ORDER": failures.append("Final confirmation phrase is missing")
         if not self.live_session.connected() or self.live_session.broker_id != "angel_one": failures.append("Connected Angel One session required")

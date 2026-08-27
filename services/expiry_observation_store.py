@@ -23,6 +23,16 @@ class ExpiryObservationStore:
             volume_ratio REAL, oi_change_pct REAL, spot REAL NOT NULL, duration_seconds INTEGER NOT NULL DEFAULT 0,
             cas_context TEXT NOT NULL, source_completeness TEXT NOT NULL, event_text TEXT NOT NULL,
             details_json TEXT NOT NULL)""")
+        additions = {
+            "spike_start_premium": "REAL", "spike_event_premium": "REAL", "spike_latest_premium": "REAL",
+            "opposite_contract_symbol": "TEXT", "opposite_option_type": "TEXT",
+            "opposite_start_premium": "REAL", "opposite_event_premium": "REAL", "opposite_latest_premium": "REAL",
+            "opposite_change_pct": "REAL", "paired_last_updated_at": "TEXT",
+        }
+        existing = {row[1] for row in self.db.cursor.execute("PRAGMA table_info(expiry_spike_events)").fetchall()}
+        for name, sql_type in additions.items():
+            if name not in existing:
+                self.db.cursor.execute(f"ALTER TABLE expiry_spike_events ADD COLUMN {name} {sql_type}")
         self.db.connection.commit()
 
     def save_observation(self, row):
@@ -35,7 +45,9 @@ class ExpiryObservationStore:
 
     def save_event(self, row):
         columns = ("event_key trade_date started_at last_seen_at underlying contract_symbol strike option_type moneyness premium peak_change_pct "
-                   "volume_ratio oi_change_pct spot duration_seconds cas_context source_completeness event_text details_json").split()
+                   "volume_ratio oi_change_pct spot duration_seconds cas_context source_completeness event_text "
+                   "spike_start_premium spike_event_premium spike_latest_premium opposite_contract_symbol opposite_option_type "
+                   "opposite_start_premium opposite_event_premium opposite_latest_premium opposite_change_pct paired_last_updated_at details_json").split()
         values = [row.get(name) for name in columns[:-1]] + [json.dumps(row, default=str)]
         self.db.cursor.execute(f"INSERT OR REPLACE INTO expiry_spike_events ({','.join(columns)}) VALUES ({','.join('?' for _ in columns)})", values)
         self.db.connection.commit()

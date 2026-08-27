@@ -1,16 +1,19 @@
 """Application release metadata kept in one place."""
 
 APP_NAME = "TPS AI Trading Assistant"
-VERSION = "1.4.9"
-DISPLAY_VERSION = "Release 1.4.9"
+VERSION = "1.5.0"
+DISPLAY_VERSION = "Release 1.5.0"
 RELEASE_DATE = "27-08-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
-SOFTWARE_UPDATE_VERSION = "v1.4.9"
-LAST_UPDATED_AT = "27-08-2026 11:23:11 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.4.9 - 27-08-2026 11:23 IST"
+SOFTWARE_UPDATE_VERSION = "v1.5.0"
+LAST_UPDATED_AT = "27-08-2026 21:50:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.5.0 - 27-08-2026 21:50 IST"
 RELEASE_NOTES = (
+    "Started Release 1.5.0 with PAPER as the safe default order mode, saved amount/percentage/exact-price target and stop settings, optional time-exit planning and read-only Angel One account-funds visibility.",
+    "Added an audited Paper Order Plan path that never contacts the broker; REAL entry remains LIMIT-only and requires saved opt-in, an app-session unlock, market hours, risk caps, duplicate protection and final review.",
+    "Expanded Expiry After 3 PM Observation with same-strike paired CE/PE evidence: both premiums are saved at the rolling start, spike event and latest follow-up so the rising side and opposite-side decline can be studied together.",
     "Added Expiry After 3 PM Observation: an opt-in, research-only expiry-day monitor for nearby ATM and ITM index-option premium acceleration after 3:00 PM.",
     "Added permanent 30-second observation and Spike Event history with spot, premium change, incremental-volume surge, OI change, ATM distance, optional IV/Greeks, sustain duration and source-completeness evidence.",
     "Made expiry spike confirmation context-aware: price acceleration alone remains PRICE WATCH; a saved spike also requires volume, OI-change or underlying-breakout confirmation, while cash-market CAS is labelled as context and never misread as an index-option halt.",

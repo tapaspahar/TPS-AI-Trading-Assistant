@@ -7,9 +7,10 @@ from services.execution_service import ExecutionService, OrderRequest
 
 
 class FakeSettings:
-    def __init__(self, enabled=True):
+    def __init__(self, enabled=True, mode="REAL"):
         self.values = {
             "real_execution_enabled": enabled,
+            "execution_mode": mode,
             "execution_max_orders_per_day": 3,
             "execution_max_quantity": 65,
             "execution_max_order_value": 25_000.0,
@@ -145,3 +146,23 @@ def test_execution_audit_schema_is_upgrade_safe(tmp_path):
     columns = {row["name"] for row in database.cursor.execute("PRAGMA table_info(execution_audit)")}
     assert {"fingerprint", "broker_order_id", "realized_pnl", "status"} <= columns
     database.connection.close()
+
+
+def test_paper_plan_is_saved_without_broker_connection():
+    database = FakeDatabase()
+    service = ExecutionService(database, FakeSettings(enabled=False, mode="PAPER"), FakeLiveSession)
+    planned = order(target_price=120.0, stop_price=90.0, time_exit="15:20")
+    result = service.stage_paper(planned)
+    assert result["status"] == "PAPER_PLAN"
+    assert database.rows[0]["status"] == "PAPER_PLAN"
+    assert database.rows[0]["target_price"] == 120.0
+    assert database.rows[0]["stop_price"] == 90.0
+
+
+@pytest.mark.parametrize(
+    "side,basis,value,purpose,expected",
+    [("BUY", "PERCENT", 20, "TARGET", 120.0), ("BUY", "AMOUNT", 10, "STOP", 90.0),
+     ("SELL", "PERCENT", 20, "TARGET", 80.0), ("SELL", "AMOUNT", 10, "STOP", 110.0)],
+)
+def test_planned_exit_price_supports_amount_and_percentage(side, basis, value, purpose, expected):
+    assert ExecutionService.exit_price(100, side, basis, value, purpose) == expected

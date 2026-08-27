@@ -233,6 +233,28 @@ class AngelOneClient:
         return {"order_id": str(data.get("orderid") or data.get("orderId") or ""),
                 "unique_order_id": str(data.get("uniqueorderid") or ""), "raw": response}
 
+    def get_funds(self) -> dict:
+        """Return normalized read-only account funds from Angel One RMS."""
+        if not self.session:
+            raise RuntimeError("Connect Angel One before loading account funds.")
+        response = self.session.rmsLimit()
+        if not response or not response.get("status"):
+            raise RuntimeError(str((response or {}).get("message", "Account funds are unavailable.")))
+        data = response.get("data") or {}
+        def number(*keys):
+            for key in keys:
+                if data.get(key) not in (None, ""):
+                    try: return float(data[key])
+                    except (TypeError, ValueError): pass
+            return 0.0
+        return {
+            "available_cash": number("availablecash", "availableCash", "net"),
+            "net": number("net"),
+            "utilized": number("utiliseddebits", "utilisedDebits"),
+            "collateral": number("collateral"),
+            "raw": data,
+        }
+
     def get_order_book(self) -> list[dict]:
         if not self.session:
             raise RuntimeError("Connect Angel One before checking order status.")

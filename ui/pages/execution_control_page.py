@@ -33,6 +33,14 @@ class ExecutionControlPage(QWidget):
         )
         warning.setWordWrap(True); layout.addWidget(warning)
 
+        funds_box = QGroupBox("Broker account funds (read-only)")
+        funds = QHBoxLayout(funds_box)
+        self.funds_status = QLabel("Connect Angel One to view available trading balance.")
+        self.funds_status.setWordWrap(True)
+        funds_refresh = QPushButton("Refresh Account Funds"); funds_refresh.clicked.connect(self.refresh_funds)
+        funds.addWidget(self.funds_status, 1); funds.addWidget(funds_refresh)
+        layout.addWidget(funds_box)
+
         limits_box = QGroupBox("1. Persistent safety limits (default execution OFF)")
         limits = QFormLayout(limits_box)
         values = self.store.load()
@@ -62,7 +70,7 @@ class ExecutionControlPage(QWidget):
         arm.addRow("Type ENABLE REAL TRADING", self.arm_phrase); arm.addRow("Session state", self.session_status); arm.addRow(arm_buttons)
         layout.addWidget(arm_box)
 
-        order_box = QGroupBox("3. Stage one LIMIT order")
+        order_box = QGroupBox("3. Stage one Paper or Real LIMIT order")
         form = QFormLayout(order_box)
         self.exchange = QComboBox(); self.exchange.addItems(("NFO", "BFO", "NSE", "BSE"))
         self.token = QLineEdit(); self.symbol = QLineEdit()
@@ -70,14 +78,29 @@ class ExecutionControlPage(QWidget):
         self.quantity = QSpinBox(); self.quantity.setRange(1, 10000)
         self.price = QDoubleSpinBox(); self.price.setRange(0.05, 10_000_000); self.price.setDecimals(2)
         self.product = QComboBox(); self.product.addItems(("INTRADAY", "CARRYFORWARD"))
+        self.target_basis = QComboBox(); self.stop_basis = QComboBox()
+        for widget in (self.target_basis, self.stop_basis):
+            widget.addItem("Exact exit price", "PRICE"); widget.addItem("₹ move from entry", "AMOUNT"); widget.addItem("% move from entry", "PERCENT")
+        self.target_basis.setCurrentIndex(max(0, self.target_basis.findData(values.get("execution_target_basis", "PERCENT"))))
+        self.stop_basis.setCurrentIndex(max(0, self.stop_basis.findData(values.get("execution_stop_basis", "PERCENT"))))
+        self.target_value = QDoubleSpinBox(); self.target_value.setRange(0.01, 10_000_000); self.target_value.setDecimals(2); self.target_value.setValue(float(values.get("execution_target_value", 20)))
+        self.stop_value = QDoubleSpinBox(); self.stop_value.setRange(0.01, 10_000_000); self.stop_value.setDecimals(2); self.stop_value.setValue(float(values.get("execution_stop_value", 10)))
+        self.time_exit_enabled = QCheckBox("Use planned time exit"); self.time_exit_enabled.setChecked(bool(values.get("execution_time_exit_enabled", True)))
+        self.time_exit = QLineEdit(str(values.get("execution_time_exit", "15:20"))); self.time_exit.setPlaceholderText("HH:MM")
+        self.plan_preview = QLabel("Enter an entry price, then calculate exact target and stop levels."); self.plan_preview.setWordWrap(True)
+        calculate = QPushButton("Calculate Entry / Target / Stop / Exit Plan"); calculate.clicked.connect(self.calculate_plan)
         self.final_phrase = QLineEdit(); self.final_phrase.setPlaceholderText("PLACE LIMIT ORDER")
         for label, widget in (("Exchange", self.exchange), ("Symbol token", self.token), ("Trading symbol", self.symbol),
                               ("Side", self.side), ("Quantity", self.quantity), ("Limit price", self.price),
-                              ("Product", self.product), ("Final phrase", self.final_phrase)):
+                              ("Product", self.product), ("Target type", self.target_basis), ("Target value", self.target_value),
+                              ("Stop type", self.stop_basis), ("Stop value", self.stop_value), ("Time exit", self.time_exit)):
             form.addRow(label, widget)
-        submit = QPushButton("Review & Submit Real LIMIT Order"); submit.clicked.connect(self.submit)
+        form.addRow(self.time_exit_enabled); form.addRow(calculate); form.addRow(self.plan_preview)
+        form.addRow("Real-order final phrase", self.final_phrase)
+        self.submit_button = QPushButton(); self.submit_button.clicked.connect(self.submit)
+        self._refresh_mode_label()
         refresh = QPushButton("Refresh Broker Order Status"); refresh.clicked.connect(self.refresh_status)
-        form.addRow(submit); form.addRow(refresh)
+        form.addRow(self.submit_button); form.addRow(refresh)
         self.result = QLabel("No order submitted in this app session."); self.result.setWordWrap(True); form.addRow(self.result)
         layout.addWidget(order_box); layout.addStretch()
 
@@ -109,13 +132,51 @@ class ExecutionControlPage(QWidget):
         QMessageBox.warning(self, "Emergency stop", "New submissions are blocked. Existing broker orders were not cancelled automatically; verify them in the broker order book.")
 
     def _order(self):
+        target = ExecutionService.exit_price(self.price.value(), self.side.currentText(), self.target_basis.currentData(), self.target_value.value(), "TARGET")
+        stop = ExecutionService.exit_price(self.price.value(), self.side.currentText(), self.stop_basis.currentData(), self.stop_value.value(), "STOP")
         return OrderRequest(self.exchange.currentText(), self.token.text().strip(), self.symbol.text().strip().upper(),
-                            self.side.currentText(), self.quantity.value(), self.price.value(), self.product.currentText())
+                            self.side.currentText(), self.quantity.value(), self.price.value(), self.product.currentText(),
+                            target, stop, self.time_exit.text().strip() if self.time_exit_enabled.isChecked() else "")
+
+    def _refresh_mode_label(self):
+        mode = str(self.store.load().get("execution_mode", "PAPER")).upper()
+        self.submit_button.setText("Save Paper Order Plan (no broker order)" if mode == "PAPER" else "Review & Submit Real LIMIT Order")
+
+    def calculate_plan(self):
+        try:
+            order = self._order()
+            self.plan_preview.setText(
+                f"Entry ₹{order.limit_price:.2f} | Target ₹{order.target_price:.2f} | Stop ₹{order.stop_price:.2f}"
+                + (f" | Time exit {order.time_exit}" if order.time_exit else " | No time exit")
+                + f" | Quantity {order.quantity} | Entry value ₹{order.quantity * order.limit_price:,.2f}"
+            )
+        except Exception as error:
+            self.plan_preview.setText(f"Plan invalid: {error}")
 
     def submit(self):
-        order = self._order()
+        try:
+            order = self._order()
+        except Exception as error:
+            QMessageBox.warning(self, "Invalid exit plan", str(error)); return
+        mode = str(self.store.load().get("execution_mode", "PAPER")).upper()
+        if mode == "PAPER":
+            try:
+                result = self.service.stage_paper(order)
+                self.last_audit_id = None
+                self.result.setText(
+                    f"Paper plan saved — {order.side} {order.quantity} {order.trading_symbol} @ ₹{order.limit_price:.2f} | "
+                    f"Target ₹{order.target_price:.2f} | Stop ₹{order.stop_price:.2f}"
+                    + (f" | Time exit {order.time_exit}" if order.time_exit else "")
+                    + ". No broker order was placed."
+                )
+                QMessageBox.information(self, "Paper plan saved", "Plan audit me save ho gaya. Broker ko koi order nahi bheja gaya.")
+            except Exception as error:
+                QMessageBox.warning(self, "Paper plan not saved", str(error))
+            return
         review = (f"REAL LIMIT ORDER\n{order.side} {order.quantity} {order.trading_symbol} @ ₹{order.limit_price:.2f}\n"
-                  f"Maximum notional: ₹{order.quantity * order.limit_price:,.2f}\n\nSubmit to Angel One?")
+                  f"Planned target ₹{order.target_price:.2f} | planned stop ₹{order.stop_price:.2f}"
+                  + (f" | time exit {order.time_exit}" if order.time_exit else "")
+                  + f"\nMaximum entry value: ₹{order.quantity * order.limit_price:,.2f}\n\nOnly the entry LIMIT order will be submitted. Submit to Angel One?")
         if QMessageBox.question(self, "Final real-order review", review, QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
             return
         try:
@@ -139,3 +200,16 @@ class ExecutionControlPage(QWidget):
             self.result.setText(f"Latest broker status: {row.get('status') or row.get('orderstatus') or 'UNKNOWN'} | Order ID: {row.get('orderid') or row.get('orderId')}")
         except Exception as error:
             QMessageBox.warning(self, "Status unavailable", str(error))
+
+    def refresh_funds(self):
+        session = self.service.live_session
+        if not session.connected() or session.broker_id != "angel_one":
+            self.funds_status.setText("Funds unavailable — connect Angel One read-only/live session first."); return
+        try:
+            values = session.client.get_funds()
+            self.funds_status.setText(
+                f"Available cash ₹{values['available_cash']:,.2f} | Net ₹{values['net']:,.2f} | "
+                f"Utilized ₹{values['utilized']:,.2f} | Collateral ₹{values['collateral']:,.2f}"
+            )
+        except Exception as error:
+            self.funds_status.setText(f"Account funds unavailable: {error}")

@@ -115,6 +115,39 @@ class SettingsPage(QWidget):
         timing_note.setWordWrap(True)
         timing_form.addRow(timing_note)
         layout.addWidget(timing_box)
+        execution_box = QGroupBox("Order Mode & Default Exit Plan — Release 1.5.0")
+        execution_form = QFormLayout(execution_box)
+        self.execution_mode = QComboBox()
+        self.execution_mode.addItem("Paper order / plan (recommended)", "PAPER")
+        self.execution_mode.addItem("Real broker order — safeguards required", "REAL")
+        self.execution_mode.setCurrentIndex(max(0, self.execution_mode.findData(values.get("execution_mode", "PAPER"))))
+        self.execution_target_basis = QComboBox()
+        self.execution_stop_basis = QComboBox()
+        for widget in (self.execution_target_basis, self.execution_stop_basis):
+            widget.addItem("Exact exit price", "PRICE")
+            widget.addItem("Rupee move from entry", "AMOUNT")
+            widget.addItem("Percentage move from entry", "PERCENT")
+        self.execution_target_basis.setCurrentIndex(max(0, self.execution_target_basis.findData(values.get("execution_target_basis", "PERCENT"))))
+        self.execution_stop_basis.setCurrentIndex(max(0, self.execution_stop_basis.findData(values.get("execution_stop_basis", "PERCENT"))))
+        self.execution_target_value = QLineEdit(str(values.get("execution_target_value", 20.0)))
+        self.execution_stop_value = QLineEdit(str(values.get("execution_stop_value", 10.0)))
+        self.execution_time_exit_enabled = QCheckBox("Enable planned time exit")
+        self.execution_time_exit_enabled.setChecked(bool(values.get("execution_time_exit_enabled", True)))
+        self.execution_time_exit = QTimeEdit(QTime.fromString(values.get("execution_time_exit", "15:20"), "HH:mm"))
+        self.execution_time_exit.setDisplayFormat("HH:mm")
+        execution_form.addRow("Active order mode", self.execution_mode)
+        execution_form.addRow("Target input type", self.execution_target_basis)
+        execution_form.addRow("Target value", self.execution_target_value)
+        execution_form.addRow("Stop-loss input type", self.execution_stop_basis)
+        execution_form.addRow("Stop-loss value", self.execution_stop_value)
+        execution_form.addRow(self.execution_time_exit_enabled)
+        execution_form.addRow("Planned exit time", self.execution_time_exit)
+        execution_note = QLabel(
+            "Paper is the safe default. Selecting Real only changes the preferred workflow; it does not authorize money movement. "
+            "Real submission still needs the saved opt-in, session unlock and final order confirmation. Target/stop are calculated plan levels, not unsafe simultaneous broker exit orders."
+        )
+        execution_note.setWordWrap(True); execution_form.addRow(execution_note)
+        layout.addWidget(execution_box)
         save = QPushButton("Save Settings")
         save.clicked.connect(self.save)
         layout.addWidget(save)
@@ -245,6 +278,13 @@ class SettingsPage(QWidget):
                 "market_pre_open_time": self.market_pre_open.time().toString("HH:mm"),
                 "market_open_time": self.market_open.time().toString("HH:mm"),
                 "market_close_time": self.market_close.time().toString("HH:mm"),
+                "execution_mode": self.execution_mode.currentData(),
+                "execution_target_basis": self.execution_target_basis.currentData(),
+                "execution_target_value": self.execution_target_value.text(),
+                "execution_stop_basis": self.execution_stop_basis.currentData(),
+                "execution_stop_value": self.execution_stop_value.text(),
+                "execution_time_exit_enabled": self.execution_time_exit_enabled.isChecked(),
+                "execution_time_exit": self.execution_time_exit.time().toString("HH:mm"),
                 "paper_trade_cooldown_minutes": self.cooldown.text(), "minimum_rr_ratio": self.minimum_rr.text(),
                 "maximum_option_spread_percent": self.max_spread.text(), "minimum_option_volume": self.minimum_volume.text(),
                 "tps_match_mode": self.tps_match_mode.currentData(),

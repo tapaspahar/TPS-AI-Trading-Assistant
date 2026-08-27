@@ -6,7 +6,7 @@ from ui.pages.expiry_observation_page import cas_context, expiry_monitor_window
 
 
 class ExpirySpikeEngineTests(unittest.TestCase):
-    def test_selects_nearest_expiry_atm_and_two_itm_each_side(self):
+    def test_selects_paired_ce_and_pe_for_each_nearby_expiry_strike(self):
         near, far = date(2026, 8, 27), date(2026, 9, 3)
         contracts = []
         for expiry in (near, far):
@@ -17,8 +17,9 @@ class ExpirySpikeEngineTests(unittest.TestCase):
                                       "exchange": "NFO"})
         selected = select_nearby_expiry_contracts(contracts, 24410)
         self.assertEqual({row["expiry"] for row in selected}, {near})
-        self.assertEqual({row["strike"] for row in selected if row["option_type"] == "CE"}, {24400.0, 24350.0, 24300.0})
-        self.assertEqual({row["strike"] for row in selected if row["option_type"] == "PE"}, {24400.0, 24450.0, 24500.0})
+        self.assertEqual({row["strike"] for row in selected if row["option_type"] == "CE"}, {24300.0, 24350.0, 24400.0, 24450.0, 24500.0})
+        self.assertEqual({row["strike"] for row in selected if row["option_type"] == "PE"}, {24300.0, 24350.0, 24400.0, 24450.0, 24500.0})
+        self.assertEqual(len(selected), 10)
 
     def test_price_acceleration_without_independent_evidence_is_watch_only(self):
         start = datetime(2026, 8, 27, 15, 10)

@@ -95,8 +95,9 @@ class ExpiryObservationPage(QWidget):
         self.cards = QLabel("Spot: - | Expiry: - | Tracked contracts: 0 | CAS: -"); self.cards.setObjectName("sectionCard"); layout.addWidget(self.cards)
         self.prediction = QLabel("Historical prediction: observation data collect ho raha hai.")
         self.prediction.setObjectName("sectionCard"); self.prediction.setWordWrap(True); layout.addWidget(self.prediction)
-        layout.addWidget(QLabel("Spike Events — permanent historical log")); self.events_table = QTableWidget(0, 8)
-        self.events_table.setHorizontalHeaderLabels(("Time", "Index", "Contract", "Strike", "Type", "Spike", "Duration", "Evidence")); self.events_table.setMinimumHeight(220); layout.addWidget(self.events_table)
+        layout.addWidget(QLabel("Spike Events — same-strike CE/PE paired movement log")); self.events_table = QTableWidget(0, 12)
+        self.events_table.setHorizontalHeaderLabels(("Time", "Index", "Contract", "Strike", "Type", "Start", "Spike", "Latest",
+                                                     "Opposite", "Opp. start", "Opp. event", "Opp. latest")); self.events_table.setMinimumHeight(220); layout.addWidget(self.events_table)
         layout.addWidget(QLabel("Latest ATM / ITM observations")); self.obs_table = QTableWidget(0, 10)
         self.obs_table.setHorizontalHeaderLabels(("Time", "Contract", "Moneyness", "Premium", "% move", "Volume x", "OI", "OI change", "Spot", "Data")); self.obs_table.setMinimumHeight(260); layout.addWidget(self.obs_table)
         self.timer = QTimer(self); self.timer.setInterval(30000); self.timer.timeout.connect(self.scan); self.timer.start(); self.refresh_history()
@@ -132,12 +133,17 @@ class ExpiryObservationPage(QWidget):
         context = cas_context(now); rows = payload.get("rows") or []
         if not rows:
             self.status.setText("Today selected index ki expiry nahi hai; observation save nahi hua."); return
+        current = {}
+        results = {}
         for item in rows:
             contract, quote = item["contract"], item["quote"]
             premium = float(quote.get("ltp", 0) or 0); volume = float(quote.get("tradeVolume", quote.get("volume", 0)) or 0)
             oi = float(quote.get("opnInterest", quote.get("openInterest", 0)) or 0); token = str(contract["token"])
             sample = {"observed_at": now, "premium": premium, "volume": volume, "open_interest": oi, "spot": spot}
             self.history[token].append(sample); result = evaluate_spike(list(self.history[token]), spot_breakout=abs(spot-prior_spot) >= max(5, spot*.00025))
+            pair_key = (float(contract["strike"]), str(contract["option_type"]).upper())
+            current[pair_key] = {"contract": contract, "premium": premium, "token": token}
+            results[token] = result
             row = {"observed_at": now.isoformat(), "trade_date": now.date().isoformat(), "underlying": symbol,
                    "expiry": contract["expiry"].isoformat(), "contract_symbol": contract["symbol"], "strike": contract["strike"],
                    "option_type": contract["option_type"], "moneyness": contract["moneyness"], "atm_distance": contract["atm_distance"],
@@ -148,22 +154,45 @@ class ExpiryObservationPage(QWidget):
                    "theta": quote.get("theta"), "vega": quote.get("vega"), "sustain_seconds": result.get("elapsed_seconds", 0) if result.get("event") else 0,
                    "cas_context": context, "source_completeness": result.get("source_completeness", "PARTIAL")}
             self.store.save_observation(row)
+        # Save or update paired spike events only after all CE and PE quotes from
+        # this poll are available, so both sides share the exact same timestamp.
+        for item in rows:
+            contract = item["contract"]; token = str(contract["token"]); result = results[token]
+            premium = current[(float(contract["strike"]), str(contract["option_type"]).upper())]["premium"]
+            opposite_type = "PE" if str(contract["option_type"]).upper() == "CE" else "CE"
+            opposite = current.get((float(contract["strike"]), opposite_type))
+            active = self.active_events.get(token)
             if result.get("event"):
-                active = self.active_events.get(token)
                 if active is None:
-                    active = {"key": f"{now.date()}|{contract['symbol']}|{now.strftime('%H%M%S')}", "started_at": now, "peak": 0.0}
+                    opposite_history = list(self.history[opposite["token"]]) if opposite else []
+                    opposite_start = float(opposite_history[0].get("premium", 0)) if opposite_history else None
+                    active = {"key": f"{now.date()}|{contract['symbol']}|{now.strftime('%H%M%S')}", "started_at": now,
+                              "peak": 0.0, "spike_start": result.get("baseline_premium"), "spike_event": premium,
+                              "opposite_symbol": opposite["contract"]["symbol"] if opposite else "",
+                              "opposite_type": opposite_type, "opposite_start": opposite_start,
+                              "opposite_event": opposite["premium"] if opposite else None}
                     self.active_events[token] = active
                 active["peak"] = max(float(active["peak"]), float(result["premium_change_pct"]))
+            if active is not None:
                 duration = max(0, int((now - active["started_at"]).total_seconds()))
                 result["elapsed_seconds"] = duration
                 event_text = format_spike_event(symbol, contract, result, now); key = active["key"]
+                opposite_latest = opposite["premium"] if opposite else None
+                opposite_start = active.get("opposite_start")
+                opposite_change = ((opposite_latest - opposite_start) / opposite_start * 100
+                                   if opposite_latest is not None and opposite_start else None)
                 self.store.save_event({"event_key": key, "trade_date": now.date().isoformat(), "started_at": active["started_at"].isoformat(), "last_seen_at": now.isoformat(),
                     "underlying": symbol, "contract_symbol": contract["symbol"], "strike": contract["strike"], "option_type": contract["option_type"],
                     "moneyness": contract["moneyness"], "premium": premium, "peak_change_pct": active["peak"], "volume_ratio": result.get("volume_ratio"),
                     "oi_change_pct": result.get("oi_change_pct"), "spot": spot, "duration_seconds": result.get("elapsed_seconds", 0), "cas_context": context,
                     "underlying_move": spot-prior_spot,
-                    "source_completeness": result.get("source_completeness", "PARTIAL"), "event_text": event_text})
-            else:
+                    "source_completeness": result.get("source_completeness", "PARTIAL"), "event_text": event_text,
+                    "spike_start_premium": active.get("spike_start"), "spike_event_premium": active.get("spike_event"),
+                    "spike_latest_premium": premium, "opposite_contract_symbol": active.get("opposite_symbol"),
+                    "opposite_option_type": active.get("opposite_type"), "opposite_start_premium": opposite_start,
+                    "opposite_event_premium": active.get("opposite_event"), "opposite_latest_premium": opposite_latest,
+                    "opposite_change_pct": opposite_change, "paired_last_updated_at": now.isoformat()})
+            if active is not None and not result.get("event") and (now - active["started_at"]).total_seconds() >= 600:
                 self.active_events.pop(token, None)
         self.cards.setText(f"Spot: {spot:,.2f} | Expiry: {payload['expiry'].strftime('%d-%m-%Y')} | Tracked contracts: {len(rows)} | CAS: {context}")
         self.status.setText(f"Last observation saved: {now.strftime('%d-%m-%Y %I:%M:%S %p')} | Research only")
@@ -172,8 +201,11 @@ class ExpiryObservationPage(QWidget):
     def refresh_history(self):
         events = self.store.events(); self.events_table.setRowCount(len(events))
         for r, row in enumerate(events):
+            money = lambda value: "-" if value is None else f"₹{float(value):,.2f}"
             values = (row["started_at"], row["underlying"], row["contract_symbol"], f"{row['strike']:g}", row["option_type"],
-                      f"{row['peak_change_pct']:+.1f}%", f"{row['duration_seconds']} sec", row["event_text"])
+                      money(row.get("spike_start_premium")), money(row.get("spike_event_premium")), money(row.get("spike_latest_premium")),
+                      f"{row.get('opposite_option_type') or '-'} {row.get('opposite_contract_symbol') or ''}".strip(),
+                      money(row.get("opposite_start_premium")), money(row.get("opposite_event_premium")), money(row.get("opposite_latest_premium")))
             for c, value in enumerate(values): self.events_table.setItem(r, c, QTableWidgetItem(str(value)))
         today, symbol = datetime.now(IST).date().isoformat(), self.underlying.currentText(); observations = self.store.observations(today, symbol, 100)
         forecast = predict_expiry_spike(

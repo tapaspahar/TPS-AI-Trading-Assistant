@@ -333,7 +333,7 @@ class StrategyTradesPage(QWidget):
             f"Today's combined strategy P&L (report only): ₹{float(daily.get('combined_pnl') or 0):,.2f} | "
             f"Per-strategy target preset: {'₹' + format(target, ',.2f') if target > 0 else 'AUTO'} | "
             f"Per-strategy stop preset: {'₹' + format(max_loss, ',.2f') if max_loss > 0 else 'AUTO'}. "
-            "Release 1.4.8 testing cap: 30 unique multi-strike strategy captures/day."
+            "Testing cap: 30 unique multi-strike strategy captures/day."
         )
 
     def _strategy_detail_text(self, record) -> str:

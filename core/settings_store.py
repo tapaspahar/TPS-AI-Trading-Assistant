@@ -77,6 +77,15 @@ DEFAULT_SETTINGS = {
     # Real broker execution remains off by default. Arming is session-only and
     # is intentionally never persisted across an application restart.
     "real_execution_enabled": False,
+    # The visible mode is a preference, not an authorization. REAL still
+    # requires the saved opt-in, a session unlock and a per-order phrase.
+    "execution_mode": "PAPER",
+    "execution_target_basis": "PERCENT",
+    "execution_target_value": 20.0,
+    "execution_stop_basis": "PERCENT",
+    "execution_stop_value": 10.0,
+    "execution_time_exit_enabled": True,
+    "execution_time_exit": "15:20",
     "execution_max_orders_per_day": 3,
     "execution_max_quantity": 65,
     "execution_max_order_value": 25000.0,
@@ -171,6 +180,13 @@ class SettingsStore:
             "daily_loss_percent": float(settings["daily_loss_percent"]),
             "max_trades_per_day": int(settings["max_trades_per_day"]),
             "real_execution_enabled": bool(settings.get("real_execution_enabled", current["real_execution_enabled"])),
+            "execution_mode": str(settings.get("execution_mode", current["execution_mode"])).upper(),
+            "execution_target_basis": str(settings.get("execution_target_basis", current["execution_target_basis"])).upper(),
+            "execution_target_value": float(settings.get("execution_target_value", current["execution_target_value"])),
+            "execution_stop_basis": str(settings.get("execution_stop_basis", current["execution_stop_basis"])).upper(),
+            "execution_stop_value": float(settings.get("execution_stop_value", current["execution_stop_value"])),
+            "execution_time_exit_enabled": bool(settings.get("execution_time_exit_enabled", current["execution_time_exit_enabled"])),
+            "execution_time_exit": str(settings.get("execution_time_exit", current["execution_time_exit"])).strip(),
             "execution_max_orders_per_day": int(settings.get("execution_max_orders_per_day", current["execution_max_orders_per_day"])),
             "execution_max_quantity": int(settings.get("execution_max_quantity", current["execution_max_quantity"])),
             "execution_max_order_value": float(settings.get("execution_max_order_value", current["execution_max_order_value"])),
@@ -290,6 +306,14 @@ class SettingsStore:
             raise ValueError("Execution value cap must be positive and loss lock cannot be negative.")
         if not 30 <= values["execution_duplicate_window_seconds"] <= 3600:
             raise ValueError("Duplicate-order window must be between 30 and 3,600 seconds.")
+        if values["execution_mode"] not in {"PAPER", "REAL"}:
+            raise ValueError("Order mode must be PAPER or REAL.")
+        if values["execution_target_basis"] not in {"PRICE", "AMOUNT", "PERCENT"} or values["execution_stop_basis"] not in {"PRICE", "AMOUNT", "PERCENT"}:
+            raise ValueError("Target and stop basis must be exact price, amount, or percentage.")
+        if values["execution_target_value"] <= 0 or values["execution_stop_value"] <= 0:
+            raise ValueError("Target and stop values must be positive.")
+        if not __import__("re").fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", values["execution_time_exit"]):
+            raise ValueError("Execution time exit must use HH:MM format.")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         if self.path.exists() and self._read_file(self.path):
             shutil.copy2(self.path, self.backup_path)

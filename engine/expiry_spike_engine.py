@@ -16,14 +16,19 @@ def select_nearby_expiry_contracts(contracts, spot, itm_depth=2):
     atm = min(strikes, key=lambda value: abs(value - float(spot)))
     ce_strikes = [atm] + sorted((s for s in strikes if s < atm), reverse=True)[:itm_depth]
     pe_strikes = [atm] + sorted((s for s in strikes if s > atm))[:itm_depth]
-    wanted = {("CE", s) for s in ce_strikes} | {("PE", s) for s in pe_strikes}
+    paired_strikes = set(ce_strikes + pe_strikes)
+    wanted = {(side, strike) for side in ("CE", "PE") for strike in paired_strikes}
     result = []
     for row in active:
         strike = float(row["strike"])
         if (row["option_type"], strike) not in wanted:
             continue
         item = dict(row)
-        item["moneyness"] = "ATM" if strike == atm else "ITM"
+        if strike == atm:
+            item["moneyness"] = "ATM"
+        else:
+            item["moneyness"] = "ITM" if ((item["option_type"] == "CE" and strike < atm) or
+                                               (item["option_type"] == "PE" and strike > atm)) else "OTM"
         item["atm_distance"] = strike - atm
         result.append(item)
     return sorted(result, key=lambda row: (row["option_type"], abs(row["atm_distance"])))
@@ -72,6 +77,9 @@ def evaluate_spike(samples, *, spot_breakout=False):
         "oi_change_pct": oi_change_pct,
         "confirmations": confirmations,
         "source_completeness": completeness,
+        "baseline_premium": old,
+        "latest_premium": new,
+        "baseline_at": baseline["observed_at"],
     }
 
 

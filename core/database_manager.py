@@ -624,7 +624,7 @@ class Database:
 
     def count_execution_orders(self, trading_date):
         row = self.cursor.execute(
-            "SELECT COUNT(*) n FROM execution_audit WHERE trading_date=? AND status NOT IN ('BLOCKED','REJECTED')",
+            "SELECT COUNT(*) n FROM execution_audit WHERE trading_date=? AND status NOT IN ('BLOCKED','REJECTED','PAPER_PLAN')",
             (trading_date,),
         ).fetchone()
         return int(row["n"])
@@ -639,7 +639,7 @@ class Database:
     def has_recent_execution_fingerprint(self, fingerprint, seconds):
         cutoff = (datetime.now().astimezone() - timedelta(seconds=int(seconds))).isoformat(timespec="seconds")
         row = self.cursor.execute(
-            "SELECT 1 FROM execution_audit WHERE fingerprint=? AND created_at>=? AND status NOT IN ('BLOCKED','REJECTED') LIMIT 1",
+            "SELECT 1 FROM execution_audit WHERE fingerprint=? AND created_at>=? AND status NOT IN ('BLOCKED','REJECTED','PAPER_PLAN') LIMIT 1",
             (fingerprint, cutoff),
         ).fetchone()
         return bool(row)
