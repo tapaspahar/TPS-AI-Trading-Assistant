@@ -118,7 +118,7 @@ class SettingsPage(QWidget):
         save = QPushButton("Save Settings")
         save.clicked.connect(self.save)
         layout.addWidget(save)
-        layout.addWidget(QLabel("Settings are stored only on this computer. They do not connect to a broker or place trades."))
+        layout.addWidget(QLabel("Settings are stored only on this computer. Saving settings never places an order; real submission is separately locked inside Broker Execution."))
         recovery_box = QGroupBox("Release 1.3 - Overtrading Protection")
         recovery_layout = QVBoxLayout(recovery_box)
         recovery_note = QLabel(
@@ -183,7 +183,7 @@ class SettingsPage(QWidget):
         safety_note = QLabel("Calendar source: Trading Economics API. If no key is configured, TPS clearly reports feed unavailable and uses the emergency News Risk switch; it never invents an event.")
         safety_note.setWordWrap(True); safety_form.addRow(safety_note)
         layout.addWidget(safety_box)
-        broker_box = QGroupBox("Broker live data (read-only)")
+        broker_box = QGroupBox("Broker connection (market data; safeguarded execution where supported)")
         broker_form = QFormLayout(broker_box)
         broker_form.setContentsMargins(18, 28, 18, 16)
         broker_form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)

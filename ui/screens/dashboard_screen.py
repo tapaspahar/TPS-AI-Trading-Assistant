@@ -34,6 +34,7 @@ from ui.pages.self_development_page import SelfDevelopmentPage
 from ui.pages.recovery_center_page import RecoveryCenterPage
 from ui.pages.volatility_intelligence_page import VolatilityIntelligencePage
 from ui.pages.expiry_observation_page import ExpiryObservationPage
+from ui.pages.execution_control_page import ExecutionControlPage
 from ui.widgets.glass_effects import add_glass_shadow
 from ui.widgets.accessible_scroll import configure_scroll_area
 from ui.widgets.consolidated_workspace import ConsolidatedWorkspace
@@ -117,6 +118,7 @@ class DashboardScreen(QWidget):
         self.recoveryCenterPage = RecoveryCenterPage()
         self.volatilityIntelligencePage = VolatilityIntelligencePage()
         self.expiryObservationPage = ExpiryObservationPage()
+        self.executionControlPage = ExecutionControlPage()
         self.optionsHub = ConsolidatedWorkspace((
             (self.optionsPage, "Trade Plan & Auto Paper"),
             (self.putCallRatioPage, "OI / PCR Intelligence"),
@@ -150,7 +152,7 @@ class DashboardScreen(QWidget):
             self.casAnalysisPage, retired(), self.strategyHub, self.postMarketHub, retired(),
             self.powerfulHub, retired(), self.gapHub, self.autoOpportunityHub, self.trendMemoryPage,
             self.scalperPage, self.notificationCenterPage, self.selfDevelopmentPage, self.recoveryCenterPage, retired(),
-            self.strategyTradesPage, self.expiryObservationPage,
+            self.strategyTradesPage, self.expiryObservationPage, self.executionControlPage,
         )
         for page in pages:
             self.stack.addWidget(page)
@@ -191,6 +193,7 @@ class DashboardScreen(QWidget):
                               (self.sidebar.aboutButton, 15), (self.sidebar.helpButton, 16)):
             button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
         self.sidebar.expiryObservationButton.clicked.connect(lambda: self.show_page(35))
+        self.sidebar.executionControlButton.clicked.connect(lambda: self.show_page(36))
         for button, index in ((self.sidebar.casAnalysisButton, 19),):
             button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
         self.sidebar.optionStrategiesButton.clicked.connect(lambda _checked=False: self.show_page(21))

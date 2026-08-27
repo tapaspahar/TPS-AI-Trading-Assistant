@@ -38,6 +38,17 @@ class Database:
 
     def create_tables(self) -> None:
         self.cursor.execute(
+            """CREATE TABLE IF NOT EXISTS execution_audit (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL,
+                trading_date TEXT NOT NULL, fingerprint TEXT NOT NULL, broker TEXT NOT NULL,
+                exchange TEXT NOT NULL, symbol_token TEXT NOT NULL, trading_symbol TEXT NOT NULL,
+                side TEXT NOT NULL, quantity INTEGER NOT NULL, limit_price REAL NOT NULL,
+                status TEXT NOT NULL, broker_order_id TEXT, message TEXT, realized_pnl REAL DEFAULT 0
+            )"""
+        )
+        self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_execution_audit_day ON execution_audit(trading_date)")
+        self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_execution_audit_fingerprint ON execution_audit(fingerprint, created_at)")
+        self.cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS trades (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -577,6 +588,7 @@ class Database:
                 )
         self._backfill_attempt_evidence_states()
         self.connection.commit()
+
         # Upgrade-safe backfill: previously closed automatic paper trades also
         # become searchable outcome memories without changing their records.
         for legacy_trade in self.cursor.execute(
@@ -586,6 +598,51 @@ class Database:
         ).fetchall():
             self._save_automatic_outcome_review(int(legacy_trade["id"]))
         self.connection.commit()
+
+    def create_execution_audit(self, order, fingerprint, status, message=""):
+        now = datetime.now().astimezone()
+        result = self.cursor.execute(
+            """INSERT INTO execution_audit
+            (created_at,trading_date,fingerprint,broker,exchange,symbol_token,trading_symbol,side,quantity,limit_price,status,message)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (now.isoformat(timespec="seconds"), now.date().isoformat(), fingerprint, "angel_one",
+             order["exchange"], str(order["symbol_token"]), order["trading_symbol"], order["side"],
+             int(order["quantity"]), float(order["limit_price"]), status, message),
+        )
+        self.connection.commit()
+        return int(result.lastrowid)
+
+    def update_execution_audit(self, audit_id, status, broker_order_id="", message=""):
+        self.cursor.execute(
+            "UPDATE execution_audit SET status=?, broker_order_id=?, message=? WHERE id=?",
+            (status, broker_order_id, message, int(audit_id)),
+        )
+        self.connection.commit()
+
+    def get_execution_audit(self, audit_id):
+        return self.cursor.execute("SELECT * FROM execution_audit WHERE id=?", (int(audit_id),)).fetchone()
+
+    def count_execution_orders(self, trading_date):
+        row = self.cursor.execute(
+            "SELECT COUNT(*) n FROM execution_audit WHERE trading_date=? AND status NOT IN ('BLOCKED','REJECTED')",
+            (trading_date,),
+        ).fetchone()
+        return int(row["n"])
+
+    def execution_loss_today(self, trading_date):
+        row = self.cursor.execute(
+            "SELECT COALESCE(SUM(CASE WHEN realized_pnl < 0 THEN -realized_pnl ELSE 0 END),0) n FROM execution_audit WHERE trading_date=?",
+            (trading_date,),
+        ).fetchone()
+        return float(row["n"])
+
+    def has_recent_execution_fingerprint(self, fingerprint, seconds):
+        cutoff = (datetime.now().astimezone() - timedelta(seconds=int(seconds))).isoformat(timespec="seconds")
+        row = self.cursor.execute(
+            "SELECT 1 FROM execution_audit WHERE fingerprint=? AND created_at>=? AND status NOT IN ('BLOCKED','REJECTED') LIMIT 1",
+            (fingerprint, cutoff),
+        ).fetchone()
+        return bool(row)
 
     def _backfill_attempt_evidence_states(self) -> int:
         """Recover structured evidence already present in legacy payloads.

@@ -1,7 +1,8 @@
-"""Read-only Angel One SmartAPI session helper.
+"""Angel One SmartAPI session helper.
 
 Credentials are supplied in memory by the UI and are never persisted here.
-Order placement is intentionally out of scope.
+Market-data methods are read-only.  Order methods are deliberately small and
+are called only by the separately armed safeguarded execution service.
 """
 
 from __future__ import annotations
@@ -204,3 +205,46 @@ class AngelOneClient:
         if not response.get("status"):
             raise RuntimeError(response.get("message", "Angel One PCR data is unavailable."))
         return response.get("data") or []
+
+    def place_limit_order(self, order: dict) -> dict:
+        """Submit one validated LIMIT order; never infer that acceptance means fill."""
+        if not self.session:
+            raise RuntimeError("Connect Angel One before submitting an order.")
+        payload = {
+            "variety": "NORMAL", "tradingsymbol": str(order["trading_symbol"]),
+            "symboltoken": str(order["symbol_token"]), "transactiontype": str(order["side"]).upper(),
+            "exchange": str(order["exchange"]).upper(), "ordertype": "LIMIT",
+            "producttype": str(order.get("product_type", "INTRADAY")).upper(),
+            "duration": "DAY", "price": str(order["limit_price"]),
+            "squareoff": "0", "stoploss": "0", "quantity": str(order["quantity"]),
+        }
+        self._suppress_sensitive_smartapi_logs()
+        try:
+            if hasattr(self.session, "placeOrderFullResponse"):
+                response = self.session.placeOrderFullResponse(payload)
+            else:
+                order_id = self.session.placeOrder(payload)
+                response = {"status": bool(order_id), "data": {"orderid": order_id}}
+        except Exception as error:
+            raise RuntimeError("Angel One rejected or could not accept the order request.") from error
+        if not response or not response.get("status"):
+            raise RuntimeError(str((response or {}).get("message", "Angel One order submission failed.")))
+        data = response.get("data") or {}
+        return {"order_id": str(data.get("orderid") or data.get("orderId") or ""),
+                "unique_order_id": str(data.get("uniqueorderid") or ""), "raw": response}
+
+    def get_order_book(self) -> list[dict]:
+        if not self.session:
+            raise RuntimeError("Connect Angel One before checking order status.")
+        response = self.session.orderBook()
+        if not response or not response.get("status"):
+            raise RuntimeError(str((response or {}).get("message", "Order book unavailable.")))
+        return response.get("data") or []
+
+    def cancel_order(self, order_id: str, variety: str = "NORMAL") -> dict:
+        if not self.session:
+            raise RuntimeError("Connect Angel One before cancelling an order.")
+        response = self.session.cancelOrder(str(order_id), str(variety))
+        if isinstance(response, dict) and not response.get("status", True):
+            raise RuntimeError(str(response.get("message", "Order cancellation failed.")))
+        return response if isinstance(response, dict) else {"status": True, "data": response}

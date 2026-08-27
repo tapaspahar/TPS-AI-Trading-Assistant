@@ -74,6 +74,14 @@ DEFAULT_SETTINGS = {
     "strategy_daily_target_profit": 0.0,
     "strategy_daily_max_loss": 0.0,
     "strategy_daily_limit_state": {},
+    # Real broker execution remains off by default. Arming is session-only and
+    # is intentionally never persisted across an application restart.
+    "real_execution_enabled": False,
+    "execution_max_orders_per_day": 3,
+    "execution_max_quantity": 65,
+    "execution_max_order_value": 25000.0,
+    "execution_max_daily_loss": 1000.0,
+    "execution_duplicate_window_seconds": 120,
     "notifications_enabled": True,
     "notification_sound": True,
     "notification_preferences": {
@@ -162,6 +170,12 @@ class SettingsStore:
             "risk_percent": float(settings["risk_percent"]),
             "daily_loss_percent": float(settings["daily_loss_percent"]),
             "max_trades_per_day": int(settings["max_trades_per_day"]),
+            "real_execution_enabled": bool(settings.get("real_execution_enabled", current["real_execution_enabled"])),
+            "execution_max_orders_per_day": int(settings.get("execution_max_orders_per_day", current["execution_max_orders_per_day"])),
+            "execution_max_quantity": int(settings.get("execution_max_quantity", current["execution_max_quantity"])),
+            "execution_max_order_value": float(settings.get("execution_max_order_value", current["execution_max_order_value"])),
+            "execution_max_daily_loss": float(settings.get("execution_max_daily_loss", current["execution_max_daily_loss"])),
+            "execution_duplicate_window_seconds": int(settings.get("execution_duplicate_window_seconds", current["execution_duplicate_window_seconds"])),
             "market_pre_open_time": str(settings.get("market_pre_open_time", current["market_pre_open_time"])).strip(),
             "market_open_time": str(settings.get("market_open_time", current["market_open_time"])).strip(),
             "market_close_time": str(settings.get("market_close_time", current["market_close_time"])).strip(),
@@ -268,6 +282,14 @@ class SettingsStore:
             raise ValueError("Choose a valid broker provider.")
         if values["active_option_strategy_plan"] is not None and not isinstance(values["active_option_strategy_plan"], dict):
             raise ValueError("Active option strategy plan must be a saved plan or empty.")
+        if not 1 <= values["execution_max_orders_per_day"] <= 20:
+            raise ValueError("Real execution order cap must be between 1 and 20 per day.")
+        if not 1 <= values["execution_max_quantity"] <= 10000:
+            raise ValueError("Real execution quantity cap must be between 1 and 10,000.")
+        if values["execution_max_order_value"] <= 0 or values["execution_max_daily_loss"] < 0:
+            raise ValueError("Execution value cap must be positive and loss lock cannot be negative.")
+        if not 30 <= values["execution_duplicate_window_seconds"] <= 3600:
+            raise ValueError("Duplicate-order window must be between 30 and 3,600 seconds.")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         if self.path.exists() and self._read_file(self.path):
             shutil.copy2(self.path, self.backup_path)
