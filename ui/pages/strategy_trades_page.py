@@ -48,6 +48,7 @@ class StrategyTradesPage(QWidget):
     """Automatic, multi-leg defined-risk paper validation ledger."""
 
     strategy_event = Signal(dict)
+    execution_requested = Signal(dict)
 
     def __init__(self):
         super().__init__()
@@ -131,6 +132,10 @@ class StrategyTradesPage(QWidget):
         layout.addWidget(self.ledger)
         self.details = QLabel("Captured trade select karke every leg, saved score, payoff zone aur outcome explanation dekhiye.")
         self.details.setWordWrap(True); self.details.setMinimumHeight(110); layout.addWidget(self.details)
+        self.prepare_execution = QPushButton("Prepare Selected Strategy in Broker Execution")
+        self.prepare_execution.clicked.connect(self._prepare_selected_execution)
+        self.prepare_execution.setEnabled(False)
+        layout.addWidget(self.prepare_execution)
         review_title = QLabel("Market-close strategy analysis — date-wise permanent learning record")
         review_title.setObjectName("sectionTitle"); layout.addWidget(review_title)
         self.reviews = QTableWidget(0, 9)
@@ -376,3 +381,14 @@ class StrategyTradesPage(QWidget):
         record = next((x for x in self.db.get_strategy_trades(limit=5000) if int(x["id"]) == int(trade_id)), None)
         if not record: return
         self.details.setText(self._strategy_detail_text(record))
+        self.prepare_execution.setEnabled(str(record["status"] or "").upper() == "OPEN")
+
+    def _prepare_selected_execution(self):
+        row = self.ledger.currentRow()
+        if row < 0 or not self.ledger.item(row, 0):
+            return
+        trade_id = self.ledger.item(row, 0).data(256)
+        record = next((dict(x) for x in self.db.get_strategy_trades(limit=5000) if int(x["id"]) == int(trade_id)), None)
+        if not record or str(record.get("status") or "").upper() != "OPEN":
+            return
+        self.execution_requested.emit({"kind": "STRATEGY", "record": record})

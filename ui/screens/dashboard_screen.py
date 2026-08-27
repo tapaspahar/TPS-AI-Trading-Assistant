@@ -171,6 +171,8 @@ class DashboardScreen(QWidget):
         self.optionsPage.auto_paper_status.connect(self.notify_auto_attempt)
         self.optionStrategiesPage.loaded.connect(self.strategyTradesPage.ingest_analysis)
         self.strategyTradesPage.strategy_event.connect(self.notify_strategy_trade)
+        self.strategyTradesPage.execution_requested.connect(self.prepare_execution_candidate)
+        self.autoOpportunityPage.execution_requested.connect(self.prepare_execution_candidate)
         self.liveMarketPage.guard_alert.connect(self.notify_market_guard)
         self.liveMarketPage.structure_received.connect(self.notify_market_structure)
         self.liveMarketPage.level_alert.connect(self.notify_support_resistance)
@@ -440,7 +442,13 @@ class DashboardScreen(QWidget):
         elif requested_index == 35:
             self.expiryObservationPage.refresh_history()
             self.expiryObservationPage.scan()
+        elif requested_index == 36:
+            self.executionControlPage.refresh_mode()
         self.stack.setCurrentIndex(index)
+
+    def prepare_execution_candidate(self, payload):
+        self.executionControlPage.load_candidate(payload)
+        self.show_page(36)
 
     def start_default_nifty(self):
         self.liveMarketPage.select_symbol("NIFTY")

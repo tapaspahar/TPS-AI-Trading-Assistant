@@ -23,6 +23,7 @@ class AutoOpportunityPage(QWidget):
     results_ready = Signal(list)
     scan_failed = Signal(str)
     progress_ready = Signal(int, int, str)
+    execution_requested = Signal(dict)
 
     def __init__(self):
         super().__init__()
@@ -71,6 +72,10 @@ class AutoOpportunityPage(QWidget):
         detail_box = QGroupBox("Selected suggestion — evidence and exit conditions")
         detail_layout = QVBoxLayout(detail_box); self.detail = QLabel("Select a row to inspect every reason.")
         self.detail.setWordWrap(True); detail_layout.addWidget(self.detail); layout.addWidget(detail_box)
+        self.prepare_execution = QPushButton("Prepare Selected Suggestion in Broker Execution")
+        self.prepare_execution.clicked.connect(self._prepare_selected_execution)
+        self.prepare_execution.setEnabled(False)
+        detail_layout.addWidget(self.prepare_execution)
         layout.addStretch()
 
         self.results_ready.connect(self.show_results); self.scan_failed.connect(self.show_error)
@@ -152,12 +157,16 @@ class AutoOpportunityPage(QWidget):
             for column, value in enumerate(values):
                 item = QTableWidgetItem(str(value)); item.setData(256, dict(row)); self.table.setItem(index, column, item)
         self.table.horizontalHeader().setStretchLastSection(True)
+        from core.settings_store import SettingsStore
+        mode = str(SettingsStore().load().get("execution_mode", "PAPER")).upper()
+        self.cards["mode"].set_value(f"{mode} REVIEW\nSafeguards required")
 
     def show_selected(self):
         row = self.table.currentRow()
         if row < 0 or not self.table.item(row, 0):
             return
         record = self.table.item(row, 0).data(256); details = json.loads(record.get("details_json") or "{}")
+        self.prepare_execution.setEnabled(str(record.get("action") or "").upper() not in ("WAIT", "ERROR", ""))
         evidence = "\n• ".join(details.get("evidence") or ["No confirming evidence published."])
         blockers = "\n• ".join(details.get("blockers") or ["None — research candidate gates passed."])
         self.detail.setText(
@@ -167,6 +176,16 @@ class AutoOpportunityPage(QWidget):
             f"Exit logic: {record['exit_rule']}\n\nEvidence:\n• {evidence}\n\nBlockers / caution:\n• {blockers}\n\n"
             "Suggestion completed-candle research hai; live spread/slippage aur unexpected news ko manually verify karna zaroori hai."
         )
+
+    def _prepare_selected_execution(self):
+        row = self.table.currentRow()
+        if row < 0 or not self.table.item(row, 0):
+            return
+        record = dict(self.table.item(row, 0).data(256) or {})
+        action = str(record.get("action") or "").upper()
+        if action in ("WAIT", "ERROR", ""):
+            return
+        self.execution_requested.emit({"kind": "OPPORTUNITY", "record": record})
 
     def show_error(self, message):
         self.scanning = False; self.run.setEnabled(True)

@@ -14,7 +14,8 @@ def _quote(rows, strike, kind):
 def _leg(action, row, lots=1):
     price = float(row.get("ask") or row.get("ltp") or 0) if action == "BUY" else float(row.get("bid") or row.get("ltp") or 0)
     return {"action": action, "option_type": row["option_type"], "strike": float(row["strike"]),
-            "symbol": row.get("symbol", ""), "price": round(price, 2), "lots": int(lots),
+            "symbol": row.get("symbol", ""), "token": str(row.get("token") or ""),
+            "exchange": row.get("exchange", ""), "price": round(price, 2), "lots": int(lots),
             "lot_size": int(row.get("lot_size") or 1), "quantity": int(row.get("lot_size") or 1) * int(lots)}
 
 

@@ -26,6 +26,8 @@ def option_opportunity(result: dict, settings: dict) -> dict:
         "target_2": round(entry + risk * max(2.0, rr + 0.5), 2),
         "quantity": int(quote.get("lot_size") or 0) or None, "rr_ratio": round(rr, 2),
         "blockers": [], "evidence": _evidence(result),
+        "execution": {"exchange": quote.get("exchange"), "symbol_token": quote.get("token"),
+                      "trading_symbol": quote.get("symbol")},
         "exit_rule": f"Exit at stop/targets, opposite Powerful Engine signal, or {int(settings.get('time_exit_minutes_before_close', 10))} minutes before close.",
     }
 
@@ -45,6 +47,9 @@ def stock_option_opportunity(result: dict) -> dict:
         "target_2": round(float(plan["entry"]) + 2 * (float(plan["entry"]) - float(plan["stoploss"])), 2),
         "quantity": int(plan.get("quantity") or 0) or None, "rr_ratio": float(plan.get("rr_ratio") or 0),
         "blockers": [], "evidence": list(plan.get("reasons") or []),
+        "execution": {"exchange": (plan.get("contract") or {}).get("exchange"),
+                      "symbol_token": (plan.get("contract") or {}).get("token"),
+                      "trading_symbol": (plan.get("contract") or {}).get("symbol")},
         "exit_rule": "Exit at premium stop/targets, opposite underlying structure, liquidity failure, or time exit.",
     }
 
@@ -60,6 +65,8 @@ def equity_opportunity(equity: dict, result: dict, candle_time=None) -> dict:
         "target_1": float(result["target_1"]) if ready else None,
         "target_2": float(result["target_2"]) if ready else None,
         "quantity": None,
+        "execution": {"exchange": equity.get("exchange"), "symbol_token": equity.get("token"),
+                      "trading_symbol": equity.get("symbol")},
         "rr_ratio": round((float(result["target_1"]) - float(result["entry"])) / max(float(result["entry"]) - float(result["stop_loss"]), .01), 2) if ready else None,
         "blockers": [] if ready else [result.get("plan_note", "Long setup not ready")],
         "evidence": [item for item in (

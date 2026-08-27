@@ -1,4 +1,5 @@
 """Explicit, session-locked broker execution console."""
+import json
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
     QMessageBox, QPushButton, QScrollArea, QSpinBox, QDoubleSpinBox, QVBoxLayout, QWidget,
@@ -74,6 +75,11 @@ class ExecutionControlPage(QWidget):
 
         order_box = QGroupBox("3. Stage one Paper or Real LIMIT order")
         form = QFormLayout(order_box)
+        self.candidate_source = QLabel("No candidate transferred. Fields may be entered directly.")
+        self.candidate_source.setWordWrap(True)
+        self.leg_selector = QComboBox()
+        self.leg_selector.currentIndexChanged.connect(self._load_selected_leg)
+        self._candidate_legs = []
         self.exchange = QComboBox(); self.exchange.addItems(("NFO", "BFO", "NSE", "BSE"))
         self.token = QLineEdit(); self.symbol = QLineEdit()
         self.side = QComboBox(); self.side.addItems(("BUY", "SELL"))
@@ -92,6 +98,8 @@ class ExecutionControlPage(QWidget):
         self.plan_preview = QLabel("Enter an entry price, then calculate exact target and stop levels."); self.plan_preview.setWordWrap(True)
         calculate = QPushButton("Calculate Entry / Target / Stop / Exit Plan"); calculate.clicked.connect(self.calculate_plan)
         self.final_order_ack = QCheckBox("I have reviewed entry, target, stop, quantity and REAL order details")
+        form.addRow("Transferred candidate", self.candidate_source)
+        form.addRow("Strategy leg", self.leg_selector)
         for label, widget in (("Exchange", self.exchange), ("Symbol token", self.token), ("Trading symbol", self.symbol),
                               ("Side", self.side), ("Quantity", self.quantity), ("Limit price", self.price),
                               ("Product", self.product), ("Target type", self.target_basis), ("Target value", self.target_value),
@@ -157,6 +165,89 @@ class ExecutionControlPage(QWidget):
     def _refresh_mode_label(self):
         mode = str(self.store.load().get("execution_mode", "PAPER")).upper()
         self.submit_button.setText("Save Paper Order Plan (no broker order)" if mode == "PAPER" else "Review & Submit Real LIMIT Order")
+
+    def refresh_mode(self):
+        self._refresh_mode_label()
+
+    def load_candidate(self, payload: dict):
+        """Transfer a research candidate into review without bypassing execution safeguards."""
+        kind = str(payload.get("kind") or "").upper()
+        record = dict(payload.get("record") or {})
+        legs = []
+        if kind == "STRATEGY":
+            try:
+                raw_legs = json.loads(record.get("legs_json") or "[]")
+            except (TypeError, ValueError, json.JSONDecodeError):
+                raw_legs = []
+            underlying = str(record.get("symbol") or "").upper()
+            for index, leg in enumerate(raw_legs, 1):
+                legs.append(self._normalise_leg(leg, underlying, f"Leg {index}"))
+            title = record.get("friendly_name") or record.get("strategy_name") or "Defined-risk strategy"
+            self.candidate_source.setText(
+                f"Strategy: {title}. {len(legs)} legs transferred. Each leg must be reviewed and submitted separately; "
+                "this is not atomic basket execution, so partial-fill and margin risk remain."
+            )
+        else:
+            try:
+                details = json.loads(record.get("details_json") or "{}")
+            except (TypeError, ValueError, json.JSONDecodeError):
+                details = {}
+            action = str(record.get("action") or "BUY").upper()
+            legs = [self._normalise_leg({
+                "action": "SELL" if action.startswith("SELL") else "BUY",
+                "contract": record.get("instrument") or record.get("symbol"),
+                "price": record.get("entry"), "quantity": record.get("quantity") or 1,
+                "token": details.get("symbol_token") or details.get("token"),
+                "exchange": details.get("exchange"),
+                "target": record.get("target_1"), "stop": record.get("stop"),
+            }, str(record.get("symbol") or ""), "Opportunity")]
+            self.candidate_source.setText(
+                f"Opportunity Radar: {record.get('action')} {record.get('instrument') or record.get('symbol')}. "
+                "Transferred for safeguarded review; no order has been sent."
+            )
+        self._candidate_legs = legs
+        missing_tokens = sum(not leg["token"] for leg in legs)
+        if missing_tokens:
+            self.candidate_source.setText(
+                self.candidate_source.text()
+                + f" {missing_tokens} leg(s) ka broker token unresolved hai; REAL submit token milne tak blocked rahega."
+            )
+        self.leg_selector.blockSignals(True); self.leg_selector.clear()
+        for leg in legs:
+            self.leg_selector.addItem(f"{leg['label']} — {leg['side']} {leg['symbol']}")
+        self.leg_selector.blockSignals(False)
+        if legs:
+            self.leg_selector.setCurrentIndex(0); self._load_selected_leg(0)
+        self.final_order_ack.setChecked(False)
+        self._refresh_mode_label()
+
+    @staticmethod
+    def _normalise_leg(leg, underlying, label):
+        symbol = str(leg.get("trading_symbol") or leg.get("tradingsymbol") or leg.get("contract") or leg.get("symbol") or "").upper()
+        exchange = str(leg.get("exchange") or ("BFO" if underlying == "SENSEX" else "NFO" if not symbol.endswith("-EQ") else "NSE")).upper()
+        return {
+            "label": label, "exchange": exchange,
+            "token": str(leg.get("symbol_token") or leg.get("symboltoken") or leg.get("token") or ""),
+            "symbol": symbol, "side": str(leg.get("action") or leg.get("side") or "BUY").upper(),
+            "quantity": max(1, int(float(leg.get("quantity") or 1))),
+            "price": float(leg.get("price") or leg.get("entry") or 0),
+            "target": float(leg.get("target") or 0), "stop": float(leg.get("stop") or 0),
+        }
+
+    def _load_selected_leg(self, index):
+        if index < 0 or index >= len(self._candidate_legs):
+            return
+        leg = self._candidate_legs[index]
+        self.exchange.setCurrentIndex(max(0, self.exchange.findText(leg["exchange"])))
+        self.token.setText(leg["token"]); self.symbol.setText(leg["symbol"])
+        self.side.setCurrentIndex(max(0, self.side.findText(leg["side"])))
+        self.quantity.setValue(leg["quantity"])
+        if leg["price"] > 0: self.price.setValue(leg["price"])
+        if leg["target"] > 0:
+            self.target_basis.setCurrentIndex(self.target_basis.findData("PRICE")); self.target_value.setValue(leg["target"])
+        if leg["stop"] > 0:
+            self.stop_basis.setCurrentIndex(self.stop_basis.findData("PRICE")); self.stop_value.setValue(leg["stop"])
+        self.calculate_plan()
 
     def calculate_plan(self):
         try:

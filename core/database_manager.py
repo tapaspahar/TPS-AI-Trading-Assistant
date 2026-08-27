@@ -1159,6 +1159,7 @@ class Database:
         for item in opportunities:
             candle_time = str(item.get("candle_time") or item.get("scanned_at") or "")
             details = {"evidence": item.get("evidence") or [], "blockers": item.get("blockers") or []}
+            details.update({key: value for key, value in (item.get("execution") or {}).items() if value not in (None, "")})
             result = self.cursor.execute(
                 """
                 INSERT INTO auto_opportunities (

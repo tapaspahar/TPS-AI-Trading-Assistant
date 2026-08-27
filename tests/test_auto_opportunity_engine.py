@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+import json
 from pathlib import Path
 
 from core.database_manager import Database
@@ -15,7 +16,8 @@ class AutoOpportunityEngineTests(unittest.TestCase):
                 "symbol": "NIFTY",
                 "candle_time": "2026-08-12T10:00:00+05:30",
                 "dominant_strength": 84,
-                "option_quote": {"symbol": "NIFTY12AUG2624500PE", "ask": 100, "lot_size": 65},
+                "option_quote": {"symbol": "NIFTY12AUG2624500PE", "ask": 100, "lot_size": 65,
+                                 "exchange": "NFO", "token": "12345"},
                 "evidence": [{"layer": "Trend", "detail": "Bearish alignment", "available": True}],
             },
             {"minimum_rr_ratio": 1.5, "time_exit_minutes_before_close": 10},
@@ -26,6 +28,7 @@ class AutoOpportunityEngineTests(unittest.TestCase):
         self.assertEqual(result["target_1"], 130)
         self.assertEqual(result["target_2"], 140)
         self.assertEqual(result["quantity"], 65)
+        self.assertEqual(result["execution"]["symbol_token"], "12345")
 
     def test_unpublished_index_signal_remains_wait(self):
         result = option_opportunity(
@@ -50,18 +53,21 @@ class AutoOpportunityEngineTests(unittest.TestCase):
     def test_database_upserts_same_candle_and_keeps_details(self):
         with tempfile.TemporaryDirectory() as directory:
             database = Database(Path(directory) / "opportunities.db")
-            row = option_opportunity(
-                {"published": False, "symbol": "NIFTY", "candle_time": "2026-08-12T10:00:00+05:30",
-                 "blockers": ["No confirmation"]},
-                {},
-            )
+            row = option_opportunity({
+                "published": True, "candidate": "CE", "symbol": "NIFTY", "dominant_strength": 80,
+                "candle_time": "2026-08-12T10:00:00+05:30", "blockers": [],
+                "option_quote": {"symbol": "NIFTYCE", "ask": 100, "lot_size": 65,
+                                 "exchange": "NFO", "token": "987"},
+            }, {})
             database.save_auto_opportunities([row])
             row["score"] = 60
             database.save_auto_opportunities([row])
             saved = database.get_auto_opportunities()
             self.assertEqual(len(saved), 1)
             self.assertEqual(saved[0]["score"], 60)
-            self.assertIn("No confirmation", saved[0]["details_json"])
+            details = json.loads(saved[0]["details_json"])
+            self.assertEqual(details["symbol_token"], "987")
+            self.assertEqual(details["exchange"], "NFO")
             database.close()
 
 

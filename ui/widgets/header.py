@@ -4,6 +4,7 @@ from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
 from core.market_session import IST, format_remaining, market_session
+from core.settings_store import SettingsStore
 
 
 class Header(QFrame):
@@ -74,3 +75,5 @@ class Header(QFrame):
         remaining = format_remaining(session["deadline"] - now)
         self.clock.setText(now.strftime("%d-%m-%Y   %H:%M:%S IST"))
         self.market.setText(f"Market Status: {session['label']} in {remaining}")
+        mode = str(SettingsStore().load().get("execution_mode", "PAPER")).upper()
+        self.ai.setText(f"AI: Ready • {'REAL TRADE' if mode == 'REAL' else 'PAPER TRADE'}")

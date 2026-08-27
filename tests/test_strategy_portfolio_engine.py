@@ -13,6 +13,7 @@ class StrategyPortfolioEngineTests(unittest.TestCase):
                 intrinsic = max(0, 100 - strike) if kind == "CE" else max(0, strike - 100)
                 ltp = intrinsic + max(2, 8 - abs(strike - 100) * .6)
                 rows.append({"strike": strike, "option_type": kind, "symbol": f"X{strike}{kind}",
+                             "token": f"T{strike}{kind}", "exchange": "NFO",
                              "ltp": ltp, "bid": ltp - .1, "ask": ltp + .1,
                              "volume": 1000, "lot_size": 10})
         return {"symbol": "NIFTY", "spot": 100, "bias": "BULLISH",
@@ -29,6 +30,8 @@ class StrategyPortfolioEngineTests(unittest.TestCase):
         self.assertTrue(all("return_on_capital" in item for item in catalog))
         self.assertTrue(all("market_alignment" in item for item in catalog))
         self.assertGreater(len({item["structure_key"] for item in catalog}), 10)
+        self.assertTrue(all(leg["token"] and leg["exchange"] == "NFO"
+                            for item in catalog for leg in item["legs"]))
 
     def test_multiple_strike_combinations_are_compared(self):
         catalog = build_strategy_catalog(self._result(), {"capital": 100000, "risk_percent": 10})
