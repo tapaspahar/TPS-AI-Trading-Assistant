@@ -96,8 +96,8 @@ class StrategyTradesPage(QWidget):
 
         performance_title = QLabel("Strategy ranking — actual closed paper win rate (top rank first)")
         performance_title.setObjectName("sectionTitle"); layout.addWidget(performance_title)
-        self.performance = QTableWidget(0, 9)
-        self.performance.setHorizontalHeaderLabels(("Rank", "Cutie name / structure", "Closed trades", "Wins", "Win rate", "Average P&L", "Total P&L", "Avg capture ROC", "Observed regimes"))
+        self.performance = QTableWidget(0, 12)
+        self.performance.setHorizontalHeaderLabels(("Rank", "Cutie name / structure", "Validation", "Closed trades", "Wins", "Win rate", "95% lower bound", "Expectancy", "Profit factor", "Total P&L", "Avg capture ROC", "Observed regimes"))
         self.performance.setEditTriggers(QTableWidget.NoEditTriggers); self.performance.setMinimumHeight(220)
         layout.addWidget(self.performance)
 
@@ -317,10 +317,10 @@ class StrategyTradesPage(QWidget):
         self.performance.setRowCount(len(performance))
         for row, item in enumerate(performance):
             samples = int(item["samples"] or 0); wins = int(item["wins"] or 0)
-            values = (row + 1, f"{item['friendly_name']} / {item['strategy_name']}", samples, wins,
-                      f"{float(item['win_rate'] or 0):.1f}%",
-                      f"₹{float(item['average_pnl'] or 0):,.2f}", f"₹{float(item['total_pnl'] or 0):,.2f}",
-                      f"{float(item['average_model_roc'] or 0):.1f}%", item["market_regimes"] or "UNKNOWN")
+            values = (row + 1, f"{item['friendly_name']} / {item['strategy_name']}", item["validation_tier"], samples, wins,
+                      f"{float(item['win_rate'] or 0):.1f}%", f"{float(item['wilson_lower_bound'] or 0):.1f}%",
+                      f"₹{float(item['average_pnl'] or 0):,.2f}", f"{float(item['profit_factor'] or 0):.2f}",
+                      f"₹{float(item['total_pnl'] or 0):,.2f}", f"{float(item['average_model_roc'] or 0):.1f}%", item["market_regimes"] or "UNKNOWN")
             for column, value in enumerate(values): self.performance.setItem(row, column, QTableWidgetItem(str(value)))
         self.performance.resizeColumnsToContents(); self.performance.horizontalHeader().setStretchLastSection(True)
         closed_rows = [item for item in rows if str(item["status"]).upper() == "CLOSED"]
@@ -355,11 +355,14 @@ class StrategyTradesPage(QWidget):
         target = float(guard_settings.get("strategy_daily_target_profit") or 0)
         max_loss = float(guard_settings.get("strategy_daily_max_loss") or 0)
         guard_label = str(guard_state.get("status") or "ACTIVE") if guard_state.get("date") == today else "ACTIVE"
+        measured_rate = (100.0 * wins / closed) if closed else 0.0
+        validated = sum(item.get("validation_tier") == "VALIDATED LOW-RISK" for item in performance)
         self.summary.setText(
             (self.session_message + "\n" if self.session_message else "") +
             f"Live analysed: {len(self.latest_catalog)}/30 | "
             f"Paper strategies: {total} | Open: {int(summary.get('open_count') or 0)} | Closed: {closed} | "
-            f"Positive model outcomes: {wins}/{closed if closed else 0} | Realized model P&L: ₹{float(summary.get('pnl') or 0):,.2f}. "
+            f"Measured wins: {wins}/{closed if closed else 0} ({measured_rate:.1f}%) | Net paper P&L: ₹{float(summary.get('pnl') or 0):,.2f} | "
+            f"Validated low-risk strategies: {validated}. 70% target requires at least 30 closed outcomes, positive expectancy, profit factor 1.20+ and a conservative confidence check. "
             "Ranking sirf closed paper outcomes ke win rate par hai (tie me zyada samples, phir total P&L). "
             f"Individual closed reports: {len(closed_rows)} | "
             f"Today's combined strategy P&L: ₹{float(daily.get('combined_pnl') or 0):,.2f} | "

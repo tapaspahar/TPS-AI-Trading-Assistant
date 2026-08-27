@@ -96,6 +96,7 @@ class OptionStrategiesAutoModeTests(unittest.TestCase):
             "symbol": "NIFTY", "state": "REVIEW CANDIDATE", "strategy": "Bull Call Debit Spread",
             "bias": "BULLISH", "expiry": "2026-08-27", "max_loss": 1000,
             "management_reference": {"target_profit": 500},
+            "observed_validation": {"validation_tier": "VALIDATED LOW-RISK"},
             "legs": [
                 {"action": "BUY", "option_type": "CE", "strike": 24500},
                 {"action": "SELL", "option_type": "CE", "strike": 24600},

@@ -11,6 +11,7 @@ from services.live_session import LiveSession
 from services.option_strategy_service import OptionStrategyService
 from engine.strategy_adjustment_engine import monitor_strategy_plan
 from core.settings_store import SettingsStore
+from core.database_manager import Database
 from core.assistant_voice import cutie_says
 from core.market_session import IST, market_session
 from services.notification_service import NotificationService
@@ -101,6 +102,7 @@ class OptionStrategiesPage(QWidget):
         self._last_auto_bucket = None
         self._last_suggestion_signature = None
         self.settings_store = SettingsStore()
+        self.db = Database()
         saved_settings = self.settings_store.load()
         self.active_plan = saved_settings.get("active_option_strategy_plan") or None
         self.daily_target.setValue(float(saved_settings.get("strategy_daily_target_profit") or 0))
@@ -261,6 +263,15 @@ class OptionStrategiesPage(QWidget):
         # permanently stuck in the analyzing state.
         self.running = False; self.run.setEnabled(True)
         self.last_result = result
+        performance = next(
+            (item for item in self.db.get_strategy_performance()
+             if str(item.get("strategy_name") or "").upper() == str(result.get("strategy") or "").upper()),
+            None,
+        )
+        result["observed_validation"] = performance or {
+            "validation_tier": "UNPROVEN", "samples": 0, "win_rate": 0,
+            "expectancy": 0, "validation_reason": "No matching closed paper outcomes yet",
+        }
         self.cards["strategy"].set_value(f"{result['state']}\n{result['strategy']}")
         self.cards["bias"].set_value(f"{result['bias']}\nConfidence {result.get('confidence', 0)}%")
         environment = result.get("environment") or {}
@@ -290,8 +301,10 @@ class OptionStrategiesPage(QWidget):
         self.cards["fibonacci"].set_value(
             f"{fib.get('state', 'DATA GAP')}\n{fib.get('nearest_ratio', '-')}% @ {fib.get('nearest_level', '-')}"
         )
+        validation = result["observed_validation"]
         self.cards["evidence"].set_value(
-            f"{result.get('strategy_score', 0)}/100\n{result.get('strategy_passed', 0)}/{result.get('strategy_total', 0)} checks"
+            f"{result.get('strategy_score', 0)}/100 | {result.get('strategy_passed', 0)}/{result.get('strategy_total', 0)} checks\n"
+            f"{validation['validation_tier']} — {validation['samples']} closed, {float(validation['win_rate']):.1f}% wins"
         )
         legs = result.get("legs") or []; self.table.setRowCount(len(legs))
         for row_index, leg in enumerate(legs):
@@ -325,6 +338,9 @@ class OptionStrategiesPage(QWidget):
             f"Completed candle: {result['candle_time']} | Expiry: {result['expiry']} | {result['quoted_contracts']} live contracts quoted\n"
             f"{payoff}{management_text}{greek_text}\nEvidence:\n- {reasons}"
             + (f"\nBlockers:\n- {blockers}" if blockers else "")
+            + f"\n\nObserved validation: {validation['validation_tier']} | {validation['samples']} closed | "
+              f"Win rate {float(validation['win_rate']):.1f}% | Expectancy Rs {float(validation['expectancy']):,.2f}. "
+              f"{validation['validation_reason']}. Model score is not a success guarantee."
             + f"\n\n{result['warning']}"
         )
         primary_blocker = (result.get("blockers") or [None])[0]
@@ -344,6 +360,9 @@ class OptionStrategiesPage(QWidget):
         if market_session(settings=self.settings_store.load())["state"] != "OPEN":
             return False
         if result.get("state") not in {"REVIEW CANDIDATE", "WATCH CANDIDATE"} or not result.get("legs"):
+            return False
+        validation = result.get("observed_validation") or {}
+        if validation.get("validation_tier") != "VALIDATED LOW-RISK":
             return False
         legs = tuple(
             (str(leg.get("action")), str(leg.get("option_type")), float(leg.get("strike") or 0))
@@ -372,6 +391,12 @@ class OptionStrategiesPage(QWidget):
             dedupe_key=identity,
             once_per_day=True,
         )
+
+    def closeEvent(self, event):
+        """Release the page-owned SQLite connection before the widget closes."""
+        self.timer.stop()
+        self.db.close()
+        super().closeEvent(event)
 
     def show_monitor_result(self, monitor):
         pnl = monitor.get("estimated_pnl")
