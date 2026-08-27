@@ -6,7 +6,7 @@ from datetime import datetime, time
 
 from PySide6.QtCore import QObject, QRunnable, QSettings, QThreadPool, QTimer, Signal
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QGridLayout, QGroupBox,
-                               QInputDialog, QLabel, QLineEdit, QMessageBox, QPushButton,
+                               QLabel, QLineEdit, QMessageBox, QPushButton,
                                QScrollArea, QSpinBox, QTableWidget, QTableWidgetItem,
                                QVBoxLayout, QWidget)
 
@@ -110,6 +110,8 @@ class ExpiryObservationPage(QWidget):
         self.pair_time = QLineEdit(self.settings.value("expiry_pair/time_exit", "15:25")); self.pair_time.setPlaceholderText("HH:MM")
         self.auto_pair = QCheckBox("Spike confirmed hone par auto pair capture/submit (sirf current session)")
         self.auto_pair.setChecked(False)
+        self.real_pair_money_ack = QCheckBox("I understand CE+PE REAL pair actual money use karega")
+        self.real_pair_session_ack = QCheckBox("Is app session ke liye REAL expiry pair activate karein")
         self.paper_pair = QPushButton("Capture PAPER CE+PE Pair"); self.paper_pair.clicked.connect(lambda: self._place_pair(False))
         self.arm_pair = QPushButton("Arm REAL Pair Session"); self.arm_pair.clicked.connect(self._arm_real_pair)
         self.real_pair = QPushButton("Place REAL CE+PE Pair"); self.real_pair.clicked.connect(lambda: self._place_pair(True))
@@ -119,10 +121,12 @@ class ExpiryObservationPage(QWidget):
         execution.addWidget(QLabel("Combined maximum loss"), 1, 0); execution.addWidget(self.pair_stop, 1, 1)
         execution.addWidget(QLabel("Time exit (HH:MM)"), 1, 2); execution.addWidget(self.pair_time, 1, 3)
         execution.addWidget(self.auto_pair, 2, 0, 1, 4)
-        execution.addWidget(self.paper_pair, 3, 0); execution.addWidget(self.arm_pair, 3, 1)
-        execution.addWidget(self.real_pair, 3, 2); execution.addWidget(self.stop_pair, 3, 3)
+        execution.addWidget(self.real_pair_money_ack, 3, 0, 1, 2)
+        execution.addWidget(self.real_pair_session_ack, 3, 2, 1, 2)
+        execution.addWidget(self.paper_pair, 4, 0); execution.addWidget(self.arm_pair, 4, 1)
+        execution.addWidget(self.real_pair, 4, 2); execution.addWidget(self.stop_pair, 4, 3)
         self.pair_status = QLabel("No open expiry pair. REAL authority har app restart par locked rahegi.")
-        self.pair_status.setWordWrap(True); execution.addWidget(self.pair_status, 4, 0, 1, 4)
+        self.pair_status.setWordWrap(True); execution.addWidget(self.pair_status, 5, 0, 1, 4)
         layout.addWidget(execution_box)
         for field in (self.pair_lots, self.pair_target, self.pair_stop, self.pair_time):
             if hasattr(field, "valueChanged"): field.valueChanged.connect(self._save_pair_preferences)
@@ -145,18 +149,25 @@ class ExpiryObservationPage(QWidget):
         self.settings.setValue("expiry_pair/time_exit", self.pair_time.text().strip())
 
     def _arm_real_pair(self):
-        execution_phrase, ok = QInputDialog.getText(self, "Arm real execution", "Type ENABLE REAL TRADING:")
-        if not ok: return
-        pair_phrase, ok = QInputDialog.getText(self, "Arm expiry pair", "Type ARM EXPIRY PAIR:")
-        if not ok: return
+        if not self.real_pair_money_ack.isChecked() or not self.real_pair_session_ack.isChecked():
+            QMessageBox.warning(self, "Real pair locked", "REAL expiry pair activate karne ke liye dono safety ticks select karein.")
+            return
+        answer = QMessageBox.question(
+            self, "Activate REAL expiry pair",
+            "Confirmed spike par CE aur PE ke do actual BUY orders submit ho sakte hain. Partial fill aur loss possible hai. Continue?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if answer != QMessageBox.Yes:
+            return
         try:
-            self.pair_execution.arm_real(execution_phrase, pair_phrase)
+            self.pair_execution.arm_real("ENABLE REAL TRADING", "ARM EXPIRY PAIR")
             self.pair_status.setText("REAL pair session ARMED. App close/restart par authority expire ho jayegi.")
         except Exception as error:
             QMessageBox.warning(self, "Real pair locked", str(error))
 
     def _emergency_stop(self):
         self.auto_pair.setChecked(False); self.pair_execution.emergency_stop()
+        self.real_pair_money_ack.setChecked(False); self.real_pair_session_ack.setChecked(False)
         self.pair_status.setText("Emergency stop active: new REAL pair submission locked. Existing broker positions manually verify karein.")
 
     def _candidate_pair(self, strike=None):

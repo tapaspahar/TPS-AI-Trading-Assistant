@@ -60,14 +60,16 @@ class ExecutionControlPage(QWidget):
 
         arm_box = QGroupBox("2. Unlock only for this app session")
         arm = QFormLayout(arm_box)
-        self.arm_phrase = QLineEdit(); self.arm_phrase.setPlaceholderText(ExecutionService.UNLOCK_PHRASE)
+        self.arm_money_ack = QCheckBox("I understand ki REAL mode actual broker order place kar sakta hai")
+        self.arm_session_ack = QCheckBox("Is app session ke liye REAL order execution activate karein")
         self.session_status = QLabel("LOCKED")
         arm_buttons = QHBoxLayout()
-        arm_btn = QPushButton("Arm Session"); arm_btn.clicked.connect(self.arm_session)
+        arm_btn = QPushButton("Activate REAL Session"); arm_btn.clicked.connect(self.arm_session)
         disarm_btn = QPushButton("Disarm"); disarm_btn.clicked.connect(self.disarm)
         kill_btn = QPushButton("EMERGENCY STOP"); kill_btn.clicked.connect(self.emergency_stop)
         arm_buttons.addWidget(arm_btn); arm_buttons.addWidget(disarm_btn); arm_buttons.addWidget(kill_btn)
-        arm.addRow("Type ENABLE REAL TRADING", self.arm_phrase); arm.addRow("Session state", self.session_status); arm.addRow(arm_buttons)
+        arm.addRow(self.arm_money_ack); arm.addRow(self.arm_session_ack)
+        arm.addRow("Session state", self.session_status); arm.addRow(arm_buttons)
         layout.addWidget(arm_box)
 
         order_box = QGroupBox("3. Stage one Paper or Real LIMIT order")
@@ -89,14 +91,14 @@ class ExecutionControlPage(QWidget):
         self.time_exit = QLineEdit(str(values.get("execution_time_exit", "15:20"))); self.time_exit.setPlaceholderText("HH:MM")
         self.plan_preview = QLabel("Enter an entry price, then calculate exact target and stop levels."); self.plan_preview.setWordWrap(True)
         calculate = QPushButton("Calculate Entry / Target / Stop / Exit Plan"); calculate.clicked.connect(self.calculate_plan)
-        self.final_phrase = QLineEdit(); self.final_phrase.setPlaceholderText("PLACE LIMIT ORDER")
+        self.final_order_ack = QCheckBox("I have reviewed entry, target, stop, quantity and REAL order details")
         for label, widget in (("Exchange", self.exchange), ("Symbol token", self.token), ("Trading symbol", self.symbol),
                               ("Side", self.side), ("Quantity", self.quantity), ("Limit price", self.price),
                               ("Product", self.product), ("Target type", self.target_basis), ("Target value", self.target_value),
                               ("Stop type", self.stop_basis), ("Stop value", self.stop_value), ("Time exit", self.time_exit)):
             form.addRow(label, widget)
         form.addRow(self.time_exit_enabled); form.addRow(calculate); form.addRow(self.plan_preview)
-        form.addRow("Real-order final phrase", self.final_phrase)
+        form.addRow(self.final_order_ack)
         self.submit_button = QPushButton(); self.submit_button.clicked.connect(self.submit)
         self._refresh_mode_label()
         refresh = QPushButton("Refresh Broker Order Status"); refresh.clicked.connect(self.refresh_status)
@@ -118,17 +120,31 @@ class ExecutionControlPage(QWidget):
         QMessageBox.information(self, "Safety settings", "Execution safety limits saved. Session remains LOCKED.")
 
     def arm_session(self):
+        if not self.arm_money_ack.isChecked() or not self.arm_session_ack.isChecked():
+            QMessageBox.warning(self, "Execution remains locked", "REAL session activate karne ke liye dono safety ticks select karein.")
+            return
+        answer = QMessageBox.question(
+            self, "Activate REAL execution",
+            "REAL execution is app session ke liye activate hogi aur actual broker orders place kar sakti hai. Continue?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if answer != QMessageBox.Yes:
+            return
         try:
-            self.service.arm(self.arm_phrase.text())
-            self.arm_phrase.clear(); self.session_status.setText("ARMED — this app session only")
+            self.service.arm(ExecutionService.UNLOCK_PHRASE)
+            self.session_status.setText("ARMED — this app session only")
         except Exception as error:
             QMessageBox.warning(self, "Execution remains locked", str(error))
 
     def disarm(self):
         self.service.disarm(); self.session_status.setText("LOCKED")
+        self.arm_money_ack.setChecked(False); self.arm_session_ack.setChecked(False)
+        self.final_order_ack.setChecked(False)
 
     def emergency_stop(self):
         self.service.emergency_stop(); self.session_status.setText("EMERGENCY STOP ACTIVE")
+        self.arm_money_ack.setChecked(False); self.arm_session_ack.setChecked(False)
+        self.final_order_ack.setChecked(False)
         QMessageBox.warning(self, "Emergency stop", "New submissions are blocked. Existing broker orders were not cancelled automatically; verify them in the broker order book.")
 
     def _order(self):
@@ -173,6 +189,9 @@ class ExecutionControlPage(QWidget):
             except Exception as error:
                 QMessageBox.warning(self, "Paper plan not saved", str(error))
             return
+        if not self.final_order_ack.isChecked():
+            QMessageBox.warning(self, "Final review required", "REAL order submit karne se pehle final order-review tick select karein.")
+            return
         review = (f"REAL LIMIT ORDER\n{order.side} {order.quantity} {order.trading_symbol} @ ₹{order.limit_price:.2f}\n"
                   f"Planned target ₹{order.target_price:.2f} | planned stop ₹{order.stop_price:.2f}"
                   + (f" | time exit {order.time_exit}" if order.time_exit else "")
@@ -180,10 +199,11 @@ class ExecutionControlPage(QWidget):
         if QMessageBox.question(self, "Final real-order review", review, QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
             return
         try:
-            result = self.service.submit(order, self.final_phrase.text())
+            result = self.service.submit(order, "PLACE LIMIT ORDER")
             self.last_audit_id = result["audit_id"]
             self.service.disarm(); self.session_status.setText("LOCKED — re-arm required")
-            self.final_phrase.clear()
+            self.final_order_ack.setChecked(False)
+            self.arm_money_ack.setChecked(False); self.arm_session_ack.setChecked(False)
             self.result.setText(f"Broker accepted order ID {result.get('order_id') or 'pending'}. Status: ACCEPTED_NOT_FILLED. Refresh status before assuming execution.")
         except Exception as error:
             self.result.setText(f"Order not submitted: {error}")
