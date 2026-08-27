@@ -236,6 +236,13 @@ PAGES = (
      "Select NIFTY, BANKNIFTY or SENSEX and load live comparison. Review expected move, actual range, utilization, VIX trend/percentile, ATR, realised volatility, direction/volume strength, option-chain levels and defined-risk strategy context. Expected move is not a target or guaranteed boundary.",
      "Index select karke live comparison load karein. Expected move, actual range, utilization, VIX trend/percentile, ATR, realised volatility, direction-volume strength, OI levels aur defined-risk strategy context dekhein. Expected move target ya guarantee nahi hai.",
      "इंडेक्स चुनकर लाइव तुलना लोड करें। Expected move, actual range, utilization, VIX trend/percentile, ATR, realised volatility, दिशा-वॉल्यूम शक्ति, OI स्तर और defined-risk strategy context देखें। Expected move लक्ष्य या गारंटी नहीं है।"),
+    (35, "Expiry After 3 PM Observation",
+     "Research-only expiry-day monitor for nearby ATM and ITM index options after 3:00 PM. It records premium acceleration together with spot, volume, OI, option context, sustain time and CAS context; it is not a Buy/Sell signal.",
+     "Expiry day par 3:00 PM ke baad nearby ATM/ITM index options ka research monitor. Premium acceleration ke saath spot, volume, OI, option context, sustain time aur CAS context save hota hai; yeh Buy/Sell signal nahi hai.",
+     "एक्सपायरी दिन पर दोपहर 3 बजे के बाद निकट ATM/ITM इंडेक्स ऑप्शन का रिसर्च मॉनिटर। प्रीमियम तेज़ी के साथ स्पॉट, वॉल्यूम, OI, ऑप्शन संदर्भ, टिकाव समय और CAS संदर्भ सुरक्षित होता है; यह Buy/Sell संकेत नहीं है।",
+     "Select the index and turn Today is Expiry ON only for the relevant expiry session. TPS verifies the actual nearest expiry and market window, polls every 30 seconds, and logs a Spike Event only when price acceleration has volume, OI-change or spot-breakout confirmation. Missing IV/Greeks remain clearly marked as a partial data source.",
+     "Index select karke sirf relevant expiry session me Today is Expiry ON karein. TPS actual nearest expiry aur market window verify karke har 30 second observe karta hai. Price acceleration ko volume, OI-change ya spot-breakout confirmation mile tabhi Spike Event save hota hai. Missing IV/Greeks partial data source ke roop me clear rahenge.",
+     "इंडेक्स चुनकर केवल संबंधित एक्सपायरी सत्र में Today is Expiry चालू करें। TPS वास्तविक निकटतम एक्सपायरी और बाजार समय जाँचकर हर 30 सेकंड अवलोकन करता है। मूल्य तेज़ी को वॉल्यूम, OI बदलाव या स्पॉट ब्रेकआउट पुष्टि मिलने पर ही Spike Event सुरक्षित होता है। उपलब्ध न होने वाले IV/Greeks को आंशिक डेटा के रूप में स्पष्ट दिखाया जाता है।"),
 )
 
 # Release 1.4 keeps these specialist tools but presents them as tabs inside

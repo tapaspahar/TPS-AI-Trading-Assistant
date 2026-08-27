@@ -43,9 +43,9 @@ class ReleaseNotesTests(unittest.TestCase):
             self.assertIn(note, html)
 
     def test_release_1_4_5_metadata_and_packaging_are_aligned(self):
-        self.assertEqual(VERSION, "1.4.8")
-        self.assertEqual(DISPLAY_VERSION, "Release 1.4.8")
-        self.assertEqual(RELEASE_DATE, "26-08-2026")
+        self.assertEqual(VERSION, "1.4.9")
+        self.assertEqual(DISPLAY_VERSION, "Release 1.4.9")
+        self.assertEqual(RELEASE_DATE, "27-08-2026")
         with open("packaging/installer.iss", encoding="utf-8") as file:
             installer = file.read()
         with open("packaging/windows_version_info.txt", encoding="utf-8") as file:

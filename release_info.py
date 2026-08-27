@@ -1,16 +1,19 @@
 """Application release metadata kept in one place."""
 
 APP_NAME = "TPS AI Trading Assistant"
-VERSION = "1.4.8"
-DISPLAY_VERSION = "Release 1.4.8"
-RELEASE_DATE = "26-08-2026"
+VERSION = "1.4.9"
+DISPLAY_VERSION = "Release 1.4.9"
+RELEASE_DATE = "27-08-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
-SOFTWARE_UPDATE_VERSION = "v1.4.8"
-LAST_UPDATED_AT = "26-08-2026 23:42:06 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.4.8 - 26-08-2026 23:42 IST"
+SOFTWARE_UPDATE_VERSION = "v1.4.9"
+LAST_UPDATED_AT = "27-08-2026 11:23:11 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.4.9 - 27-08-2026 11:23 IST"
 RELEASE_NOTES = (
+    "Added Expiry After 3 PM Observation: an opt-in, research-only expiry-day monitor for nearby ATM and ITM index-option premium acceleration after 3:00 PM.",
+    "Added permanent 30-second observation and Spike Event history with spot, premium change, incremental-volume surge, OI change, ATM distance, optional IV/Greeks, sustain duration and source-completeness evidence.",
+    "Made expiry spike confirmation context-aware: price acceleration alone remains PRICE WATCH; a saved spike also requires volume, OI-change or underlying-breakout confirmation, while cash-market CAS is labelled as context and never misread as an index-option halt.",
     "Added a saved daily combined target-profit and maximum-loss guard on Option Strategies; when either paper limit is reached, all open Strategy Trades close at their latest verified model P&L and further captures lock for that trading date.",
     "Added live daily Strategy Trades P&L, target, loss-limit and guard-state visibility while preserving the 30-strategy testing cap and keeping this workflow paper-only with no broker orders or guaranteed profit.",
     "Added individual Strategy Trade reports: every closed multi-leg paper strategy now has its own STR report, detail view and date/period Excel export instead of being visible only inside aggregate counts.",

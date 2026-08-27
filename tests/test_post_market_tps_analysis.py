@@ -8,6 +8,15 @@ from core.database_manager import Database
 from services.post_market_tps_analysis import ensure_completed_post_market_reports, generate_and_save_post_market_analysis
 
 
+def _ensure_with_default_session(database, now):
+    """Keep scheduler tests independent of the user's saved market timings."""
+    from unittest.mock import patch
+
+    with patch("core.settings_store.SettingsStore") as settings_store:
+        settings_store.return_value.load.return_value = {}
+        return ensure_completed_post_market_reports(database, now=now)
+
+
 def _attempt(candle_time: str, score: int = 100, blockers=None) -> dict:
     if blockers is None:
         blockers = ["Entry is extended 1.15 ATR; late entry is blocked"]
@@ -45,9 +54,7 @@ class PostMarketTpsAnalysisTests(unittest.TestCase):
     def test_scheduler_records_zero_activity_when_app_is_open_after_close(self):
         with TemporaryDirectory() as directory:
             database = Database(Path(directory) / "zero-activity.db")
-            updated = ensure_completed_post_market_reports(
-                database, now=datetime(2026, 8, 10, 15, 31)
-            )
+            updated = _ensure_with_default_session(database, datetime(2026, 8, 10, 15, 31))
             self.assertEqual(updated, ["10-08-2026"])
             saved = database.get_post_market_tps_analysis("10-08-2026")
             self.assertIn("koi automatic paper trade capture nahi hua", saved["summary_text"])
@@ -74,27 +81,23 @@ class PostMarketTpsAnalysisTests(unittest.TestCase):
             first = _attempt("2026-08-10T11:00:00+05:30")
             self.assertTrue(database.save_auto_trade_attempt("NIFTY", first))
 
-            before_close = ensure_completed_post_market_reports(
-                database, now=datetime(2026, 8, 10, 15, 30, 30)
-            )
+            before_close = _ensure_with_default_session(database, datetime(2026, 8, 10, 15, 30, 30))
             self.assertEqual(before_close, [])
             self.assertIsNone(database.get_post_market_tps_analysis("10-08-2026"))
 
-            after_close = ensure_completed_post_market_reports(
-                database, now=datetime(2026, 8, 10, 15, 31)
-            )
+            after_close = _ensure_with_default_session(database, datetime(2026, 8, 10, 15, 31))
             self.assertEqual(after_close, ["10-08-2026"])
             first_saved = database.get_post_market_tps_analysis("10-08-2026")
             self.assertIsNotNone(first_saved)
             self.assertEqual(
-                ensure_completed_post_market_reports(database, now=datetime(2026, 8, 10, 15, 32)),
+                _ensure_with_default_session(database, datetime(2026, 8, 10, 15, 32)),
                 [],
             )
 
             second = _attempt("2026-08-10T14:55:00+05:30", score=82)
             self.assertTrue(database.save_auto_trade_attempt("NIFTY", second))
             self.assertEqual(
-                ensure_completed_post_market_reports(database, now=datetime(2026, 8, 10, 15, 33)),
+                _ensure_with_default_session(database, datetime(2026, 8, 10, 15, 33)),
                 ["10-08-2026"],
             )
             refreshed = database.get_post_market_tps_analysis("10-08-2026")
