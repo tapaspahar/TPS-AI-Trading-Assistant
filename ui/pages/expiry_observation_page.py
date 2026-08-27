@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QGridLayout, QLabel, QPushB
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from core.market_session import IST, parse_session_times
-from engine.expiry_spike_engine import evaluate_spike, format_spike_event, select_nearby_expiry_contracts
+from engine.expiry_spike_engine import evaluate_spike, format_spike_event, predict_expiry_spike, select_nearby_expiry_contracts
 from services.expiry_observation_store import ExpiryObservationStore
 from services.live_session import LiveSession
 from services.option_contract_service import UNDERLYING_QUOTES, OptionContractService
@@ -93,6 +93,8 @@ class ExpiryObservationPage(QWidget):
         controls.addWidget(self.expiry_toggle, 1, 0, 1, 2); controls.addWidget(self.scan_button, 2, 0, 1, 2); layout.addLayout(controls)
         self.status = QLabel("Toggle OFF — no expiry monitoring."); self.status.setWordWrap(True); layout.addWidget(self.status)
         self.cards = QLabel("Spot: - | Expiry: - | Tracked contracts: 0 | CAS: -"); self.cards.setObjectName("sectionCard"); layout.addWidget(self.cards)
+        self.prediction = QLabel("Historical prediction: observation data collect ho raha hai.")
+        self.prediction.setObjectName("sectionCard"); self.prediction.setWordWrap(True); layout.addWidget(self.prediction)
         layout.addWidget(QLabel("Spike Events — permanent historical log")); self.events_table = QTableWidget(0, 8)
         self.events_table.setHorizontalHeaderLabels(("Time", "Index", "Contract", "Strike", "Type", "Spike", "Duration", "Evidence")); self.events_table.setMinimumHeight(220); layout.addWidget(self.events_table)
         layout.addWidget(QLabel("Latest ATM / ITM observations")); self.obs_table = QTableWidget(0, 10)
@@ -159,6 +161,7 @@ class ExpiryObservationPage(QWidget):
                     "underlying": symbol, "contract_symbol": contract["symbol"], "strike": contract["strike"], "option_type": contract["option_type"],
                     "moneyness": contract["moneyness"], "premium": premium, "peak_change_pct": active["peak"], "volume_ratio": result.get("volume_ratio"),
                     "oi_change_pct": result.get("oi_change_pct"), "spot": spot, "duration_seconds": result.get("elapsed_seconds", 0), "cas_context": context,
+                    "underlying_move": spot-prior_spot,
                     "source_completeness": result.get("source_completeness", "PARTIAL"), "event_text": event_text})
             else:
                 self.active_events.pop(token, None)
@@ -173,6 +176,12 @@ class ExpiryObservationPage(QWidget):
                       f"{row['peak_change_pct']:+.1f}%", f"{row['duration_seconds']} sec", row["event_text"])
             for c, value in enumerate(values): self.events_table.setItem(r, c, QTableWidgetItem(str(value)))
         today, symbol = datetime.now(IST).date().isoformat(), self.underlying.currentText(); observations = self.store.observations(today, symbol, 100)
+        forecast = predict_expiry_spike(
+            observations,
+            self.store.historical_observations(symbol),
+            self.store.historical_events(symbol),
+        )
+        self.prediction.setText("Expiry pattern prediction: " + forecast["text"])
         self.obs_table.setRowCount(len(observations))
         for r, row in enumerate(observations):
             values = (row["observed_at"], row["contract_symbol"], row["moneyness"], f"₹{row['premium']:,.2f}",

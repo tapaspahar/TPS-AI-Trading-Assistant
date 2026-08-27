@@ -47,3 +47,13 @@ class ExpiryObservationStore:
         return [dict(row) for row in self.db.cursor.execute(
             "SELECT * FROM expiry_option_observations WHERE trade_date=? AND underlying=? ORDER BY observed_at DESC LIMIT ?",
             (trade_date, underlying, limit)).fetchall()]
+
+    def historical_observations(self, underlying, limit=10000):
+        return [dict(row) for row in self.db.cursor.execute(
+            "SELECT * FROM expiry_option_observations WHERE underlying=? ORDER BY observed_at DESC LIMIT ?",
+            (underlying, limit)).fetchall()]
+
+    def historical_events(self, underlying, limit=2000):
+        return [dict(row) for row in self.db.cursor.execute(
+            "SELECT * FROM expiry_spike_events WHERE underlying=? ORDER BY started_at DESC LIMIT ?",
+            (underlying, limit)).fetchall()]

@@ -169,6 +169,32 @@ class StrategyTradeRankingTests(unittest.TestCase):
         self.assertTrue(all(row["outcome"] == "DAILY TARGET HIT" for row in rows))
         self.assertEqual(sum(float(row["realized_pnl"]) for row in rows), 151.0)
 
+    def test_per_strategy_target_closes_only_the_strategy_that_hits(self):
+        today = datetime.now().strftime("%d-%m-%Y")
+        for index, strike in enumerate((400, 500)):
+            candidate = {
+                "strategy": f"Per Trade {index}", "friendly_name": f"Cutie Per Trade {index}",
+                "family": "DIRECTIONAL", "bias": "BULLISH",
+                "legs": [{"action": "BUY", "option_type": "CE", "strike": strike, "symbol": f"OPT{strike}",
+                          "lots": 1, "quantity": 1, "price": 10}],
+                "max_profit": 100, "max_loss": 50, "capital_required": 50, "entry_cashflow": -10,
+                "return_on_capital": 20, "breakevens": [strike + 10], "profit_zone": "ABOVE",
+                "scenario_profitable_percent": 60, "rank_score": 75, "explanation": "test",
+            }
+            self.db.save_strategy_trade(candidate, {
+                "symbol": "NIFTY", "spot": 450, "expiry": "TEST",
+                "candle_time": f"2026-08-26T10:{index * 5:02d}:00",
+                "strategy_target_profit_amount": 20, "strategy_stop_loss_amount": 15,
+            })
+        self.db.update_strategy_trades("NIFTY", 455, candle_time=f"{today} 10:10", quote_rows=[
+            {"symbol": "OPT400", "option_type": "CE", "strike": 400, "bid": 31},
+            {"symbol": "OPT500", "option_type": "CE", "strike": 500, "bid": 10},
+        ])
+        rows = self.db.get_strategy_trades(today)
+        states = {row["strategy_name"]: row["status"] for row in rows}
+        self.assertEqual(states["Per Trade 0"], "CLOSED")
+        self.assertEqual(states["Per Trade 1"], "OPEN")
+
 
 if __name__ == "__main__":
     unittest.main()

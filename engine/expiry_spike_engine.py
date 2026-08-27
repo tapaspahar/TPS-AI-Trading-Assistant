@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from statistics import median
+from collections import defaultdict
 
 
 def select_nearby_expiry_contracts(contracts, spot, itm_depth=2):
@@ -80,3 +81,46 @@ def format_spike_event(symbol, contract, result, observed_at: datetime):
     evidence = " | ".join(result.get("confirmations") or ["confirmation unavailable"])
     return (f"{observed_at.strftime('%I:%M %p').lstrip('0')} | {symbol} {contract['moneyness']} "
             f"{contract['option_type']} | {change:+.0f}% in {minutes} min | {evidence}")
+
+
+def predict_expiry_spike(current_rows, historical_rows, historical_events):
+    """Return an auditable historical-analogue watch, never a guaranteed signal."""
+    if not current_rows:
+        return {"state": "COLLECTING", "text": "Prediction ke liye aaj ka observation data abhi available nahi hai."}
+    today = str(current_rows[0].get("trade_date") or "")
+    ordered = sorted(current_rows, key=lambda row: str(row.get("observed_at") or ""))
+    first_spot, last_spot = float(ordered[0].get("spot") or 0), float(ordered[-1].get("spot") or 0)
+    move = last_spot - first_spot
+    threshold = max(5.0, first_spot * .00025) if first_spot else 5.0
+    direction = "FALLING" if move <= -threshold else "RISING" if move >= threshold else "FLAT"
+    side = "PE" if direction == "FALLING" else "CE" if direction == "RISING" else "CE/PE"
+
+    by_day = defaultdict(list)
+    for row in historical_rows:
+        day = str(row.get("trade_date") or "")
+        if day and day != today:
+            by_day[day].append(row)
+    analog_days = []
+    for day, rows in by_day.items():
+        rows = sorted(rows, key=lambda row: str(row.get("observed_at") or ""))
+        start, end = float(rows[0].get("spot") or 0), float(rows[-1].get("spot") or 0)
+        gate = max(5.0, start * .00025) if start else 5.0
+        day_direction = "FALLING" if end - start <= -gate else "RISING" if end - start >= gate else "FLAT"
+        if day_direction == direction:
+            analog_days.append(day)
+    event_days = {
+        str(row.get("trade_date") or "") for row in historical_events
+        if str(row.get("trade_date") or "") in analog_days
+        and (side == "CE/PE" or str(row.get("option_type") or "").upper() == side)
+    }
+    samples, hits = len(analog_days), len(event_days)
+    probability = round(100.0 * (hits + 1) / (samples + 2), 1) if samples else 0.0
+    confidence = "INSUFFICIENT" if samples < 3 else "LOW" if samples < 8 else "MEDIUM" if samples < 15 else "HIGH"
+    watch = f"{side} SPIKE WATCH" if direction != "FLAT" else "TWO-SIDED SPIKE WATCH"
+    return {
+        "state": watch, "direction": direction, "side": side, "probability": probability,
+        "samples": samples, "hits": hits, "confidence": confidence, "move": move,
+        "text": (f"{watch} | Spot observation move {move:+,.2f} ({direction}) | "
+                 f"Historical analogues: {hits}/{samples} event-day(s) | Smoothed probability {probability:.1f}% | "
+                 f"Evidence confidence: {confidence}. Research prediction hai, entry guarantee nahi."),
+    }

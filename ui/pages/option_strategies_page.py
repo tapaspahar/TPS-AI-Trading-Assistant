@@ -40,17 +40,17 @@ class OptionStrategiesPage(QWidget):
         self.auto = QCheckBox("Monitor every 5 minutes (review suggestions only)"); self.auto.toggled.connect(self.toggle_auto)
         controls.addWidget(self.index, 0, 0); controls.addWidget(self.run, 0, 1); controls.addWidget(self.auto, 1, 0, 1, 2)
         layout.addLayout(controls)
-        limits_box = QGroupBox("Today's combined Strategy Trades target & loss guard")
+        limits_box = QGroupBox("Per-strategy paper target & stop-loss preset")
         limits = QGridLayout(limits_box)
         self.daily_target = QDoubleSpinBox(); self.daily_target.setRange(0, 10_000_000); self.daily_target.setDecimals(2)
         self.daily_target.setPrefix("₹"); self.daily_target.setSpecialValueText("Disabled")
         self.daily_loss = QDoubleSpinBox(); self.daily_loss.setRange(0, 10_000_000); self.daily_loss.setDecimals(2)
         self.daily_loss.setPrefix("₹"); self.daily_loss.setSpecialValueText("Disabled")
-        self.save_daily_limits = QPushButton("Save Today's Strategy Target & Maximum Loss")
+        self.save_daily_limits = QPushButton("Save Per-Strategy Target & Stop Loss")
         self.save_daily_limits.clicked.connect(self.save_strategy_daily_limits)
         self.daily_limit_status = QLabel(); self.daily_limit_status.setWordWrap(True)
-        limits.addWidget(QLabel("Target profit"), 0, 0); limits.addWidget(self.daily_target, 0, 1)
-        limits.addWidget(QLabel("Maximum loss"), 1, 0); limits.addWidget(self.daily_loss, 1, 1)
+        limits.addWidget(QLabel("Each new strategy target profit"), 0, 0); limits.addWidget(self.daily_target, 0, 1)
+        limits.addWidget(QLabel("Each new strategy maximum loss"), 1, 0); limits.addWidget(self.daily_loss, 1, 1)
         limits.addWidget(self.save_daily_limits, 2, 0, 1, 2); limits.addWidget(self.daily_limit_status, 3, 0, 1, 2)
         layout.addWidget(limits_box)
         plan_controls = QGridLayout()
@@ -124,25 +124,19 @@ class OptionStrategiesPage(QWidget):
 
     def _show_daily_limit_status(self, settings):
         today = datetime.now(IST).strftime("%d-%m-%Y")
-        state = dict(settings.get("strategy_daily_limit_state") or {})
-        status = state.get("status", "ACTIVE") if state.get("trade_date") == today else "ACTIVE"
         target = float(settings.get("strategy_daily_target_profit") or 0)
         loss = float(settings.get("strategy_daily_max_loss") or 0)
         self.daily_limit_status.setText(
-            f"{today} | Status: {status} | Combined target: "
-            f"{f'₹{target:,.2f}' if target else 'Disabled'} | Maximum loss: "
-            f"{f'₹{loss:,.2f}' if loss else 'Disabled'}. "
-            "Limit hit hote hi all open paper strategies close aur fresh captures lock honge."
+            f"{today} | Har nayi captured strategy ka target: "
+            f"{f'₹{target:,.2f}' if target else 'Automatic (50% max benefit)'} | Stop loss: "
+            f"{f'₹{loss:,.2f}' if loss else 'Automatic (50% max defined loss)'}. "
+            "Limit us strategy ke saath save hoga; hit hone par sirf wahi strategy close hogi."
         )
 
     def save_strategy_daily_limits(self):
         values = self.settings_store.load()
         values["strategy_daily_target_profit"] = self.daily_target.value()
         values["strategy_daily_max_loss"] = self.daily_loss.value()
-        today = datetime.now(IST).strftime("%d-%m-%Y")
-        prior = dict(values.get("strategy_daily_limit_state") or {})
-        if prior.get("trade_date") != today:
-            values["strategy_daily_limit_state"] = {"trade_date": today, "status": "ACTIVE"}
         self.settings_store.save(values)
         self._show_daily_limit_status(self.settings_store.load())
 

@@ -250,6 +250,8 @@ class Database:
             "entry_cashflow": "REAL NOT NULL DEFAULT 0",
             "return_on_capital": "REAL NOT NULL DEFAULT 0",
             "market_regime": "TEXT",
+            "target_profit_amount": "REAL NOT NULL DEFAULT 0",
+            "stop_loss_amount": "REAL NOT NULL DEFAULT 0",
         }.items():
             if column not in strategy_columns:
                 self.cursor.execute(f"ALTER TABLE strategy_trades ADD COLUMN {column} {definition}")
@@ -1962,8 +1964,9 @@ class Database:
                (captured_at, trade_date, candle_time, symbol, expiry, strategy_name, friendly_name, family, bias,
                 structure_key, legs_json, entry_spot, last_spot, max_profit, max_loss,
                 capital_required, entry_cashflow, return_on_capital, market_regime,
+                target_profit_amount, stop_loss_amount,
                 breakevens_json, profit_zone, scenario_win_rate, rank_score, explanation, source_json)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (now, datetime.now().strftime("%d-%m-%Y"), candle, str(source.get("symbol") or ""),
              str(source.get("expiry") or ""), candidate["strategy"], candidate.get("friendly_name") or candidate["strategy"],
              candidate["family"], candidate["bias"],
@@ -1971,6 +1974,8 @@ class Database:
              float(source.get("spot") or 0), float(candidate["max_profit"]), float(candidate["max_loss"]),
              float(candidate.get("capital_required") or 0), float(candidate.get("entry_cashflow") or 0),
              float(candidate.get("return_on_capital") or 0), str(source.get("market_regime") or "UNKNOWN"),
+             float(source.get("strategy_target_profit_amount") or 0),
+             float(source.get("strategy_stop_loss_amount") or 0),
              json.dumps(candidate.get("breakevens") or []), candidate.get("profit_zone", ""),
              float(candidate.get("scenario_profitable_percent") or 0), float(candidate.get("rank_score") or 0),
              candidate.get("explanation", ""), json.dumps(source, default=str)),
@@ -1982,6 +1987,17 @@ class Database:
         """Mark open paper strategies from live executable quotes and close exits."""
         from engine.strategy_portfolio_engine import payoff_at_expiry
         now = datetime.now()
+        evaluation_time = now
+        if candle_time:
+            for parser in (
+                lambda value: datetime.fromisoformat(value),
+                lambda value: datetime.strptime(value, "%d-%m-%Y %H:%M"),
+            ):
+                try:
+                    evaluation_time = parser(str(candle_time))
+                    break
+                except (TypeError, ValueError):
+                    continue
         closed = []
         rows = self.cursor.execute(
             "SELECT * FROM strategy_trades WHERE status='OPEN' AND symbol=? ORDER BY id", (str(symbol).upper(),)
@@ -2004,8 +2020,12 @@ class Database:
                 multiplier = 1 if leg["action"] == "BUY" else -1
                 pnl += (exit_price - float(leg["price"])) * int(leg["quantity"]) * multiplier
             pnl = round(pnl, 2) if complete_mark else payoff_at_expiry(legs, float(spot))
-            target = max(1.0, float(row["max_profit"]) * .50)
-            loss_review = -max(1.0, float(row["max_loss"]) * .50)
+            # Limits are snapshotted on each capture.  One strategy reaching
+            # its own boundary must never close unrelated open strategies.
+            saved_target = float(row["target_profit_amount"] or 0)
+            saved_stop = float(row["stop_loss_amount"] or 0)
+            target = saved_target if saved_target > 0 else max(1.0, float(row["max_profit"]) * .50)
+            loss_review = -saved_stop if saved_stop > 0 else -max(1.0, float(row["max_loss"]) * .50)
             outcome = None
             if pnl >= target:
                 outcome = "TARGET BENEFIT REACHED"
@@ -2013,7 +2033,7 @@ class Database:
                 outcome = "LOSS REVIEW EXIT"
             elif force_close:
                 outcome = "MARKET CLOSE EXIT"
-            elif now.strftime("%H:%M") >= "15:25":
+            elif evaluation_time.strftime("%H:%M") >= "15:25":
                 outcome = "TIME EXIT"
             review = ""
             if outcome:
