@@ -91,6 +91,11 @@ DEFAULT_SETTINGS = {
     "execution_max_order_value": 25000.0,
     "execution_max_daily_loss": 1000.0,
     "execution_duplicate_window_seconds": 120,
+    "expiry_pair_auto_execute": False,
+    "expiry_pair_lots": 1,
+    "expiry_pair_target_pnl": 1000.0,
+    "expiry_pair_stop_pnl": 500.0,
+    "expiry_pair_time_exit": "15:25",
     "notifications_enabled": True,
     "notification_sound": True,
     "notification_preferences": {

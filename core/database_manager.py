@@ -49,6 +49,21 @@ class Database:
         self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_execution_audit_day ON execution_audit(trading_date)")
         self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_execution_audit_fingerprint ON execution_audit(fingerprint, created_at)")
         self.cursor.execute(
+            """CREATE TABLE IF NOT EXISTS execution_pairs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL, trading_date TEXT NOT NULL,
+                source_page TEXT NOT NULL, mode TEXT NOT NULL, underlying TEXT NOT NULL,
+                strike REAL NOT NULL, expiry TEXT NOT NULL, lots INTEGER NOT NULL,
+                quantity INTEGER NOT NULL, status TEXT NOT NULL,
+                ce_symbol TEXT NOT NULL, ce_token TEXT NOT NULL, ce_entry REAL NOT NULL,
+                pe_symbol TEXT NOT NULL, pe_token TEXT NOT NULL, pe_entry REAL NOT NULL,
+                ce_order_id TEXT, pe_order_id TEXT, target_pnl REAL NOT NULL,
+                stop_pnl REAL NOT NULL, time_exit TEXT, last_pnl REAL DEFAULT 0,
+                exit_reason TEXT, details_json TEXT NOT NULL DEFAULT '{}'
+            )"""
+        )
+        self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_execution_pairs_day ON execution_pairs(trading_date, status)")
+        self.cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS trades (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -643,6 +658,40 @@ class Database:
             (fingerprint, cutoff),
         ).fetchone()
         return bool(row)
+
+    def create_execution_pair(self, pair):
+        now = datetime.now().astimezone().isoformat(timespec="seconds")
+        result = self.cursor.execute(
+            """INSERT INTO execution_pairs
+            (created_at,updated_at,trading_date,source_page,mode,underlying,strike,expiry,lots,quantity,status,
+             ce_symbol,ce_token,ce_entry,pe_symbol,pe_token,pe_entry,target_pnl,stop_pnl,time_exit,details_json)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (now, now, pair["trading_date"], pair["source_page"], pair["mode"], pair["underlying"],
+             float(pair["strike"]), pair["expiry"], int(pair["lots"]), int(pair["quantity"]), pair["status"],
+             pair["ce_symbol"], str(pair["ce_token"]), float(pair["ce_entry"]), pair["pe_symbol"],
+             str(pair["pe_token"]), float(pair["pe_entry"]), float(pair["target_pnl"]),
+             float(pair["stop_pnl"]), pair.get("time_exit", ""), json.dumps(pair.get("details") or {})),
+        )
+        self.connection.commit()
+        return int(result.lastrowid)
+
+    def update_execution_pair(self, pair_id, **values):
+        allowed = {"status", "ce_order_id", "pe_order_id", "last_pnl", "exit_reason", "details_json"}
+        updates = {key: value for key, value in values.items() if key in allowed}
+        if not updates:
+            return
+        updates["updated_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
+        sql = ",".join(f"{key}=?" for key in updates)
+        self.cursor.execute(f"UPDATE execution_pairs SET {sql} WHERE id=?", (*updates.values(), int(pair_id)))
+        self.connection.commit()
+
+    def get_open_execution_pair(self, underlying=None):
+        sql = "SELECT * FROM execution_pairs WHERE status IN ('PAPER_OPEN','REAL_SUBMITTING','REAL_OPEN','EXITING')"
+        params = []
+        if underlying:
+            sql += " AND underlying=?"; params.append(str(underlying))
+        sql += " ORDER BY id DESC LIMIT 1"
+        return self.cursor.execute(sql, params).fetchone()
 
     def _backfill_attempt_evidence_states(self) -> int:
         """Recover structured evidence already present in legacy payloads.

@@ -144,7 +144,8 @@ class SettingsPage(QWidget):
         execution_form.addRow("Planned exit time", self.execution_time_exit)
         execution_note = QLabel(
             "Paper is the safe default. Selecting Real only changes the preferred workflow; it does not authorize money movement. "
-            "Real submission still needs the saved opt-in, session unlock and final order confirmation. Target/stop are calculated plan levels, not unsafe simultaneous broker exit orders."
+            "Real submission still needs the saved opt-in and a fresh session unlock. Expiry After 3 PM pair execution additionally needs its own ARM EXPIRY PAIR phrase; auto execution resets OFF on every launch. "
+            "Its combined target, maximum loss and time exit submit guarded exits for both legs, but broker fills are never atomic or guaranteed—always verify partial/rejected orders in the broker app."
         )
         execution_note.setWordWrap(True); execution_form.addRow(execution_note)
         layout.addWidget(execution_box)

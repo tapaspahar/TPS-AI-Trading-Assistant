@@ -233,6 +233,29 @@ class AngelOneClient:
         return {"order_id": str(data.get("orderid") or data.get("orderId") or ""),
                 "unique_order_id": str(data.get("uniqueorderid") or ""), "raw": response}
 
+    def place_market_order(self, order: dict) -> dict:
+        """Submit an emergency/managed exit MARKET order and return its broker id."""
+        if not self.session:
+            raise RuntimeError("Connect Angel One before submitting an order.")
+        payload = {
+            "variety": "NORMAL", "tradingsymbol": str(order["trading_symbol"]),
+            "symboltoken": str(order["symbol_token"]), "transactiontype": str(order["side"]).upper(),
+            "exchange": str(order["exchange"]).upper(), "ordertype": "MARKET",
+            "producttype": str(order.get("product_type", "INTRADAY")).upper(),
+            "duration": "DAY", "price": "0", "squareoff": "0", "stoploss": "0",
+            "quantity": str(order["quantity"]),
+        }
+        self._suppress_sensitive_smartapi_logs()
+        try:
+            response = self.session.placeOrderFullResponse(payload) if hasattr(self.session, "placeOrderFullResponse") else {
+                "status": True, "data": {"orderid": self.session.placeOrder(payload)}}
+        except Exception as error:
+            raise RuntimeError("Angel One exit order submission failed; broker order book verify kijiye.") from error
+        if not response or not response.get("status"):
+            raise RuntimeError(str((response or {}).get("message", "Angel One exit order failed.")))
+        data = response.get("data") or {}
+        return {"order_id": str(data.get("orderid") or data.get("orderId") or ""), "raw": response}
+
     def get_funds(self) -> dict:
         """Return normalized read-only account funds from Angel One RMS."""
         if not self.session:
