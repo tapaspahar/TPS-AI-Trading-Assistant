@@ -35,6 +35,7 @@ from ui.pages.recovery_center_page import RecoveryCenterPage
 from ui.pages.volatility_intelligence_page import VolatilityIntelligencePage
 from ui.pages.expiry_observation_page import ExpiryObservationPage
 from ui.pages.execution_control_page import ExecutionControlPage
+from ui.pages.options_algo_page import OptionsAlgoPage
 from ui.widgets.glass_effects import add_glass_shadow
 from ui.widgets.accessible_scroll import configure_scroll_area
 from ui.widgets.consolidated_workspace import ConsolidatedWorkspace
@@ -119,6 +120,7 @@ class DashboardScreen(QWidget):
         self.volatilityIntelligencePage = VolatilityIntelligencePage()
         self.expiryObservationPage = ExpiryObservationPage()
         self.executionControlPage = ExecutionControlPage()
+        self.optionsAlgoPage = OptionsAlgoPage()
         self.optionsHub = ConsolidatedWorkspace((
             (self.optionsPage, "Trade Plan & Auto Paper"),
             (self.putCallRatioPage, "OI / PCR Intelligence"),
@@ -152,7 +154,7 @@ class DashboardScreen(QWidget):
             self.casAnalysisPage, retired(), self.strategyHub, self.postMarketHub, retired(),
             self.powerfulHub, retired(), self.gapHub, self.autoOpportunityHub, self.trendMemoryPage,
             self.scalperPage, self.notificationCenterPage, self.selfDevelopmentPage, self.recoveryCenterPage, retired(),
-            self.strategyTradesPage, self.expiryObservationPage, self.executionControlPage,
+            self.strategyTradesPage, self.expiryObservationPage, self.executionControlPage, self.optionsAlgoPage,
         )
         for page in pages:
             self.stack.addWidget(page)
@@ -196,6 +198,7 @@ class DashboardScreen(QWidget):
             button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
         self.sidebar.expiryObservationButton.clicked.connect(lambda: self.show_page(35))
         self.sidebar.executionControlButton.clicked.connect(lambda: self.show_page(36))
+        self.sidebar.optionsAlgoButton.clicked.connect(lambda: self.show_page(37))
         for button, index in ((self.sidebar.casAnalysisButton, 19),):
             button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
         self.sidebar.optionStrategiesButton.clicked.connect(lambda _checked=False: self.show_page(21))
@@ -444,6 +447,8 @@ class DashboardScreen(QWidget):
             self.expiryObservationPage.scan()
         elif requested_index == 36:
             self.executionControlPage.refresh_mode()
+        elif requested_index == 37:
+            self.optionsAlgoPage.refresh()
         self.stack.setCurrentIndex(index)
 
     def prepare_execution_candidate(self, payload):

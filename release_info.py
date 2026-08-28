@@ -11,6 +11,8 @@ SOFTWARE_UPDATE_VERSION = "v1.5.0"
 LAST_UPDATED_AT = "27-08-2026 21:50:00 IST"
 FOOTER_UPDATE_TEXT = "Software Update v1.5.0 - 27-08-2026 21:50 IST"
 RELEASE_NOTES = (
+    "Added a dedicated Options Algo Trading Control Center with saved daily net-profit, maximum-loss, estimated-charge, lot and 1-10 trade boundaries; PAPER entries use the existing completed-candle evidence engine and new entries stop automatically at any daily boundary.",
+    "Kept the options-algo activation session-only, continued target/stop/time-exit monitoring after its new-entry kill switch, and fail-closed REAL automation until broker fill reconciliation plus managed exits are verified end to end.",
     "Started Release 1.5.0 with PAPER as the safe default order mode, saved amount/percentage/exact-price target and stop settings, optional time-exit planning and read-only Angel One account-funds visibility.",
     "Added an audited Paper Order Plan path that never contacts the broker; REAL entry remains LIMIT-only and requires saved opt-in, an app-session unlock, market hours, risk caps, duplicate protection and final review.",
     "Expanded Expiry After 3 PM Observation with same-strike paired CE/PE evidence: both premiums are saved at the rolling start, spike event and latest follow-up so the rising side and opposite-side decline can be studied together.",

@@ -94,7 +94,7 @@ def _fallback_timing(stage: str, checked_at: datetime, candle_time: str | None) 
     }
 
 
-def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
+def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots: int = 1) -> dict:
     """Evaluate both sides and capture only after checklist, score and risk pass."""
     symbol = str(symbol).upper()
     database = Database()
@@ -263,7 +263,8 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict) -> dict:
             return _record(database, symbol, result)
         plan = create_review_plan(
             symbol, spot, contracts, chain["quote_rows"], chart, chain, settings,
-            requested_lots=1, minimum_score=int(settings.get("trade_plan_min_score", 95)),
+            requested_lots=max(1, min(100, int(requested_lots))),
+            minimum_score=int(settings.get("trade_plan_min_score", 95)),
         )
         plan["confidence"] = chart["final_confidence"]
         plan["event_context"] = event_risk

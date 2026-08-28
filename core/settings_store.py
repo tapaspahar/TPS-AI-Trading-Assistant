@@ -91,6 +91,14 @@ DEFAULT_SETTINGS = {
     "execution_max_order_value": 25000.0,
     "execution_max_daily_loss": 1000.0,
     "execution_duplicate_window_seconds": 120,
+    # Dedicated options-only algorithm controller. It is PAPER by default and
+    # session activation is deliberately never persisted.
+    "options_algo_enabled": False,
+    "options_algo_daily_target_net": 1000.0,
+    "options_algo_daily_max_loss": 500.0,
+    "options_algo_max_trades": 10,
+    "options_algo_estimated_charges": 60.0,
+    "options_algo_lots": 1,
     "expiry_pair_auto_execute": False,
     "expiry_pair_lots": 1,
     "expiry_pair_target_pnl": 1000.0,
@@ -238,6 +246,12 @@ class SettingsStore:
             "strategy_daily_target_profit": max(0.0, float(settings.get("strategy_daily_target_profit", current["strategy_daily_target_profit"]))),
             "strategy_daily_max_loss": max(0.0, float(settings.get("strategy_daily_max_loss", current["strategy_daily_max_loss"]))),
             "strategy_daily_limit_state": dict(settings.get("strategy_daily_limit_state", current["strategy_daily_limit_state"]) or {}),
+            "options_algo_enabled": bool(settings.get("options_algo_enabled", current["options_algo_enabled"])),
+            "options_algo_daily_target_net": max(0.0, float(settings.get("options_algo_daily_target_net", current["options_algo_daily_target_net"]))),
+            "options_algo_daily_max_loss": max(0.0, float(settings.get("options_algo_daily_max_loss", current["options_algo_daily_max_loss"]))),
+            "options_algo_max_trades": max(1, min(10, int(settings.get("options_algo_max_trades", current["options_algo_max_trades"])))),
+            "options_algo_estimated_charges": max(0.0, float(settings.get("options_algo_estimated_charges", current["options_algo_estimated_charges"]))),
+            "options_algo_lots": max(1, min(100, int(settings.get("options_algo_lots", current["options_algo_lots"])))),
             "notifications_enabled": bool(settings.get("notifications_enabled", current["notifications_enabled"])),
             "notification_sound": bool(settings.get("notification_sound", current["notification_sound"])),
             "notification_preferences": {
