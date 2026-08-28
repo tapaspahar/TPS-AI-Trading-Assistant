@@ -98,7 +98,13 @@ DEFAULT_SETTINGS = {
     "options_algo_daily_max_loss": 500.0,
     "options_algo_max_trades": 10,
     "options_algo_estimated_charges": 60.0,
+    "options_algo_estimated_slippage": 20.0,
     "options_algo_lots": 1,
+    "options_algo_entry_start": "09:20",
+    "options_algo_last_entry": "15:00",
+    "options_algo_min_validation_trades": 30,
+    "options_algo_min_validation_win_rate": 55.0,
+    "options_algo_max_validation_drawdown": 5000.0,
     "expiry_pair_auto_execute": False,
     "expiry_pair_lots": 1,
     "expiry_pair_target_pnl": 1000.0,
@@ -251,7 +257,13 @@ class SettingsStore:
             "options_algo_daily_max_loss": max(0.0, float(settings.get("options_algo_daily_max_loss", current["options_algo_daily_max_loss"]))),
             "options_algo_max_trades": max(1, min(10, int(settings.get("options_algo_max_trades", current["options_algo_max_trades"])))),
             "options_algo_estimated_charges": max(0.0, float(settings.get("options_algo_estimated_charges", current["options_algo_estimated_charges"]))),
+            "options_algo_estimated_slippage": max(0.0, float(settings.get("options_algo_estimated_slippage", current["options_algo_estimated_slippage"]))),
             "options_algo_lots": max(1, min(100, int(settings.get("options_algo_lots", current["options_algo_lots"])))),
+            "options_algo_entry_start": str(settings.get("options_algo_entry_start", current["options_algo_entry_start"])).strip(),
+            "options_algo_last_entry": str(settings.get("options_algo_last_entry", current["options_algo_last_entry"])).strip(),
+            "options_algo_min_validation_trades": max(1, min(1000, int(settings.get("options_algo_min_validation_trades", current["options_algo_min_validation_trades"])))),
+            "options_algo_min_validation_win_rate": max(0.0, min(100.0, float(settings.get("options_algo_min_validation_win_rate", current["options_algo_min_validation_win_rate"])))),
+            "options_algo_max_validation_drawdown": max(0.0, float(settings.get("options_algo_max_validation_drawdown", current["options_algo_max_validation_drawdown"]))),
             "notifications_enabled": bool(settings.get("notifications_enabled", current["notifications_enabled"])),
             "notification_sound": bool(settings.get("notification_sound", current["notification_sound"])),
             "notification_preferences": {
@@ -265,6 +277,14 @@ class SettingsStore:
             raise ValueError("Daily-loss percentage must be between 0 and 100, and trade limit must be at least 1.")
         from core.market_session import parse_session_times
         parse_session_times(values)
+        from datetime import time
+        try:
+            algo_start = time.fromisoformat(values["options_algo_entry_start"])
+            algo_end = time.fromisoformat(values["options_algo_last_entry"])
+        except ValueError as error:
+            raise ValueError("Algo entry times must use HH:MM format.") from error
+        if not algo_start < algo_end:
+            raise ValueError("Algo entry start must be earlier than last-entry time.")
         if not 1 <= values["recovery_daily_trade_limit"] <= values["max_trades_per_day"]:
             raise ValueError("Recovery daily limit must be between 1 and the normal maximum-trades limit.")
         if not 1 <= values["paper_validation_daily_limit"] <= 20:

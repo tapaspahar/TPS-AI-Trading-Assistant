@@ -4,17 +4,17 @@ from __future__ import annotations
 from datetime import datetime
 from threading import Thread
 
-from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtCore import QObject, QTime, QTimer, Signal
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QGridLayout, QGroupBox,
                                QLabel, QMessageBox, QPushButton, QScrollArea, QSpinBox,
-                               QVBoxLayout, QWidget)
+                               QTimeEdit, QVBoxLayout, QWidget)
 
 from core.database_manager import Database
 from core.market_session import IST, market_session
 from core.settings_store import SettingsStore
 from services.auto_paper_trader import run_auto_paper_cycle
 from services.live_session import LiveSession
-from services.options_algo_service import calculate_algo_day_state
+from services.options_algo_service import calculate_algo_day_state, calculate_validation_metrics
 
 
 class _AlgoSignals(QObject):
@@ -49,20 +49,31 @@ class OptionsAlgoPage(QWidget):
         self.loss = QDoubleSpinBox(); self.loss.setRange(0, 10_000_000); self.loss.setPrefix("₹"); self.loss.setDecimals(2)
         self.max_trades = QSpinBox(); self.max_trades.setRange(1, 10); self.lots = QSpinBox(); self.lots.setRange(1, 100)
         self.charges = QDoubleSpinBox(); self.charges.setRange(0, 100_000); self.charges.setPrefix("₹"); self.charges.setDecimals(2)
+        self.slippage = QDoubleSpinBox(); self.slippage.setRange(0, 100_000); self.slippage.setPrefix("₹"); self.slippage.setDecimals(2)
+        self.entry_start = QTimeEdit(); self.entry_start.setDisplayFormat("HH:mm")
+        self.last_entry = QTimeEdit(); self.last_entry.setDisplayFormat("HH:mm")
         settings = self.store.load()
         self.target.setValue(float(settings.get("options_algo_daily_target_net", 1000)))
         self.loss.setValue(float(settings.get("options_algo_daily_max_loss", 500)))
         self.max_trades.setValue(int(settings.get("options_algo_max_trades", 10)))
         self.lots.setValue(int(settings.get("options_algo_lots", 1)))
         self.charges.setValue(float(settings.get("options_algo_estimated_charges", 60)))
+        self.slippage.setValue(float(settings.get("options_algo_estimated_slippage", 20)))
+        self.entry_start.setTime(QTime.fromString(settings.get("options_algo_entry_start", "09:20"), "HH:mm"))
+        self.last_entry.setTime(QTime.fromString(settings.get("options_algo_last_entry", "15:00"), "HH:mm"))
         controls.addWidget(QLabel("Index options"), 0, 0); controls.addWidget(self.symbol, 0, 1)
         controls.addWidget(QLabel("Daily target profit — net after estimated charges"), 1, 0); controls.addWidget(self.target, 1, 1)
         controls.addWidget(QLabel("Daily maximum loss — net after estimated charges"), 2, 0); controls.addWidget(self.loss, 2, 1)
         controls.addWidget(QLabel("Maximum captured trades/orders today (1–10)"), 3, 0); controls.addWidget(self.max_trades, 3, 1)
         controls.addWidget(QLabel("Lots per qualified trade"), 4, 0); controls.addWidget(self.lots, 4, 1)
         controls.addWidget(QLabel("Estimated round-trip charges per closed trade"), 5, 0); controls.addWidget(self.charges, 5, 1)
+        controls.addWidget(QLabel("Estimated slippage per closed trade"), 6, 0); controls.addWidget(self.slippage, 6, 1)
+        controls.addWidget(QLabel("New-entry window (completed candles only)"), 7, 0)
+        window = QWidget(); window_layout = QGridLayout(window); window_layout.setContentsMargins(0, 0, 0, 0)
+        window_layout.addWidget(self.entry_start, 0, 0); window_layout.addWidget(QLabel("to"), 0, 1); window_layout.addWidget(self.last_entry, 0, 2)
+        controls.addWidget(window, 7, 1)
         self.save_button = QPushButton("Save Today's Algo Boundaries"); self.save_button.clicked.connect(self.save_settings)
-        controls.addWidget(self.save_button, 6, 0, 1, 2); layout.addWidget(controls_box)
+        controls.addWidget(self.save_button, 8, 0, 1, 2); layout.addWidget(controls_box)
 
         session_box = QGroupBox("Current application session")
         session = QGridLayout(session_box)
@@ -74,10 +85,13 @@ class OptionsAlgoPage(QWidget):
         session.addWidget(self.kill, 2, 0, 1, 2); layout.addWidget(session_box)
 
         cards = QGridLayout(); self.card_labels = {}
-        for index, name in enumerate(("Algo state", "Gross realized P&L", "Estimated charges", "Net P&L", "Trades / limit", "Open positions")):
+        for index, name in enumerate(("Algo state", "Gross realized P&L", "Estimated friction", "Net P&L", "Trades / limit", "Open positions")):
             box = QGroupBox(name); box_layout = QVBoxLayout(box); value = QLabel("-"); value.setObjectName("cardValue"); value.setWordWrap(True)
             box_layout.addWidget(value); cards.addWidget(box, index // 3, index % 3); self.card_labels[name] = value
         layout.addLayout(cards)
+        quality_box = QGroupBox("Paper Validation & Deployment Readiness — real order authorization nahi")
+        quality_layout = QVBoxLayout(quality_box); self.quality = QLabel(); self.quality.setWordWrap(True); quality_layout.addWidget(self.quality)
+        layout.addWidget(quality_box)
         self.status = QLabel("Algo session stopped."); self.status.setWordWrap(True); layout.addWidget(self.status)
         disclosure = QLabel(
             "REAL mode: automatic broker entry tabhi available hogi jab broker fill reconciliation aur managed target/stop exit chain verified ho. "
@@ -90,7 +104,9 @@ class OptionsAlgoPage(QWidget):
         settings = self.store.load(); settings.update({
             "options_algo_daily_target_net": self.target.value(), "options_algo_daily_max_loss": self.loss.value(),
             "options_algo_max_trades": self.max_trades.value(), "options_algo_estimated_charges": self.charges.value(),
-            "options_algo_lots": self.lots.value(),
+            "options_algo_estimated_slippage": self.slippage.value(), "options_algo_lots": self.lots.value(),
+            "options_algo_entry_start": self.entry_start.time().toString("HH:mm"),
+            "options_algo_last_entry": self.last_entry.time().toString("HH:mm"),
         }); self.store.save(settings)
         self.status.setText(f"✓ Algo boundaries {datetime.now(IST).strftime('%d-%m-%Y %H:%M:%S IST')} par save ho gayi.")
         self.refresh()
@@ -124,9 +140,19 @@ class OptionsAlgoPage(QWidget):
         settings = self.store.load(); mode = str(settings.get("execution_mode", "PAPER")).upper(); self.mode.setText(mode)
         state = calculate_algo_day_state(self._progress(), settings, session_active=self.session_active)
         values = {"Algo state": f"{state.state}\n{state.reason}", "Gross realized P&L": f"₹{state.gross_pnl:,.2f}",
-                  "Estimated charges": f"₹{state.estimated_charges:,.2f}", "Net P&L": f"₹{state.net_pnl:,.2f}",
+                  "Estimated friction": f"Charges ₹{state.estimated_charges:,.2f}\nSlippage ₹{state.estimated_slippage:,.2f}", "Net P&L": f"₹{state.net_pnl:,.2f}",
                   "Trades / limit": f"{state.trades} / {state.trades + state.remaining_trades}", "Open positions": str(state.open_trades)}
         for name, value in values.items(): self.card_labels[name].setText(value)
+        db = Database()
+        try: metrics = calculate_validation_metrics(db.get_journal_rows(), settings)
+        finally: db.close()
+        factor = "∞" if metrics.profit_factor is None and metrics.closed_trades else ("-" if metrics.profit_factor is None else f"{metrics.profit_factor:.2f}")
+        verdict = "REVIEW-READY" if metrics.ready_for_review else "PAPER EVIDENCE PENDING"
+        self.quality.setText(
+            f"{verdict} | Closed {metrics.closed_trades} | Wins {metrics.wins} | Win rate {metrics.win_rate:.1f}% | "
+            f"Net expectancy ₹{metrics.expectancy:,.2f}/trade | Profit factor {factor} | Max drawdown ₹{metrics.max_drawdown:,.2f}\n"
+            f"Gate: {metrics.reason} TPS real execution ko automatically unlock nahi karega."
+        )
         if state.state in {"TARGET HIT", "LOSS LIMIT HIT", "TRADE LIMIT HIT"} and self.session_active:
             self.emergency_stop(); self.status.setText(f"AUTO KILL SWITCH — {state.reason} No new trade will be captured today.")
 
@@ -138,6 +164,12 @@ class OptionsAlgoPage(QWidget):
         settings = self.store.load(); state = calculate_algo_day_state(self._progress(), settings, session_active=self.session_active)
         if not state.allow_new_entry or market_session(settings=settings)["state"] != "OPEN": return
         now = datetime.now(IST)
+        start = QTime.fromString(settings.get("options_algo_entry_start", "09:20"), "HH:mm")
+        end = QTime.fromString(settings.get("options_algo_last_entry", "15:00"), "HH:mm")
+        current = QTime(now.hour, now.minute)
+        if current < start or current > end:
+            self.status.setText(f"New-entry window {start.toString('HH:mm')}–{end.toString('HH:mm')} ke bahar hai; open trade exits monitor ho rahe hain.")
+            return
         candle_key = f"{now:%Y-%m-%d-%H}-{(now.minute // 5) * 5:02d}"
         if candle_key == self.last_candle_key: return
         self.last_candle_key = candle_key; self.running = True
