@@ -1,5 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from threading import Thread
+from time import perf_counter
 
 from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import (
@@ -12,6 +13,7 @@ from engine.option_chain_engine import analyze_option_chain
 from engine.pcr_sentiment_engine import analyze_pcr_sentiment
 from engine.oi_flow_intelligence import analyze_oi_flow
 from engine.oi_strike_candidate_engine import shortlist_oi_strike
+from engine.chart_oi_narrative_engine import analyze_chart_oi_narrative
 from core.settings_store import SettingsStore
 from services.live_session import LiveSession
 from services.option_contract_service import OptionContractService, UNDERLYING_QUOTES, contracts_near_spot
@@ -79,6 +81,9 @@ class PutCallRatioPage(QWidget):
             "strike_candidate": DashboardCard("Strike Shortlist", "Waiting"),
             "candidate_status": DashboardCard("Candidate Evidence", "Waiting"),
             "candidate_levels": DashboardCard("Review Levels", "Waiting"),
+            "candle_anatomy": DashboardCard("Completed Candle Anatomy", "Waiting"),
+            "wick_memory": DashboardCard("Repeated Wick Memory", "Waiting"),
+            "chart_oi": DashboardCard("Chart + OI Confluence", "Waiting"),
         }
         for index, card in enumerate(self.cards.values()):
             card.set_compact(True); card.setMinimumHeight(92); grid.addWidget(card, index // 3, index % 3)
@@ -89,6 +94,12 @@ class PutCallRatioPage(QWidget):
         self.candidate_details.setWordWrap(True)
         candidate_layout.addWidget(self.candidate_details)
         layout.addWidget(candidate_box)
+        narrative_box = QGroupBox("Why is the candle behaving this way? — chart-first explanation")
+        narrative_layout = QVBoxLayout(narrative_box)
+        self.narrative_details = QLabel("Completed 5-minute candle aur synchronized OI/COI analysis ke baad explanation yahan dikhega.")
+        self.narrative_details.setWordWrap(True)
+        narrative_layout.addWidget(self.narrative_details)
+        layout.addWidget(narrative_box)
         self.explanation = QLabel("Connect broker data and refresh the page.")
         self.explanation.setWordWrap(True); layout.addWidget(self.explanation)
         chain_box = QGroupBox("Focused nearest-expiry strike OI")
@@ -126,6 +137,7 @@ class PutCallRatioPage(QWidget):
 
     def _load(self, symbol):
         database = Database()
+        started = perf_counter()
         try:
             quote_config = UNDERLYING_QUOTES[symbol]
             spot_quote = LiveSession.client.get_option_quote(quote_config["exchange"], quote_config["token"])
@@ -139,6 +151,23 @@ class PutCallRatioPage(QWidget):
             chain = analyze_option_chain(contracts, quotes, spot)
             chain["oi_flow"] = analyze_oi_flow(chain["quote_rows"], spot, wing_count=7 if len(chain["quote_rows"]) >= 26 else 5)
             chain["strike_candidate"] = shortlist_oi_strike(chain, chain["oi_flow"], spot, SettingsStore().load())
+            try:
+                future = self.service.get_front_month_future(symbol)
+                candles = list(LiveSession.client.get_recent_candles(future["exchange"], future["token"], "FIVE_MINUTE", 5))
+                if candles:
+                    try:
+                        candle_start = datetime.fromisoformat(str(candles[-1].get("time")))
+                        now = datetime.now(candle_start.tzinfo) if candle_start.tzinfo else datetime.now()
+                        if candle_start + timedelta(minutes=5) > now:
+                            candles.pop()
+                    except (TypeError, ValueError):
+                        pass
+                chain["chart_oi_narrative"] = analyze_chart_oi_narrative(candles, chain["oi_flow"])
+            except (RuntimeError, ValueError, TypeError, KeyError) as candle_error:
+                chain["chart_oi_narrative"] = {
+                    "state": "DATA GAP", "explanation": f"Completed future candles unavailable: {candle_error}",
+                    "candle_time": None, "latency_note": "OI cards remain usable; chart confirmation is unavailable.",
+                }
             previous_row = database.get_latest_pcr_observation(symbol, expiry.isoformat())
             previous = dict(previous_row) if previous_row else None
             sentiment = analyze_pcr_sentiment(chain, previous)
@@ -154,6 +183,7 @@ class PutCallRatioPage(QWidget):
                 "symbol": symbol, "spot": spot, "expiry": expiry, "chain": chain,
                 "sentiment": sentiment, "captured_at": captured_at,
                 "previous_sentiment": previous.get("sentiment") if previous else None,
+                "scan_milliseconds": round((perf_counter() - started) * 1000, 1),
             })
         except (RuntimeError, ValueError, TypeError, KeyError) as error:
             self.result_failed.emit(str(error))
@@ -221,6 +251,23 @@ class PutCallRatioPage(QWidget):
             f"{invalidation}; {spot_invalidation}. Safer alternative: {candidate.get('safer_alternative')}.\n"
             f"Evidence: {evidence_text or 'not available'}\nWarnings: {warnings}. "
             "Ye profit guarantee ya broker-order permission nahi hai; completed chart confirmation aur defined-risk payoff zaroori hai."
+        )
+        narrative = chain["chart_oi_narrative"]
+        self.cards["candle_anatomy"].set_value(
+            f"Range {narrative.get('range_ratio', 0):.2f}x | Body {narrative.get('body_ratio', 0):.0f}%\n"
+            f"Upper/Lower wick {narrative.get('upper_wick_ratio', 0):.0f}%/{narrative.get('lower_wick_ratio', 0):.0f}%"
+        )
+        self.cards["wick_memory"].set_value(
+            f"Last 8 candles\nUpper {narrative.get('upper_rejections', 0)} | Lower {narrative.get('lower_rejections', 0)}"
+        )
+        self.cards["chart_oi"].set_value(
+            f"{narrative.get('state', 'DATA GAP')}\n{narrative.get('chart_direction', '-')} + {narrative.get('flow_direction', '-')}"
+        )
+        self.narrative_details.setText(
+            f"{narrative.get('anatomy', '')}\n{narrative.get('wick_explanation', '')}\n"
+            f"Conclusion: {narrative.get('explanation', '')}\n"
+            f"Evidence time: {narrative.get('candle_time', '-')} | Full broker scan/calculation {result.get('scan_milliseconds', 0):,.1f} ms. "
+            f"{narrative.get('latency_note', '')}"
         )
         self.explanation.setText(
             f"Direction context: {sentiment['direction']}\nEvidence: {'; '.join(sentiment['evidence'])}\n"

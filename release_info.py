@@ -8,9 +8,10 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.1"
-LAST_UPDATED_AT = "29-08-2026 13:08:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.5.1 - 29-08-2026 13:08 IST"
+LAST_UPDATED_AT = "29-08-2026 12:55:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.5.1 - 29-08-2026 12:55 IST"
 RELEASE_NOTES = (
+    "Added chart-first Candle Anatomy and Chart + OI Confluence: completed-candle displacement, body/wicks, repeated rejection, volume participation and fresh OI-flow alignment now produce an evidence-timed explanation without claiming unknowable participant intent.",
     "Added a review-only OI-flow strike shortlist to Options Market Intelligence with ATM/slightly-ITM liquidity preference, TRUE/FALSE/UNKNOWN evidence, entry zone, premium/spot invalidation references, two targets and a safer defined-risk vertical alternative.",
     "Added OI Flow Intelligence inside Options Market Intelligence: legacy OI PCR is separated from fresh absolute COI flow, unreliable small-base COI percentages are suppressed, dynamic CE/PE wall health is labelled, and near-money strike coverage adapts between 5 and 7 wings.",
     "OI Flow combines exchange-reported COI, premium-change quadrant, volume participation, ATM proximity and source coverage into BULLISH/BEARISH/BALANCED context; it reports DATA GAP warnings and never turns OI alone into entry permission.",
