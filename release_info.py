@@ -3,13 +3,13 @@
 APP_NAME = "TPS AI Trading Assistant"
 VERSION = "1.5.0"
 DISPLAY_VERSION = "Release 1.5.0"
-RELEASE_DATE = "28-08-2026"
+RELEASE_DATE = "27-08-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.0"
-LAST_UPDATED_AT = "28-08-2026 07:45:35 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.5.0 - 28-08-2026 07:45 IST"
+LAST_UPDATED_AT = "28-08-2026 07:57:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.5.0 - 28-08-2026 07:57 IST"
 RELEASE_NOTES = (
     "Added cost-aware Options Algo deployment readiness: configurable entry window, estimated slippage, net expectancy, profit factor, maximum drawdown and minimum paper-evidence gates are now visible before any real-order review; PAPER observation remains available and these metrics never authorize a broker order.",
     "Added a dedicated Options Algo Trading Control Center with saved daily net-profit, maximum-loss, estimated-charge, lot and 1-10 trade boundaries; PAPER entries use the existing completed-candle evidence engine and new entries stop automatically at any daily boundary.",
