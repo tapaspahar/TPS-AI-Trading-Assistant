@@ -8,8 +8,8 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.1"
-LAST_UPDATED_AT = "29-08-2026 16:39:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.5.1 - 29-08-2026 16:39 IST"
+LAST_UPDATED_AT = "29-08-2026 16:58:31 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.5.1 - 29-08-2026 16:58 IST"
 RELEASE_NOTES = (
     "Added an official NSE equity/F&O trading-day calendar and a central live-alert firewall: weekends, published exchange holidays and closed sessions can no longer produce fresh opportunity, scalp, OI, structure, early-watch or strategy suggestions from stale candles.",
     "Stopped closed-session background polling in Auto Opportunity Radar, Options Scalper and Index Market Analysis while retaining exactly one final index refresh, target/stop/exit safety monitoring, 3:40 closing confirmation and post-market report generation.",
