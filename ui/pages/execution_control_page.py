@@ -1,5 +1,8 @@
 """Explicit, session-locked broker execution console."""
 import json
+from datetime import datetime
+from threading import Thread
+from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
     QMessageBox, QPushButton, QScrollArea, QSpinBox, QDoubleSpinBox, QVBoxLayout, QWidget,
@@ -14,12 +17,18 @@ from services.live_session import LiveSession
 class ExecutionControlPage(QWidget):
     """Real orders require saved opt-in, session arm and per-order confirmation."""
 
+    funds_loaded = Signal(dict)
+    funds_failed = Signal(str)
+
     def __init__(self):
         super().__init__()
         self.store = SettingsStore()
         self.database = Database()
         self.service = ExecutionService(self.database, self.store, LiveSession)
         self.last_audit_id = None
+        self._funds_refresh_running = False
+        self.funds_loaded.connect(self._show_funds)
+        self.funds_failed.connect(self._show_funds_error)
 
         outer = QVBoxLayout(self); outer.setContentsMargins(0, 0, 0, 0)
         scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setFrameShape(QScrollArea.NoFrame)
@@ -38,9 +47,13 @@ class ExecutionControlPage(QWidget):
         funds = QHBoxLayout(funds_box)
         self.funds_status = QLabel("Connect Angel One to view available trading balance.")
         self.funds_status.setWordWrap(True)
-        funds_refresh = QPushButton("Refresh Account Funds"); funds_refresh.clicked.connect(self.refresh_funds)
-        funds.addWidget(self.funds_status, 1); funds.addWidget(funds_refresh)
+        self.funds_refresh = QPushButton("Refresh Account Funds"); self.funds_refresh.clicked.connect(self.refresh_funds)
+        funds.addWidget(self.funds_status, 1); funds.addWidget(self.funds_refresh)
         layout.addWidget(funds_box)
+        self.funds_timer = QTimer(self)
+        self.funds_timer.setInterval(60_000)
+        self.funds_timer.timeout.connect(self.refresh_funds)
+        self.funds_timer.start()
 
         limits_box = QGroupBox("1. Persistent safety limits (default execution OFF)")
         limits = QFormLayout(limits_box)
@@ -315,12 +328,41 @@ class ExecutionControlPage(QWidget):
     def refresh_funds(self):
         session = self.service.live_session
         if not session.connected() or session.broker_id != "angel_one":
-            self.funds_status.setText("Funds unavailable — connect Angel One read-only/live session first."); return
+            self.funds_status.setText("Funds unavailable — connect Angel One read-only/live session first.")
+            return
+        if self._funds_refresh_running:
+            return
+        self._funds_refresh_running = True
+        self.funds_refresh.setEnabled(False)
+        self.funds_status.setText("Account funds refresh ho rahe hain…")
+        Thread(target=self._load_funds, daemon=True).start()
+
+    def _load_funds(self):
         try:
-            values = session.client.get_funds()
-            self.funds_status.setText(
-                f"Available cash ₹{values['available_cash']:,.2f} | Net ₹{values['net']:,.2f} | "
-                f"Utilized ₹{values['utilized']:,.2f} | Collateral ₹{values['collateral']:,.2f}"
-            )
+            values = self.service.live_session.client.get_funds()
+            self.funds_loaded.emit(dict(values))
         except Exception as error:
-            self.funds_status.setText(f"Account funds unavailable: {error}")
+            self.funds_failed.emit(str(error))
+
+    def _show_funds(self, values):
+        from core.market_session import IST
+        updated = datetime.now(IST).strftime("%H:%M:%S IST")
+        self.funds_status.setText(
+            f"Available cash ₹{values['available_cash']:,.2f} | Net ₹{values['net']:,.2f} | "
+            f"Utilized ₹{values['utilized']:,.2f} | Collateral ₹{values['collateral']:,.2f} | "
+            f"Auto-updated {updated}"
+        )
+        self._finish_funds_refresh()
+
+    def _show_funds_error(self, error):
+        self.funds_status.setText(f"Account funds auto-refresh failed: {error} | Value ko current nahi maana gaya.")
+        self._finish_funds_refresh()
+
+    def _finish_funds_refresh(self):
+        self._funds_refresh_running = False
+        self.funds_refresh.setEnabled(True)
+
+    def showEvent(self, event):
+        """Refresh immediately whenever the user opens this page."""
+        super().showEvent(event)
+        QTimer.singleShot(0, self.refresh_funds)
