@@ -80,6 +80,11 @@ DEFAULT_SETTINGS = {
     # Real broker execution remains off by default. Arming is session-only and
     # is intentionally never persisted across an application restart.
     "real_execution_enabled": False,
+    "limited_real_pilot_enabled": False,
+    "real_pilot_max_orders": 2,
+    "real_pilot_max_quantity": 65,
+    "real_pilot_risk_percent": 0.25,
+    "real_pilot_daily_loss_percent": 0.5,
     # The visible mode is a preference, not an authorization. REAL still
     # requires the saved opt-in, a session unlock and a per-order phrase.
     "execution_mode": "PAPER",
@@ -202,6 +207,11 @@ class SettingsStore:
             "daily_loss_percent": float(settings["daily_loss_percent"]),
             "max_trades_per_day": int(settings["max_trades_per_day"]),
             "real_execution_enabled": bool(settings.get("real_execution_enabled", current["real_execution_enabled"])),
+            "limited_real_pilot_enabled": bool(settings.get("limited_real_pilot_enabled", current["limited_real_pilot_enabled"])),
+            "real_pilot_max_orders": int(settings.get("real_pilot_max_orders", current["real_pilot_max_orders"])),
+            "real_pilot_max_quantity": int(settings.get("real_pilot_max_quantity", current["real_pilot_max_quantity"])),
+            "real_pilot_risk_percent": float(settings.get("real_pilot_risk_percent", current["real_pilot_risk_percent"])),
+            "real_pilot_daily_loss_percent": float(settings.get("real_pilot_daily_loss_percent", current["real_pilot_daily_loss_percent"])),
             "execution_mode": str(settings.get("execution_mode", current["execution_mode"])).upper(),
             "execution_target_basis": str(settings.get("execution_target_basis", current["execution_target_basis"])).upper(),
             "execution_target_value": float(settings.get("execution_target_value", current["execution_target_value"])),
@@ -349,6 +359,14 @@ class SettingsStore:
             raise ValueError("Active option strategy plan must be a saved plan or empty.")
         if not 1 <= values["execution_max_orders_per_day"] <= 20:
             raise ValueError("Real execution order cap must be between 1 and 20 per day.")
+        if not 1 <= values["real_pilot_max_orders"] <= 2:
+            raise ValueError("Limited REAL pilot allows only 1 or 2 entries per day.")
+        if not 1 <= values["real_pilot_max_quantity"] <= 65:
+            raise ValueError("Limited REAL pilot quantity must be between 1 and 65.")
+        if not 0 < values["real_pilot_risk_percent"] <= 0.25:
+            raise ValueError("Limited REAL pilot per-trade risk cannot exceed 0.25% of capital.")
+        if not 0 < values["real_pilot_daily_loss_percent"] <= 0.5:
+            raise ValueError("Limited REAL pilot daily-loss budget cannot exceed 0.5% of capital.")
         if not 1 <= values["execution_max_quantity"] <= 10000:
             raise ValueError("Real execution quantity cap must be between 1 and 10,000.")
         if values["execution_max_order_value"] <= 0 or values["execution_max_daily_loss"] < 0:

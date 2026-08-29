@@ -10,6 +10,12 @@ class FakeSettings:
     def __init__(self, enabled=True, mode="REAL"):
         self.values = {
             "real_execution_enabled": enabled,
+            "limited_real_pilot_enabled": True,
+            "real_pilot_max_orders": 2,
+            "real_pilot_max_quantity": 65,
+            "real_pilot_risk_percent": .25,
+            "real_pilot_daily_loss_percent": .5,
+            "capital": 100000,
             "execution_mode": mode,
             "execution_max_orders_per_day": 3,
             "execution_max_quantity": 65,
@@ -71,7 +77,7 @@ class FakeLiveSession:
 
 def order(**changes):
     values = dict(exchange="NFO", symbol_token="123", trading_symbol="NIFTYOPT", side="BUY",
-                  quantity=25, limit_price=100.0, product_type="INTRADAY")
+                  quantity=25, limit_price=100.0, product_type="INTRADAY", target_price=105.0, stop_price=95.0)
     values.update(changes)
     return OrderRequest(**values)
 
@@ -112,6 +118,14 @@ def test_market_hours_caps_and_identity_are_fail_closed(monkeypatch):
     assert "Trading symbol is required" in failures
     assert "Quantity exceeds safety cap" in failures
     assert "Final confirmation phrase is missing" in failures
+
+
+def test_limited_pilot_rejects_trade_risk_above_quarter_percent(monkeypatch):
+    open_market(monkeypatch)
+    service = ExecutionService(FakeDatabase(), FakeSettings(), FakeLiveSession)
+    service.arm("ENABLE REAL TRADING")
+    failures = service.validate(order(quantity=65, stop_price=90), "PLACE LIMIT ORDER")
+    assert any("Pilot trade risk" in failure for failure in failures)
 
 
 def test_refresh_status_keeps_broker_fill_state_distinct(monkeypatch):

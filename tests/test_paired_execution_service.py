@@ -13,6 +13,12 @@ class Settings:
         self.values = {
             "execution_mode": mode,
             "real_execution_enabled": mode == "REAL",
+            "limited_real_pilot_enabled": mode == "REAL",
+            "real_pilot_max_orders": 2,
+            "real_pilot_max_quantity": 65,
+            "real_pilot_risk_percent": .25,
+            "real_pilot_daily_loss_percent": .5,
+            "capital": 1_000_000,
             "execution_max_orders_per_day": 10,
             "execution_max_quantity": 1000,
             "execution_max_order_value": 1_000_000,

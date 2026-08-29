@@ -11,6 +11,8 @@ SOFTWARE_UPDATE_VERSION = "v1.5.1"
 LAST_UPDATED_AT = "28-08-2026 07:57:00 IST"
 FOOTER_UPDATE_TEXT = "Software Update v1.5.0 - 28-08-2026 07:57 IST"
 RELEASE_NOTES = (
+    "Added opt-in Limited REAL Pilot Mode: arming requires the pilot switch, every submitted entry requires target and stop values, and code-level ceilings enforce at most two accepted entries/day, quantity 65, 0.25% planned risk/trade and 0.5% recorded daily loss regardless of larger UI values.",
+    "Cutie REAL prompts now route to Broker Execution for exact contract and final session review; they never auto-submit, and no unlimited-authority switch is provided.",
     "Expanded Cutie AI Command Center into Cutie AI Assistant: natural Hindi/English navigation can open TPS workspaces such as Dashboard, Settings, Strategy Trades and Expiry After 3 PM, while trading commands remain separated from ordinary software actions.",
     "Added Cutie AI Command Center with guarded Hindi/English prompts for PAPER algo start, status and kill switch; prompts compile into allow-listed typed intents and cannot bypass market, data, liquidity, event, risk, daily-loss, broker or emergency-stop controls.",
     "REAL automation prompts fail closed until broker fill reconciliation plus managed target/stop/time exits are certified end to end; an AI prompt never directly submits an unrestricted broker order.",

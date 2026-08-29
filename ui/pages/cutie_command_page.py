@@ -56,11 +56,11 @@ class CutieCommandPage(QWidget):
             return
         if self.parsed.get("mode") == "REAL":
             QMessageBox.warning(
-                self, "REAL automation blocked",
-                "Prompt valid hai, lekin REAL automatic entry/managed-exit reconciliation certified nahi hai. "
-                "Cutie is command ko broker ko nahi bhejegi. PAPER validation use karein.",
+                self, "Limited REAL pilot review required",
+                "Prompt valid hai. REAL command direct auto-submit nahi hogi. Cutie Broker Execution page kholegi jahan Limited Pilot, exact contract, target, stop, quantity aur session activation review karna mandatory hai.",
             )
-            self.preview_text.setText("BLOCKED — REAL managed exits and fill reconciliation pending certification.")
+            self.command_ready.emit({"intent": "REAL_PILOT_REVIEW", "summary": self.parsed["summary"]})
+            self.preview_text.setText("REAL PILOT REVIEW — Broker Execution khola gaya; koi order abhi submit nahi hua.")
             return
         self.command_ready.emit(dict(self.parsed))
         self.preview_text.setText(f"APPLIED — {self.parsed['summary']}")

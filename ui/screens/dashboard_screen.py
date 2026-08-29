@@ -245,6 +245,9 @@ class DashboardScreen(QWidget):
         if command.get("intent") == "NAVIGATE":
             self.show_page(int(command["route"]))
             return
+        if command.get("intent") == "REAL_PILOT_REVIEW":
+            self.show_page(36)
+            return
         try:
             message = self.optionsAlgoPage.apply_cutie_command(command)
         except Exception as error:

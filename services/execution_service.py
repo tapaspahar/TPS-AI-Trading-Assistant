@@ -20,6 +20,8 @@ class OrderRequest:
     target_price: float = 0.0
     stop_price: float = 0.0
     time_exit: str = ""
+    exits_managed_externally: bool = False
+    managed_risk_amount: float = 0.0
 
 
 class ExecutionService:
@@ -44,6 +46,8 @@ class ExecutionService:
             raise RuntimeError("Order mode is PAPER. Select REAL in Settings before arming.")
         if not bool(settings.get("real_execution_enabled", False)):
             raise RuntimeError("Real execution is disabled in saved safety settings.")
+        if not bool(settings.get("limited_real_pilot_enabled", False)):
+            raise RuntimeError("Enable Limited REAL Pilot Mode before arming a real-money session.")
         self._kill_switch = False
         self._armed = True
 
@@ -81,7 +85,7 @@ class ExecutionService:
         return round(result, 2)
 
     def stage_paper(self, order: OrderRequest) -> dict:
-        failures = self.validate_plan(order, require_exits=True)
+        failures = self.validate_plan(order, require_exits=not order.exits_managed_externally)
         audit_id = self.database.create_execution_audit(
             order.__dict__, self.fingerprint(order), "REJECTED" if failures else "PAPER_PLAN", "; ".join(failures)
         )
@@ -104,7 +108,8 @@ class ExecutionService:
 
     def validate(self, order: OrderRequest, confirmation: str) -> list[str]:
         settings = self.settings_store.load()
-        failures = self.validate_plan(order)
+        failures = self.validate_plan(order, require_exits=not order.exits_managed_externally)
+        pilot = bool(settings.get("limited_real_pilot_enabled", False))
         if str(settings.get("execution_mode", "REAL")).upper() != "REAL": failures.append("Order mode is PAPER")
         if not self.armed: failures.append("Execution session is locked")
         if confirmation.strip().upper() != "PLACE LIMIT ORDER": failures.append("Final confirmation phrase is missing")
@@ -114,12 +119,25 @@ class ExecutionService:
         if not order.trading_symbol.strip(): failures.append("Trading symbol is required")
         if order.side.upper() not in {"BUY", "SELL"}: failures.append("Side must be BUY or SELL")
         if order.exchange.upper() not in {"NSE", "NFO", "BSE", "BFO"}: failures.append("Exchange is unsupported")
-        if order.quantity <= 0 or order.quantity > int(settings.get("execution_max_quantity", 65)): failures.append("Quantity exceeds safety cap")
+        quantity_cap = int(settings.get("execution_max_quantity", 65))
+        if pilot: quantity_cap = min(quantity_cap, int(settings.get("real_pilot_max_quantity", 65)))
+        if order.quantity <= 0 or order.quantity > quantity_cap: failures.append("Quantity exceeds safety cap")
         if order.limit_price <= 0: failures.append("Limit price must be positive")
         if order.quantity * order.limit_price > float(settings.get("execution_max_order_value", 25000)): failures.append("Order value exceeds safety cap")
         day = datetime.now(IST).date().isoformat()
-        if self.database.count_execution_orders(day) >= int(settings.get("execution_max_orders_per_day", 3)): failures.append("Daily real-order cap reached")
+        order_cap = int(settings.get("execution_max_orders_per_day", 3))
+        if pilot: order_cap = min(order_cap, int(settings.get("real_pilot_max_orders", 2)))
+        if self.database.count_execution_orders(day) >= order_cap: failures.append("Daily real-order cap reached")
         max_loss = float(settings.get("execution_max_daily_loss", 1000))
+        if pilot:
+            capital = float(settings.get("capital", 100000))
+            max_loss = min(max_loss, capital * float(settings.get("real_pilot_daily_loss_percent", .5)) / 100.0)
+            trade_risk = (
+                float(order.managed_risk_amount) if order.exits_managed_externally
+                else abs(float(order.limit_price) - float(order.stop_price)) * int(order.quantity)
+            )
+            trade_cap = capital * float(settings.get("real_pilot_risk_percent", .25)) / 100.0
+            if trade_risk > trade_cap: failures.append(f"Pilot trade risk ₹{trade_risk:,.2f} exceeds ₹{trade_cap:,.2f} cap")
         if max_loss > 0 and self.database.execution_loss_today(day) >= max_loss: failures.append("Daily execution loss lock active")
         if self.database.has_recent_execution_fingerprint(self.fingerprint(order), int(settings.get("execution_duplicate_window_seconds", 120))): failures.append("Duplicate order blocked")
         return failures

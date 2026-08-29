@@ -10,3 +10,4 @@
 - Added Cutie AI Command Center for allow-listed Hindi/English PAPER algo start, status and emergency-stop commands. Incomplete, ambiguous and safeguard-bypass prompts are rejected.
 - REAL prompt automation remains fail-closed until fill reconciliation and broker-managed exits are proven end to end; no free-form prompt can directly place an unrestricted order.
 - Renamed the workspace to Cutie AI Assistant and added natural Hindi/English page navigation, including commands such as `jump to expiry after 3 pm page`, `show settings` and `go to strategy trades`.
+- Added Limited REAL Pilot Mode with mandatory target/stop, maximum two accepted entries/day, quantity 65, 0.25% planned risk/trade and 0.5% recorded daily-loss ceilings. Cutie REAL prompts open Broker Execution for final review and never auto-submit.

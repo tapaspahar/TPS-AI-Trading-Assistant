@@ -39,15 +39,21 @@ class ExecutionControlPage(QWidget):
         values = self.store.load()
         self.enabled = QCheckBox("I understand this enables a real-money order console")
         self.enabled.setChecked(bool(values.get("real_execution_enabled", False)))
+        self.pilot_enabled = QCheckBox("Enable Limited REAL Pilot Mode (session still requires activation)")
+        self.pilot_enabled.setChecked(bool(values.get("limited_real_pilot_enabled", False)))
         self.max_orders = QSpinBox(); self.max_orders.setRange(1, 20); self.max_orders.setValue(int(values.get("execution_max_orders_per_day", 3)))
         self.max_quantity = QSpinBox(); self.max_quantity.setRange(1, 10000); self.max_quantity.setValue(int(values.get("execution_max_quantity", 65)))
         self.max_value = QDoubleSpinBox(); self.max_value.setRange(1, 10_000_000); self.max_value.setDecimals(2); self.max_value.setValue(float(values.get("execution_max_order_value", 25000)))
         self.max_loss = QDoubleSpinBox(); self.max_loss.setRange(1, 10_000_000); self.max_loss.setDecimals(2); self.max_loss.setValue(float(values.get("execution_max_daily_loss", 1000)))
         save_limits = QPushButton("Save Execution Safety Limits"); save_limits.clicked.connect(self.save_limits)
-        limits.addRow(self.enabled); limits.addRow("Maximum submitted orders/day", self.max_orders)
+        limits.addRow(self.enabled); limits.addRow(self.pilot_enabled); limits.addRow("Maximum submitted orders/day", self.max_orders)
         limits.addRow("Maximum quantity/order", self.max_quantity); limits.addRow("Maximum order value (₹)", self.max_value)
         limits.addRow("Recorded realized-loss lock (₹)", self.max_loss); limits.addRow(save_limits)
-        loss_note = QLabel("Yeh lock sirf TPS audit me available realized P&L par apply hota hai. Broker position/P&L sync ke bina ise complete account-level loss protection na samjhein.")
+        loss_note = QLabel(
+            "Limited pilot code-level ceiling: maximum 2 accepted entries/day, quantity 65, per-trade planned risk 0.25% capital aur daily realized-loss 0.5% capital. "
+            "Target + stop mandatory hain. UI me badi value likhne par bhi lower pilot ceiling apply hogi. "
+            "Yeh lock sirf TPS audit me available realized P&L par apply hota hai; broker position/P&L sync ke bina ise complete account-level protection na samjhein."
+        )
         loss_note.setWordWrap(True); limits.addRow(loss_note)
         layout.addWidget(limits_box)
 
@@ -110,6 +116,7 @@ class ExecutionControlPage(QWidget):
         values = self.store.load()
         values.update({
             "real_execution_enabled": self.enabled.isChecked(),
+            "limited_real_pilot_enabled": self.pilot_enabled.isChecked(),
             "execution_max_orders_per_day": self.max_orders.value(),
             "execution_max_quantity": self.max_quantity.value(),
             "execution_max_order_value": self.max_value.value(),

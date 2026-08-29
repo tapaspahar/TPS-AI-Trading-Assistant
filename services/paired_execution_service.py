@@ -71,8 +71,11 @@ class PairedExecutionService:
         orders = []
         for leg in (ce, pe):
             contract = leg["contract"]
-            orders.append(OrderRequest(contract["exchange"], str(contract["token"]), contract["symbol"],
-                                       "BUY", quantity, round(float(leg["premium"]), 2)))
+            orders.append(OrderRequest(
+                contract["exchange"], str(contract["token"]), contract["symbol"],
+                "BUY", quantity, round(float(leg["premium"]), 2),
+                exits_managed_externally=True, managed_risk_amount=float(stop_pnl),
+            ))
         # Validate both legs before sending either one. Broker orders are not
         # atomic, so a known failure must be caught before the first leg leaves.
         remaining = int(settings.get("execution_max_orders_per_day", 3)) - self.database.count_execution_orders(

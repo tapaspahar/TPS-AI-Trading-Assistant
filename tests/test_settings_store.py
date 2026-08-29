@@ -64,6 +64,18 @@ class SettingsStoreTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Adaptive stop"):
                 store.save(settings)
 
+    def test_limited_real_pilot_caps_are_persisted_and_bounded(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = SettingsStore(Path(directory) / "settings.json")
+            settings = store.load()
+            settings.update({"limited_real_pilot_enabled": True, "real_pilot_max_orders": 2,
+                             "real_pilot_max_quantity": 65, "real_pilot_risk_percent": .25,
+                             "real_pilot_daily_loss_percent": .5})
+            self.assertTrue(store.save(settings)["limited_real_pilot_enabled"])
+            settings["real_pilot_risk_percent"] = 1
+            with self.assertRaisesRegex(ValueError, "0.25%"):
+                store.save(settings)
+
     def test_custom_market_times_persist_and_invalid_order_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             store = SettingsStore(Path(directory) / "settings.json")
