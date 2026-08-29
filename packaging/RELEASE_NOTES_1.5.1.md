@@ -7,3 +7,5 @@
 - No stop placement or strategy guarantees profit; market, broker and risk locks remain active.
 - Broker Account Funds now refreshes after connection, on page open and every 60 seconds in the background; the last successful IST timestamp is visible and failed responses are explicitly marked non-current.
 - Broker Funds now appears on the main Dashboard instead of the Broker Execution console, keeping the balance visible with the everyday overview while the execution page stays focused on safeguards and orders.
+- Added Cutie AI Command Center for allow-listed Hindi/English PAPER algo start, status and emergency-stop commands. Incomplete, ambiguous and safeguard-bypass prompts are rejected.
+- REAL prompt automation remains fail-closed until fill reconciliation and broker-managed exits are proven end to end; no free-form prompt can directly place an unrestricted order.

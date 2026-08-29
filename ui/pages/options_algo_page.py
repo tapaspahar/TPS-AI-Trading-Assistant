@@ -111,6 +111,26 @@ class OptionsAlgoPage(QWidget):
         self.status.setText(f"✓ Algo boundaries {datetime.now(IST).strftime('%d-%m-%Y %H:%M:%S IST')} par save ho gayi.")
         self.refresh()
 
+    def apply_cutie_command(self, command: dict):
+        """Apply only parser-produced, allow-listed commands; normal guards still decide execution."""
+        intent = command.get("intent")
+        if intent == "STOP_ALGO":
+            self.emergency_stop(); return "Kill switch applied; new entries stopped."
+        if intent == "ALGO_STATUS":
+            self.refresh(); return self.status.text()
+        if intent != "START_ALGO" or command.get("mode") != "PAPER":
+            raise RuntimeError("Only guarded PAPER algo start is available from Cutie commands.")
+        self.symbol.setCurrentIndex(max(0, self.symbol.findText(command["symbol"])))
+        self.target.setValue(float(command["target"])); self.loss.setValue(float(command["max_loss"]))
+        self.max_trades.setValue(int(command["max_trades"])); self.lots.setValue(int(command["lots"]))
+        settings = self.store.load(); settings["execution_mode"] = "PAPER"; self.store.save(settings)
+        self.save_settings()
+        if not LiveSession.connected():
+            self.status.setText("Command saved — broker data connect hone ke baad PAPER algo start karein.")
+            return self.status.text()
+        self.enable.setChecked(True)
+        return self.status.text()
+
     def _toggle_session(self, checked):
         if checked:
             settings = self.store.load()
