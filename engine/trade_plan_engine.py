@@ -6,6 +6,7 @@ a proposed plan as an executed journal trade.
 from __future__ import annotations
 
 from services.option_contract_service import buying_risk
+from engine.adaptive_stop_engine import adaptive_option_stop
 
 
 def create_review_plan(underlying, spot_price, contracts, quote_rows, chart_context, chain_context, settings, requested_lots=None, minimum_score=None):
@@ -53,8 +54,8 @@ def create_review_plan(underlying, spot_price, contracts, quote_rows, chart_cont
             itm_penalty = 0 if itm else 1
         return (itm_penalty, abs(strike - float(spot_price)), -item[3])
     contract, quote, premium, volume, spread = min(candidates, key=contract_rank)
-    stop_fraction = min(.35, max(.12, .20 * float(environment.get("stop_atr_multiplier", 1))))
-    stop_loss = round(premium * (1 - stop_fraction), 2)
+    stop_evidence = adaptive_option_stop(premium, environment, settings, spread)
+    stop_loss = stop_evidence["stoploss"]
     minimum_rr = float(settings.get("minimum_rr_ratio", 1.5))
     target_multiple = max(minimum_rr, float(environment.get("target_atr_multiplier", 2)))
     target = round(premium + (premium - stop_loss) * target_multiple, 2)
@@ -66,6 +67,11 @@ def create_review_plan(underlying, spot_price, contracts, quote_rows, chart_cont
     adjusted_risk_percent = float(settings["risk_percent"]) * float(environment.get("risk_multiplier", 1))
     risk = buying_risk(premium - stop_loss, contract["lot_size"], settings["capital"], adjusted_risk_percent)
     safe_lots = risk["lots"]
+    if safe_lots < 1:
+        raise ValueError(
+            "Adaptive structure/volatility stop ke saath ek exchange lot bhi configured rupee-risk cap me fit nahi hota. "
+            "TPS stop ko chhota nahi karega; capital/risk review karein ya trade skip karein."
+        )
     if requested_lots is None:
         requested_lots = safe_lots
     requested_lots = int(requested_lots)
@@ -104,12 +110,16 @@ def create_review_plan(underlying, spot_price, contracts, quote_rows, chart_cont
         "market_environment": environment,
         "spread_percent": round(spread, 2) if spread is not None else None,
         "adaptive_risk_percent": round(adjusted_risk_percent, 3),
+        "stop_method": stop_evidence["method"],
+        "stop_distance_percent": stop_evidence["distance_percent"],
+        "stop_evidence": stop_evidence,
         "rule_version": "TPS V2 configurable review — chart/volume/OI confirmation",
         "reasons": [
             f"Chart score {chart_context['score']}/100 meets configured minimum {minimum_score}",
             f"Focused OI/PCR context: {chain_context.get('context', 'available')}",
             f"Near-ATM liquid contract selected (volume {volume:,.0f})",
             f"Adaptive environment: {environment.get('regime', 'unavailable')}; strike {environment.get('strike_preference', 'ATM')}",
+            f"Adaptive stop: {stop_evidence['distance_percent']:.2f}% premium breathing room; quantity rupee-risk cap se sized",
         ],
         "warning": "Conditional review plan: verify live premium, bid/ask, volume, stop-loss and target in Angel One before manually placing an order. " + risk_warning,
     }

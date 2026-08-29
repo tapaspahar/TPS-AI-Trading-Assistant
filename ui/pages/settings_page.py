@@ -54,6 +54,9 @@ class SettingsPage(QWidget):
         self.minimum_rr = QLineEdit(str(values["minimum_rr_ratio"]))
         self.max_spread = QLineEdit(str(values["maximum_option_spread_percent"]))
         self.minimum_volume = QLineEdit(str(values["minimum_option_volume"]))
+        self.stop_min = QLineEdit(str(values["adaptive_stop_min_percent"]))
+        self.stop_max = QLineEdit(str(values["adaptive_stop_max_percent"]))
+        self.stop_sweep_buffer = QLineEdit(str(values["stop_sweep_buffer_percent"]))
         self.tps_match_mode = QComboBox()
         self.tps_match_mode.addItem("Adaptive - market regime decides applicable checks", "adaptive")
         self.tps_match_mode.addItem("Fixed Count - use configured required matches", "count")
@@ -87,11 +90,19 @@ class SettingsPage(QWidget):
                              ("Daily loss limit (%)", self.daily_loss_percent), ("Maximum trades per day", self.max_trades),
                              ("Paper-trade cooldown (minutes)", self.cooldown), ("Minimum risk:reward", self.minimum_rr),
                              ("Maximum option spread (%)", self.max_spread), ("Minimum option volume", self.minimum_volume),
+                             ("Adaptive stop minimum breathing room (%)", self.stop_min),
+                             ("Adaptive stop maximum (%)", self.stop_max),
+                             ("Wick / liquidity sweep buffer (%)", self.stop_sweep_buffer),
                              ("TPS checklist match mode", self.tps_match_mode),
                              ("Colour Theme", self.theme), ("UI Design Style", self.ui_style)):
             field.setMinimumHeight(36)
             form.addRow(label, field)
         layout.addLayout(form)
+        stop_note = QLabel(
+            "Release 1.5.1: TPS fixed chhota stop force nahi karta. Stop volatility regime, spread aur wick/sweep buffer se banta hai; "
+            "wider stop par quantity kam hoti hai. Ek lot risk cap me fit na ho toh trade skip hota hai. Stop hunting guaranteed fact nahi—saved candles me wick sweep aur genuine invalidation alag review honge."
+        )
+        stop_note.setWordWrap(True); layout.addWidget(stop_note)
         self.theme_hint = QLabel("Choose any colour theme plus one of 10 UI design systems. The combination previews instantly; press Save Settings to keep it for the next launch.")
         self.theme_hint.setWordWrap(True)
         layout.addWidget(self.theme_hint)
@@ -115,7 +126,7 @@ class SettingsPage(QWidget):
         timing_note.setWordWrap(True)
         timing_form.addRow(timing_note)
         layout.addWidget(timing_box)
-        execution_box = QGroupBox("Order Mode & Default Exit Plan — Release 1.5.0")
+        execution_box = QGroupBox("Order Mode & Default Exit Plan — Release 1.5.1")
         execution_form = QFormLayout(execution_box)
         self.execution_mode = QComboBox()
         self.execution_mode.addItem("Paper order / plan (recommended)", "PAPER")
@@ -288,6 +299,8 @@ class SettingsPage(QWidget):
                 "execution_time_exit": self.execution_time_exit.time().toString("HH:mm"),
                 "paper_trade_cooldown_minutes": self.cooldown.text(), "minimum_rr_ratio": self.minimum_rr.text(),
                 "maximum_option_spread_percent": self.max_spread.text(), "minimum_option_volume": self.minimum_volume.text(),
+                "adaptive_stop_min_percent": self.stop_min.text(), "adaptive_stop_max_percent": self.stop_max.text(),
+                "stop_sweep_buffer_percent": self.stop_sweep_buffer.text(),
                 "tps_match_mode": self.tps_match_mode.currentData(),
                 "economic_calendar_enabled": self.calendar_enabled.isChecked(),
                 "economic_calendar_api_key": self.calendar_key.text(), "event_feed_fail_closed": self.fail_closed.isChecked(),

@@ -10,8 +10,8 @@ from pathlib import Path
 
 DEFAULT_SETTINGS = {
     "capital": 100000.0,
-    "risk_percent": 1.0,
-    "daily_loss_percent": 3.0,
+    "risk_percent": 0.25,
+    "daily_loss_percent": 0.5,
     "max_trades_per_day": 5,
     # Exchange-session clock is configurable so a future NSE/BSE timing
     # change does not require a software release. Values are stored as HH:MM.
@@ -58,6 +58,9 @@ DEFAULT_SETTINGS = {
     "minimum_rr_ratio": 1.5,
     "maximum_option_spread_percent": 8.0,
     "minimum_option_volume": 100.0,
+    "adaptive_stop_min_percent": 18.0,
+    "adaptive_stop_max_percent": 35.0,
+    "stop_sweep_buffer_percent": 3.0,
     "trailing_stop_enabled": True,
     "trailing_stop_trigger_r": 1.0,
     "trailing_stop_lock_r": 0.25,
@@ -241,6 +244,9 @@ class SettingsStore:
             "minimum_rr_ratio": float(settings.get("minimum_rr_ratio", current["minimum_rr_ratio"])),
             "maximum_option_spread_percent": float(settings.get("maximum_option_spread_percent", current["maximum_option_spread_percent"])),
             "minimum_option_volume": float(settings.get("minimum_option_volume", current["minimum_option_volume"])),
+            "adaptive_stop_min_percent": float(settings.get("adaptive_stop_min_percent", current["adaptive_stop_min_percent"])),
+            "adaptive_stop_max_percent": float(settings.get("adaptive_stop_max_percent", current["adaptive_stop_max_percent"])),
+            "stop_sweep_buffer_percent": float(settings.get("stop_sweep_buffer_percent", current["stop_sweep_buffer_percent"])),
             "trailing_stop_enabled": bool(settings.get("trailing_stop_enabled", current["trailing_stop_enabled"])),
             "trailing_stop_trigger_r": float(settings.get("trailing_stop_trigger_r", current["trailing_stop_trigger_r"])),
             "trailing_stop_lock_r": float(settings.get("trailing_stop_lock_r", current["trailing_stop_lock_r"])),
@@ -324,6 +330,10 @@ class SettingsStore:
             raise ValueError("Minimum risk-reward ratio must be between 1 and 10.")
         if not 0 < values["maximum_option_spread_percent"] <= 100 or values["minimum_option_volume"] < 0:
             raise ValueError("Use a positive option-spread limit and non-negative minimum option volume.")
+        if not 5 <= values["adaptive_stop_min_percent"] <= values["adaptive_stop_max_percent"] <= 60:
+            raise ValueError("Adaptive stop limits must satisfy 5% <= minimum <= maximum <= 60%.")
+        if not 0 <= values["stop_sweep_buffer_percent"] <= 10:
+            raise ValueError("Stop sweep buffer must be between 0% and 10%.")
         if not 0.25 <= values["trailing_stop_trigger_r"] <= 10 or not 0 <= values["trailing_stop_lock_r"] < values["trailing_stop_trigger_r"]:
             raise ValueError("Trailing-stop trigger/lock R values are invalid.")
         if not 0 <= values["time_exit_minutes_before_close"] <= 60:

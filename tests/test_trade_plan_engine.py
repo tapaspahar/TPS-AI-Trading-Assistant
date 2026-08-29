@@ -85,3 +85,30 @@ class TradePlanEngineTests(unittest.TestCase):
                 {"context": "available"},
                 {"capital": 1_000_000, "risk_percent": 3, "trade_plan_min_score": 10},
             )
+
+    def test_adaptive_stop_adds_breathing_room_and_reduces_lots(self):
+        contracts = [{"token": "ce", "symbol": "NIFTY25000CE", "strike": 25000, "option_type": "CE", "lot_size": 75}]
+        base = {"symbol": "NIFTY", "direction": "BULLISH", "score": 95, "volume_confirmed": True,
+                "market_environment": {"regime": "HIGH VOLATILITY", "stop_atr_multiplier": 1.25}}
+        plan = create_review_plan(
+            "NIFTY", 25000, contracts,
+            [{"symbolToken": "ce", "ltp": 100, "tradeVolume": 5000, "bid": 99, "ask": 101}],
+            base, {"context": "available"},
+            {"capital": 1_000_000, "risk_percent": 1, "adaptive_stop_min_percent": 18,
+             "adaptive_stop_max_percent": 35, "stop_sweep_buffer_percent": 3},
+        )
+        self.assertEqual(plan["stoploss"], 66.5)
+        self.assertEqual(plan["stop_distance_percent"], 33.5)
+        self.assertEqual(plan["lots"], 3)
+        self.assertLessEqual(plan["estimated_risk"], plan["risk_cap"])
+
+    def test_adaptive_stop_never_tightens_to_force_one_lot(self):
+        contracts = [{"token": "ce", "symbol": "NIFTY25000CE", "strike": 25000, "option_type": "CE", "lot_size": 75}]
+        with self.assertRaisesRegex(ValueError, "ek exchange lot"):
+            create_review_plan(
+                "NIFTY", 25000, contracts, [{"symbolToken": "ce", "ltp": 1000, "tradeVolume": 5000}],
+                {"symbol": "NIFTY", "direction": "BULLISH", "score": 95, "volume_confirmed": True},
+                {"context": "available"},
+                {"capital": 100000, "risk_percent": .25, "adaptive_stop_min_percent": 18,
+                 "adaptive_stop_max_percent": 35, "stop_sweep_buffer_percent": 3},
+            )

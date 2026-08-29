@@ -1,16 +1,19 @@
 """Application release metadata kept in one place."""
 
 APP_NAME = "TPS AI Trading Assistant"
-VERSION = "1.5.0"
-DISPLAY_VERSION = "Release 1.5.0"
-RELEASE_DATE = "27-08-2026"
+VERSION = "1.5.1"
+DISPLAY_VERSION = "Release 1.5.1"
+RELEASE_DATE = "29-08-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
-SOFTWARE_UPDATE_VERSION = "v1.5.0"
+SOFTWARE_UPDATE_VERSION = "v1.5.1"
 LAST_UPDATED_AT = "28-08-2026 07:57:00 IST"
 FOOTER_UPDATE_TEXT = "Software Update v1.5.0 - 28-08-2026 07:57 IST"
 RELEASE_NOTES = (
+    "Started Release 1.5.1 Capital Guardian: new installations default to 0.25% per-trade and 0.5% daily loss budgets while existing saved user settings remain preserved across upgrades.",
+    "Replaced the fixed option-premium stop with an adaptive volatility/liquidity stop: minimum breathing room, regime adjustment, bid/ask-spread allowance and a bounded wick/sweep buffer are recorded as evidence.",
+    "A wider adaptive stop now reduces whole-lot quantity; when even one exchange lot cannot fit the configured rupee-risk cap, TPS skips the plan instead of manufacturing a dangerously tight stop.",
     "Added cost-aware Options Algo deployment readiness: configurable entry window, estimated slippage, net expectancy, profit factor, maximum drawdown and minimum paper-evidence gates are now visible before any real-order review; PAPER observation remains available and these metrics never authorize a broker order.",
     "Added a dedicated Options Algo Trading Control Center with saved daily net-profit, maximum-loss, estimated-charge, lot and 1-10 trade boundaries; PAPER entries use the existing completed-candle evidence engine and new entries stop automatically at any daily boundary.",
     "Kept the options-algo activation session-only, continued target/stop/time-exit monitoring after its new-entry kill switch, and fail-closed REAL automation until broker fill reconciliation plus managed exits are verified end to end.",

@@ -45,10 +45,24 @@ class SettingsStoreTests(unittest.TestCase):
             self.assertEqual(store.load()["ui_style"], "glassmorphism")
             self.assertEqual(store.load()["tps_match_mode"], "adaptive")
             self.assertFalse(store.load()["auto_paper_monitor_enabled"])
+            self.assertEqual(store.load()["adaptive_stop_min_percent"], 18.0)
+            self.assertEqual(store.load()["adaptive_stop_max_percent"], 35.0)
             saved = store.save({"capital": "250000", "risk_percent": "0.5", "daily_loss_percent": "2", "max_trades_per_day": "3", "theme": "light"})
             self.assertEqual(saved["max_trades_per_day"], 3)
             self.assertEqual(store.load()["theme"], "light")
             self.assertEqual(store.load()["capital"], 250000.0)
+
+    def test_adaptive_stop_settings_are_validated(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = SettingsStore(Path(directory) / "settings.json")
+            settings = store.load()
+            settings.update({"adaptive_stop_min_percent": 20, "adaptive_stop_max_percent": 40,
+                             "stop_sweep_buffer_percent": 4})
+            saved = store.save(settings)
+            self.assertEqual(saved["stop_sweep_buffer_percent"], 4)
+            settings["adaptive_stop_min_percent"] = 45
+            with self.assertRaisesRegex(ValueError, "Adaptive stop"):
+                store.save(settings)
 
     def test_custom_market_times_persist_and_invalid_order_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

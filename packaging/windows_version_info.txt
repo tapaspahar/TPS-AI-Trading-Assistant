@@ -5,11 +5,11 @@ VSVersionInfo(
     StringFileInfo([StringTable('040904B0', [
       StringStruct('CompanyName', 'Tapas Kumar Pahar'),
       StringStruct('FileDescription', 'TPS AI Trading Assistant'),
-      StringStruct('FileVersion', '1.5.0'),
+      StringStruct('FileVersion', '1.5.1'),
       StringStruct('InternalName', 'TPSAITradingAssistant'),
       StringStruct('OriginalFilename', 'TPS AI Trading Assistant.exe'),
       StringStruct('ProductName', 'TPS AI Trading Assistant'),
-      StringStruct('ProductVersion', '1.5.0'),
+      StringStruct('ProductVersion', '1.5.1'),
       StringStruct('LegalCopyright', 'Copyright (c) 2026 Tapas Kumar Pahar')
     ])]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])
