@@ -245,8 +245,13 @@ class DashboardScreen(QWidget):
         if command.get("intent") == "NAVIGATE":
             self.show_page(int(command["route"]))
             return
-        if command.get("intent") == "REAL_PILOT_REVIEW":
+        if command.get("intent") == "START_REAL_PILOT":
+            started = self.executionControlPage.start_one_click_pilot(command)
             self.show_page(36)
+            self.cutieCommandPage.preview_text.setText(
+                "ONE-CLICK REAL PILOT ARMED — automatic checks active; eligible structured order ka wait hai."
+                if started else "REAL PILOT NOT STARTED — Broker Execution status dekhein."
+            )
             return
         try:
             message = self.optionsAlgoPage.apply_cutie_command(command)

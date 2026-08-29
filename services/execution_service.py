@@ -167,6 +167,15 @@ class ExecutionService:
                 )
             raise
 
+    def submit_automated_pilot(self, order: OrderRequest) -> dict:
+        """Submit from a once-armed pilot session; all normal validations remain active."""
+        if not self.armed:
+            raise RuntimeError("Limited REAL pilot session is not armed.")
+        settings = self.settings_store.load()
+        if not bool(settings.get("limited_real_pilot_enabled", False)):
+            raise RuntimeError("Limited REAL Pilot Mode is disabled.")
+        return self.submit(order, "PLACE LIMIT ORDER")
+
     def refresh_status(self, audit_id: int) -> dict:
         audit = self.database.get_execution_audit(audit_id)
         if not audit or not audit["broker_order_id"]: raise RuntimeError("No broker order ID is available.")

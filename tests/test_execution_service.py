@@ -108,6 +108,14 @@ def test_submit_is_explicit_audited_and_duplicate_protected(monkeypatch):
         service.submit(order(), "PLACE LIMIT ORDER")
 
 
+def test_once_armed_pilot_can_submit_without_per_order_phrase(monkeypatch):
+    open_market(monkeypatch)
+    service = ExecutionService(FakeDatabase(), FakeSettings(), FakeLiveSession)
+    service.arm("ENABLE REAL TRADING")
+    result = service.submit_automated_pilot(order())
+    assert result["status"] == "ACCEPTED_NOT_FILLED"
+
+
 def test_market_hours_caps_and_identity_are_fail_closed(monkeypatch):
     monkeypatch.setattr("services.execution_service.market_session", lambda settings: {"state": "CLOSED"})
     service = ExecutionService(FakeDatabase(), FakeSettings(), FakeLiveSession)

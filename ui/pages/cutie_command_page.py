@@ -55,12 +55,8 @@ class CutieCommandPage(QWidget):
         if not self.parsed:
             return
         if self.parsed.get("mode") == "REAL":
-            QMessageBox.warning(
-                self, "Limited REAL pilot review required",
-                "Prompt valid hai. REAL command direct auto-submit nahi hogi. Cutie Broker Execution page kholegi jahan Limited Pilot, exact contract, target, stop, quantity aur session activation review karna mandatory hai.",
-            )
-            self.command_ready.emit({"intent": "REAL_PILOT_REVIEW", "summary": self.parsed["summary"]})
-            self.preview_text.setText("REAL PILOT REVIEW — Broker Execution khola gaya; koi order abhi submit nahi hua.")
+            self.command_ready.emit({**self.parsed, "intent": "START_REAL_PILOT"})
+            self.preview_text.setText("ONE-CLICK REAL PILOT REQUESTED — Cutie automatic session preflight chala rahi hai.")
             return
         self.command_ready.emit(dict(self.parsed))
         self.preview_text.setText(f"APPLIED — {self.parsed['summary']}")

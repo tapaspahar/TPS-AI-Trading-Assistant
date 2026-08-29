@@ -64,9 +64,10 @@ class ExecutionControlPage(QWidget):
         self.session_status = QLabel("LOCKED")
         arm_buttons = QHBoxLayout()
         arm_btn = QPushButton("Activate REAL Session"); arm_btn.clicked.connect(self.arm_session)
+        one_click_btn = QPushButton("Start Today's One-Click REAL Pilot"); one_click_btn.clicked.connect(self.start_one_click_pilot)
         disarm_btn = QPushButton("Disarm"); disarm_btn.clicked.connect(self.disarm)
         kill_btn = QPushButton("EMERGENCY STOP"); kill_btn.clicked.connect(self.emergency_stop)
-        arm_buttons.addWidget(arm_btn); arm_buttons.addWidget(disarm_btn); arm_buttons.addWidget(kill_btn)
+        arm_buttons.addWidget(arm_btn); arm_buttons.addWidget(one_click_btn); arm_buttons.addWidget(disarm_btn); arm_buttons.addWidget(kill_btn)
         arm.addRow(self.arm_money_ack); arm.addRow(self.arm_session_ack)
         arm.addRow("Session state", self.session_status); arm.addRow(arm_buttons)
         layout.addWidget(arm_box)
@@ -142,6 +143,26 @@ class ExecutionControlPage(QWidget):
             self.session_status.setText("ARMED — this app session only")
         except Exception as error:
             QMessageBox.warning(self, "Execution remains locked", str(error))
+
+    def start_one_click_pilot(self, command=None):
+        """One action is the daily consent; later eligible orders use automatic preflight."""
+        values = self.store.load()
+        values.update({"execution_mode": "REAL", "real_execution_enabled": True,
+                       "limited_real_pilot_enabled": True})
+        if command:
+            values["real_pilot_max_orders"] = min(2, int(command.get("max_trades", 2)))
+            values["execution_max_daily_loss"] = float(command.get("max_loss", values["execution_max_daily_loss"]))
+            values["execution_max_quantity"] = min(65, int(command.get("lots", 1)) * 65)
+        self.store.save(values)
+        self.enabled.setChecked(True); self.pilot_enabled.setChecked(True)
+        try:
+            self.service.arm(ExecutionService.UNLOCK_PHRASE)
+        except Exception as error:
+            self.session_status.setText(f"PILOT NOT STARTED — {error}")
+            return False
+        self.session_status.setText("ONE-CLICK REAL PILOT ARMED — automatic preflight active")
+        self.arm_money_ack.setChecked(True); self.arm_session_ack.setChecked(True)
+        return True
 
     def disarm(self):
         self.service.disarm(); self.session_status.setText("LOCKED")
