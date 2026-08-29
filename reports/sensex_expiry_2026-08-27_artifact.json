@@ -1,0 +1,119 @@
+{
+  "surface": "report",
+  "manifest": {
+    "version": 1,
+    "surface": "report",
+    "title": "Why Sensex Whipsawed After 3 PM on Expiry Day",
+    "description": "Evidence audit of the 27 August 2026 Sensex expiry and Closing Auction Session.",
+    "generatedAt": "2026-08-29T13:15:00+05:30",
+    "sources": [
+      {
+        "id": "tps-expiry-tape",
+        "label": "TPS expiry observation tape",
+        "query": {
+          "engine": "SQLite",
+          "language": "sql",
+          "sql": "SELECT observed_at, spot, strike, option_type, premium, open_interest, oi_change, oi_change_pct, volume FROM expiry_option_observations WHERE trade_date = '2026-08-27' AND underlying = 'SENSEX' AND strike = 77200 ORDER BY observed_at, option_type;",
+          "description": "SENSEX 77,200 CE/PE observations around the late-session repricing.",
+          "tables_used": ["expiry_option_observations", "expiry_spike_events"],
+          "filters": ["trade_date = 2026-08-27", "underlying = SENSEX", "selected strike = 77200"],
+          "metric_definitions": ["COI is exchange-reported change in open interest at the observation time; premium is the broker-reported option LTP."]
+        }
+      },
+      {
+        "id": "sebi-cas",
+        "label": "SEBI Closing Auction Session circular",
+        "href": "https://www.sebi.gov.in/legal/circulars/jan-2026/introduction-of-closing-auction-session-cas-in-the-equity-cash-segment-and-certain-modifications-in-the-pre-open-auction-session_99122.html"
+      },
+      {
+        "id": "business-standard-event",
+        "label": "Business Standard: Sensex CAS swings on 27 August 2026",
+        "href": "https://www.business-standard.com/markets/news/sensex-sees-sharp-cas-swings-on-monthly-expiry-sebi-rules-out-changes-126082701360_1.html"
+      }
+    ],
+    "charts": [
+      {
+        "id": "premium-repricing",
+        "title": "SENSEX 77,200 option premium repricing",
+        "subtitle": "Selected broker observations from 3:20 PM to 3:29 PM IST",
+        "type": "line",
+        "dataset": "premium_path",
+        "sourceId": "tps-expiry-tape",
+        "encodings": {
+          "x": {"field": "time", "type": "temporal", "label": "Time"},
+          "y": {"field": "premium", "type": "quantitative", "label": "Premium", "unit": "₹"},
+          "color": {"field": "side", "type": "nominal", "label": "Contract"},
+          "tooltip": [
+            {"field": "time", "type": "temporal", "label": "Time"},
+            {"field": "side", "type": "nominal", "label": "Contract"},
+            {"field": "premium", "type": "quantitative", "label": "Premium", "unit": "₹"},
+            {"field": "oi", "type": "quantitative", "label": "OI"},
+            {"field": "coi", "type": "quantitative", "label": "COI"}
+          ]
+        },
+        "layout": "full",
+        "maxRows": 20
+      }
+    ],
+    "tables": [
+      {
+        "id": "flow-sequence",
+        "title": "Late-session OI and premium sequence",
+        "subtitle": "Same 77,200 strike; exact selected observations",
+        "dataset": "flow_sequence",
+        "sourceId": "tps-expiry-tape",
+        "defaultSort": {"field": "time", "direction": "asc"},
+        "density": "spacious",
+        "layout": "full",
+        "columns": [
+          {"field": "time", "label": "Time", "type": "text"},
+          {"field": "ce_premium", "label": "CE premium", "format": "currency"},
+          {"field": "ce_coi", "label": "CE COI", "format": "number", "movement": true},
+          {"field": "pe_premium", "label": "PE premium", "format": "currency"},
+          {"field": "pe_coi", "label": "PE COI", "format": "number", "movement": true},
+          {"field": "interpretation", "label": "Interpretation", "type": "text"}
+        ]
+      }
+    ],
+    "blocks": [
+      {"id": "title", "type": "markdown", "body": "# Why Sensex Whipsawed After 3 PM on Expiry Day", "layout": "full"},
+      {"id": "summary", "type": "markdown", "body": "## Executive Summary\n\n- **The late move was primarily a Closing Auction Session repricing event, not an ordinary continuous-market 5-minute sell-off.** Sensex remained near 77,183 at 3:15 PM; the CAS indicative index reportedly fell below 75,000 before recovering to a 76,933.59 close.\n- **The option tape turned decisively bearish before the final index print.** At 77,200, CE premium collapsed while CE OI expanded; simultaneously PE premium surged while PE OI contracted. That combination is consistent with call writing plus put-short covering.\n- **High total PE OI did not mean durable support.** OI is inventory; falling PE OI with rising PE premium showed that previously written puts were being closed, so the apparent support was being dismantled.\n- **TPS captured the option repricing but not a trustworthy intraperiod Sensex chart.** The stored spot stayed frozen at 77,182.91 from 3:15 to 3:29 and there were no saved SENSEX 5-minute snapshots, so the exact candle path must not be reconstructed from the local spot field.", "layout": "full"},
+      {"id": "mechanism", "type": "markdown", "body": "## CAS, not ordinary trading, explains the discontinuity\n\nSEBI's new cash-market Closing Auction Session runs after continuous trading stops for eligible stocks. During the auction, constituent stocks discover closing prices and the index can show a sharply different indicative value. Equity derivatives continue trading until 3:40 PM, so expiring Sensex options rapidly reprice toward the emerging settlement reference. On 27 August, the first monthly derivatives expiry under this mechanism, the indicative Sensex reportedly dropped by more than 2,000 points and then recovered substantially before the official close.\n\n**So what:** a frozen continuous-market spot tick plus a moving auction-indicative settlement reference can make option premiums look disconnected from the visible chart. TPS must model CAS state explicitly rather than treat 3:15–3:35 as a normal candle.", "layout": "full"},
+      {"id": "premium-takeaway", "type": "markdown", "body": "## The option tape showed support failure before the final print\n\nThe chart below uses the same 77,200 strike. From 3:20:38 to 3:29:09, the CE premium fell from ₹64.00 to ₹3.75 while the PE premium rose from ₹90.10 to ₹322.10. Over the same sequence, CE open-interest change became positive while PE open-interest change became deeply negative.\n\n**Interpretation:** CE price down + OI up is consistent with fresh call writing; PE price up + OI down is consistent with put-short covering. Both point bearish. The combination is stronger evidence than total PE OI alone.", "layout": "full", "sourceId": "tps-expiry-tape"},
+      {"id": "premium-chart", "type": "chart", "chartId": "premium-repricing", "layout": "full"},
+      {"id": "flow-detail", "type": "markdown", "body": "## Why the large PE OI was misleading\n\nA put wall is support only while fresh behaviour confirms it: PE writing should generally show OI rising without an explosive premium rise, and price should hold the strike area. Here the opposite occurred. As settlement risk moved lower, put writers bought back their shorts, PE OI fell, PE premium accelerated, and call writers added positions.\n\nCOI percentage also becomes unstable near expiry when the prior OI base is small or the monitored strike window shifts. TPS should therefore compare the same strikes over time, use absolute COI and premium/OI quadrants, and label low-base percentages as unreliable.", "layout": "full"},
+      {"id": "flow-table", "type": "table", "tableId": "flow-sequence", "layout": "full"},
+      {"id": "next", "type": "markdown", "body": "## Recommended next steps\n\n1. Add an explicit CAS state from 3:15–3:35 and keep cash-index spot, indicative auction index, futures and options as separate feeds.\n2. Freeze directional automation when the settlement reference is stale or missing; continue observation and label the result `DATA GAP / CAS REPRICING`.\n3. Compare fixed ATM ±5 strikes across time. Detect bearish flow when CE price falls with OI rising and PE price rises with OI falling; reverse the logic for bullish flow.\n4. Save completed index-future candles and volume for NIFTY, BANKNIFTY and SENSEX every five minutes, then create a post-close cross-index narrative.\n5. Backtest several expiries before treating this pattern as repeatable. One dramatic event cannot establish a stable win probability.", "layout": "full"},
+      {"id": "questions", "type": "markdown", "body": "## Further questions\n\n- Can TPS ingest the official auction indicative index and imbalance, rather than reusing a stale spot quote?\n- Did the same CE-writing/PE-short-covering sequence appear on prior Sensex expiries under CAS?\n- Which constituent auction orders contributed most to the indicative fall, and were those orders executed or cancelled before random close?", "layout": "full"},
+      {"id": "caveats", "type": "markdown", "body": "## Caveats and assumptions\n\nThe local database contains 486 SENSEX option observations and nine spike events for 27 August, but no SENSEX 5-minute market snapshots. Its spot field remained unchanged for roughly 14 minutes during CAS and therefore is not reliable as the intraperiod chart. IV/Greeks and opposite-leg paired fields were unavailable. News reports establish the auction-index path and official close, but public reporting does not prove the intent of individual market participants. The diagnosis is high-confidence on mechanism and option-flow classification, not on actor-level causality.", "layout": "full"}
+    ]
+  },
+  "snapshot": {
+    "version": 1,
+    "generatedAt": "2026-08-29T13:15:00+05:30",
+    "status": "ready",
+    "datasets": {
+      "premium_path": [
+        {"time": "2026-08-27T15:20:38+05:30", "side": "77,200 CE", "premium": 64.00, "oi": 4406180, "coi": 253040, "spot_field": 77182.91},
+        {"time": "2026-08-27T15:20:38+05:30", "side": "77,200 PE", "premium": 90.10, "oi": 7062000, "coi": 186980, "spot_field": 77182.91},
+        {"time": "2026-08-27T15:23:39+05:30", "side": "77,200 CE", "premium": 85.05, "oi": 6163840, "coi": 1757660, "spot_field": 77182.91},
+        {"time": "2026-08-27T15:23:39+05:30", "side": "77,200 PE", "premium": 109.50, "oi": 4106200, "coi": -2955800, "spot_field": 77182.91},
+        {"time": "2026-08-27T15:26:39+05:30", "side": "77,200 CE", "premium": 15.75, "oi": 6008740, "coi": 702620, "spot_field": 77182.91},
+        {"time": "2026-08-27T15:26:39+05:30", "side": "77,200 PE", "premium": 217.15, "oi": 3214920, "coi": -2430760, "spot_field": 77182.91},
+        {"time": "2026-08-27T15:29:09+05:30", "side": "77,200 CE", "premium": 3.75, "oi": 6466760, "coi": 302920, "spot_field": 77182.91},
+        {"time": "2026-08-27T15:29:09+05:30", "side": "77,200 PE", "premium": 322.10, "oi": 2075760, "coi": -2030440, "spot_field": 77182.91}
+      ],
+      "flow_sequence": [
+        {"time": "15:20:38", "ce_premium": 64.00, "ce_coi": 253040, "pe_premium": 90.10, "pe_coi": 186980, "interpretation": "Transition; PE premium already rising"},
+        {"time": "15:23:39", "ce_premium": 85.05, "ce_coi": 1757660, "pe_premium": 109.50, "pe_coi": -2955800, "interpretation": "CE OI build + strong PE unwinding"},
+        {"time": "15:26:39", "ce_premium": 15.75, "ce_coi": 702620, "pe_premium": 217.15, "pe_coi": -2430760, "interpretation": "Call premium collapse; put short covering"},
+        {"time": "15:29:09", "ce_premium": 3.75, "ce_coi": 302920, "pe_premium": 322.10, "pe_coi": -2030440, "interpretation": "Bearish settlement repricing extreme"}
+      ]
+    }
+  },
+  "sources": [
+    {"id": "tps-expiry-tape", "label": "TPS expiry observation tape"},
+    {"id": "sebi-cas", "label": "SEBI Closing Auction Session circular", "href": "https://www.sebi.gov.in/legal/circulars/jan-2026/introduction-of-closing-auction-session-cas-in-the-equity-cash-segment-and-certain-modifications-in-the-pre-open-auction-session_99122.html"},
+    {"id": "business-standard-event", "label": "Business Standard event report", "href": "https://www.business-standard.com/markets/news/sensex-sees-sharp-cas-swings-on-monthly-expiry-sebi-rules-out-changes-126082701360_1.html"}
+  ]
+}

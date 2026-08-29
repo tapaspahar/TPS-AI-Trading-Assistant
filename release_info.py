@@ -8,9 +8,11 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.1"
-LAST_UPDATED_AT = "29-08-2026 12:55:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.5.1 - 29-08-2026 12:55 IST"
+LAST_UPDATED_AT = "29-08-2026 15:30:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.5.1 - 29-08-2026 15:30 IST"
 RELEASE_NOTES = (
+    "Added Live Index Intelligence & After Market Analysis: NIFTY, BANKNIFTY and SENSEX are automatically evaluated on every completed five-minute index-future candle with price anatomy, traded volume, near-ATM OI/COI flow, buyer/seller aggression, cross-index breadth and permanent evidence explanations.",
+    "Added automatic date-wise index conclusion reports with explicit source-completeness and FII/DII data-gap labels; SENSEX closing-auction observations are identified as CAS/settlement repricing instead of being misreported as ordinary continuous cash candles.",
     "Added chart-first Candle Anatomy and Chart + OI Confluence: completed-candle displacement, body/wicks, repeated rejection, volume participation and fresh OI-flow alignment now produce an evidence-timed explanation without claiming unknowable participant intent.",
     "Added a review-only OI-flow strike shortlist to Options Market Intelligence with ATM/slightly-ITM liquidity preference, TRUE/FALSE/UNKNOWN evidence, entry zone, premium/spot invalidation references, two targets and a safer defined-risk vertical alternative.",
     "Added OI Flow Intelligence inside Options Market Intelligence: legacy OI PCR is separated from fresh absolute COI flow, unreliable small-base COI percentages are suppressed, dynamic CE/PE wall health is labelled, and near-money strike coverage adapts between 5 and 7 wings.",

@@ -210,6 +210,28 @@ class Database:
             """
         )
         self.cursor.execute(
+            """CREATE TABLE IF NOT EXISTS index_candle_analyses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                trade_date TEXT NOT NULL, candle_time TEXT NOT NULL, analyzed_at TEXT NOT NULL,
+                symbol TEXT NOT NULL, state TEXT NOT NULL, direction TEXT NOT NULL,
+                aggression TEXT NOT NULL, open REAL, high REAL, low REAL, close REAL,
+                move_points REAL, range_points REAL, range_ratio REAL, volume REAL, volume_ratio REAL,
+                oi_direction TEXT, oi_quality INTEGER, call_oi REAL, put_oi REAL,
+                call_coi REAL, put_coi REAL, put_wall REAL, put_wall_health TEXT,
+                call_wall REAL, call_wall_health TEXT, source_completeness INTEGER,
+                explanation TEXT NOT NULL, details_json TEXT NOT NULL DEFAULT '{}',
+                UNIQUE(symbol, candle_time)
+            )"""
+        )
+        self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_index_candle_day ON index_candle_analyses(trade_date, candle_time)")
+        self.cursor.execute(
+            """CREATE TABLE IF NOT EXISTS index_daily_analyses (
+                trade_date TEXT PRIMARY KEY, generated_at TEXT NOT NULL,
+                market_state TEXT NOT NULL, source_completeness INTEGER NOT NULL,
+                summary_text TEXT NOT NULL, details_json TEXT NOT NULL DEFAULT '{}'
+            )"""
+        )
+        self.cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS strategy_trades (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1849,6 +1871,40 @@ class Database:
         )
         self.connection.commit()
         return result.rowcount == 1
+
+    def save_index_candle_analysis(self, analysis: dict) -> bool:
+        columns = (
+            "trade_date", "candle_time", "analyzed_at", "symbol", "state", "direction", "aggression",
+            "open", "high", "low", "close", "move_points", "range_points", "range_ratio", "volume", "volume_ratio",
+            "oi_direction", "oi_quality", "call_oi", "put_oi", "call_coi", "put_coi", "put_wall", "put_wall_health",
+            "call_wall", "call_wall_health", "source_completeness", "explanation", "details_json",
+        )
+        values = tuple(analysis.get(c) for c in columns)
+        result = self.cursor.execute(
+            f"INSERT OR IGNORE INTO index_candle_analyses ({', '.join(columns)}) VALUES ({', '.join('?' for _ in columns)})", values,
+        )
+        self.connection.commit()
+        return result.rowcount == 1
+
+    def get_index_candle_analyses(self, trade_date: str) -> list[sqlite3.Row]:
+        return self.cursor.execute(
+            "SELECT * FROM index_candle_analyses WHERE trade_date = ? ORDER BY candle_time DESC, symbol ASC", (trade_date,),
+        ).fetchall()
+
+    def save_index_daily_analysis(self, report: dict) -> None:
+        self.cursor.execute(
+            """INSERT INTO index_daily_analyses
+               (trade_date, generated_at, market_state, source_completeness, summary_text, details_json)
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON CONFLICT(trade_date) DO UPDATE SET generated_at=excluded.generated_at,
+               market_state=excluded.market_state, source_completeness=excluded.source_completeness,
+               summary_text=excluded.summary_text, details_json=excluded.details_json""",
+            tuple(report.get(k) for k in ("trade_date", "generated_at", "market_state", "source_completeness", "summary_text", "details_json")),
+        )
+        self.connection.commit()
+
+    def get_index_daily_analysis(self, trade_date: str) -> sqlite3.Row | None:
+        return self.cursor.execute("SELECT * FROM index_daily_analyses WHERE trade_date = ?", (trade_date,)).fetchone()
 
     def get_market_snapshots(self, trade_date: str | None = None) -> list[sqlite3.Row]:
         if trade_date:

@@ -51,6 +51,7 @@ class Sidebar(QFrame):
         self.executionControlButton = nav("Broker Execution")
         self.optionsAlgoButton = nav("Options Algo Trading")
         self.cutieCommandButton = nav("Cutie AI Commands")
+        self.indexMarketAnalysisButton = nav("Index Market Analysis")
         self.gapProbabilityButton = nav("3:20 + 3:40 Gap Probability")
         self.autoOpportunityButton = nav("Auto Opportunity Radar")
         self.trendMemoryButton = nav("Trend Memory Monitor")
@@ -58,7 +59,7 @@ class Sidebar(QFrame):
         # Keep the visual journey in the same order a trader uses the app:
         # market context -> chart confirmation -> option plan -> journal.
         self.buttons = (
-            self.dashboardButton, self.liveMarketButton,
+            self.dashboardButton, self.liveMarketButton, self.indexMarketAnalysisButton,
             self.equityButton,
             self.optionsButton, self.autoOpportunityButton, self.autoAttemptReportButton,
             self.notificationCenterButton, self.recoveryCenterButton, self.journalButton,
@@ -99,6 +100,7 @@ class Sidebar(QFrame):
             36: self.executionControlButton,
             37: self.optionsAlgoButton,
             38: self.cutieCommandButton,
+            39: self.indexMarketAnalysisButton,
         }
         self.menu_group = QButtonGroup(self)
         self.menu_group.setExclusive(True)
