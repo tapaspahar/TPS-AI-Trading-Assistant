@@ -11,6 +11,8 @@ SOFTWARE_UPDATE_VERSION = "v1.5.1"
 LAST_UPDATED_AT = "28-08-2026 07:57:00 IST"
 FOOTER_UPDATE_TEXT = "Software Update v1.5.0 - 28-08-2026 07:57 IST"
 RELEASE_NOTES = (
+    "Added OI Flow Intelligence inside Options Market Intelligence: legacy OI PCR is separated from fresh absolute COI flow, unreliable small-base COI percentages are suppressed, dynamic CE/PE wall health is labelled, and near-money strike coverage adapts between 5 and 7 wings.",
+    "OI Flow combines exchange-reported COI, premium-change quadrant, volume participation, ATM proximity and source coverage into BULLISH/BEARISH/BALANCED context; it reports DATA GAP warnings and never turns OI alone into entry permission.",
     "Added one-time daily REAL Pilot authorization: a single Cutie command or Broker Execution button arms the bounded session, after which structured orders may use automatic preflight without repeating a phrase for every order; all pilot caps, mandatory exits, broker, market, data and duplicate locks remain enforced.",
     "Added opt-in Limited REAL Pilot Mode: arming requires the pilot switch, every submitted entry requires target and stop values, and code-level ceilings enforce at most two accepted entries/day, quantity 65, 0.25% planned risk/trade and 0.5% recorded daily loss regardless of larger UI values.",
     "Cutie REAL prompts now route to Broker Execution for exact contract and final session review; they never auto-submit, and no unlimited-authority switch is provided.",

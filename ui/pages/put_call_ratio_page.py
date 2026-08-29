@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 from core.database_manager import Database
 from engine.option_chain_engine import analyze_option_chain
 from engine.pcr_sentiment_engine import analyze_pcr_sentiment
+from engine.oi_flow_intelligence import analyze_oi_flow
 from services.live_session import LiveSession
 from services.option_contract_service import OptionContractService, UNDERLYING_QUOTES, contracts_near_spot
 from ui.widgets.cards.dashboard_card import DashboardCard
@@ -70,6 +71,9 @@ class PutCallRatioPage(QWidget):
             "expected": DashboardCard("ATM Expected Move", "Waiting"),
             "max_pain": DashboardCard("Focused Max Pain", "Waiting"),
             "quality": DashboardCard("Chain Data Quality", "Waiting"),
+            "flow": DashboardCard("OI Flow Intelligence", "Waiting"),
+            "wall_health": DashboardCard("Dynamic Wall Health", "Waiting"),
+            "flow_quality": DashboardCard("Flow Coverage", "Waiting"),
         }
         for index, card in enumerate(self.cards.values()):
             card.set_compact(True); card.setMinimumHeight(92); grid.addWidget(card, index // 3, index % 3)
@@ -122,6 +126,7 @@ class PutCallRatioPage(QWidget):
             contracts = [contract for contract in contracts if contract["expiry"] == expiry]
             quotes = LiveSession.client.get_option_chain_quotes(contracts[0]["exchange"], [item["token"] for item in contracts])
             chain = analyze_option_chain(contracts, quotes, spot)
+            chain["oi_flow"] = analyze_oi_flow(chain["quote_rows"], spot, wing_count=7 if len(chain["quote_rows"]) >= 26 else 5)
             previous_row = database.get_latest_pcr_observation(symbol, expiry.isoformat())
             previous = dict(previous_row) if previous_row else None
             sentiment = analyze_pcr_sentiment(chain, previous)
@@ -172,10 +177,20 @@ class PutCallRatioPage(QWidget):
             f"{chain['data_quality']}/100 {chain['data_quality_label']}\nMedian spread {chain['median_spread_percent']:.2f}%{iv_text}"
             if chain.get("median_spread_percent") is not None else f"{chain['data_quality']}/100 {chain['data_quality_label']}\nSpread depth unavailable{iv_text}"
         )
+        flow = chain["oi_flow"]
+        self.cards["flow"].set_value(f"{flow['direction']}\nScore {flow['flow_score']:+.1f} | {flow['strikes_observed']} strikes")
+        self.cards["wall_health"].set_value(
+            f"PE {flow['put_wall'] or '-'}: {flow['put_wall_health']}\nCE {flow['call_wall'] or '-'}: {flow['call_wall_health']}"
+        )
+        self.cards["flow_quality"].set_value(
+            f"{flow['quality']}/100\nLegacy PCR {flow['legacy_pcr'] or '-'} | Fresh {flow['fresh_coi_pcr'] or '-'}"
+        )
         self.explanation.setText(
             f"Direction context: {sentiment['direction']}\nEvidence: {'; '.join(sentiment['evidence'])}\n"
             f"Expected move ATM straddle se expiry tak ka market-implied range hai; focused Max Pain sirf loaded strike window ka expiry context hai. "
             f"Dono standalone direction signal nahi hain.\nCaution: {'; '.join(sentiment['warnings'])}"
+            f"\n\nOI Flow: {flow['direction']} ({flow['flow_score']:+.1f}). PE wall {flow['put_wall_health']}; CE wall {flow['call_wall_health']}. "
+            f"{' ; '.join(flow['warnings']) if flow['warnings'] else 'Fresh-flow coverage usable hai.'}"
         )
         by_strike = {}
         for row in chain["quote_rows"]:

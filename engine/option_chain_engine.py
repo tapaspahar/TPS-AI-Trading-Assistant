@@ -44,6 +44,11 @@ def analyze_option_chain(contracts, quotes, spot=None):
             "oi_change": float(
                 quote.get("changeinOpenInterest", quote.get("changeInOI", quote.get("oiChange", 0))) or 0
             ),
+            "premium_change_percent": (
+                float(quote.get("percentChange")) if quote.get("percentChange") not in (None, "")
+                else float(quote.get("netChangePercent")) if quote.get("netChangePercent") not in (None, "")
+                else None
+            ),
         }
         row["spread_percent"] = (
             (row["ask"] - row["bid"]) / max((row["ask"] + row["bid"]) / 2, .01) * 100
