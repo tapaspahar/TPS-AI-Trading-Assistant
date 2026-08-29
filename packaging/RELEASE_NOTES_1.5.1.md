@@ -6,3 +6,4 @@
 - Stop evidence is attached to every generated review plan so post-market analysis can distinguish an ordinary wick/sweep from genuine setup invalidation.
 - No stop placement or strategy guarantees profit; market, broker and risk locks remain active.
 - Broker Account Funds now refreshes after connection, on page open and every 60 seconds in the background; the last successful IST timestamp is visible and failed responses are explicitly marked non-current.
+- Broker Funds now appears on the main Dashboard instead of the Broker Execution console, keeping the balance visible with the everyday overview while the execution page stays focused on safeguards and orders.

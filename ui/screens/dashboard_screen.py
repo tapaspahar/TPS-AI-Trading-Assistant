@@ -185,7 +185,7 @@ class DashboardScreen(QWidget):
         self.settingsPage.live_connected.connect(self.optionsPage.prepare_live_workspace)
         self.settingsPage.live_connected.connect(lambda: self.autoOpportunityPage.scan(force=True))
         self.settingsPage.live_connected.connect(self.scalperPage.start_monitoring)
-        self.settingsPage.live_connected.connect(self.executionControlPage.refresh_funds)
+        self.settingsPage.live_connected.connect(self.dashboardPage.refresh_funds)
         self.scalperPage.scalp_alert.connect(self.notify_scalp_watch)
         self.notifier.notification_sent.connect(self.notificationCenterPage.refresh)
         self.notificationCenterPage.unread_count_changed.connect(self.sidebar.set_notification_count)

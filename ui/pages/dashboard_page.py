@@ -1,3 +1,7 @@
+from datetime import datetime
+from threading import Thread
+
+from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import QGridLayout, QPushButton, QVBoxLayout, QWidget
 
 from core.database_manager import Database
@@ -8,9 +12,15 @@ from ui.widgets.cards.dashboard_card import DashboardCard
 class DashboardPage(QWidget):
     """Overview of the locally recorded trading journal."""
 
+    funds_loaded = Signal(dict)
+    funds_failed = Signal(str)
+
     def __init__(self):
         super().__init__()
         self.db = Database()
+        self._funds_refresh_running = False
+        self.funds_loaded.connect(self._show_funds)
+        self.funds_failed.connect(self._show_funds_error)
         layout = QVBoxLayout(self)
         grid = QGridLayout()
         grid.setHorizontalSpacing(20)
@@ -22,14 +32,19 @@ class DashboardPage(QWidget):
             "win_rate": DashboardCard("Win Rate", "0%"),
             "risk": DashboardCard("Risk Status", "Review each trade"),
             "trades": DashboardCard("Recorded Trades", "0"),
+            "funds": DashboardCard("Broker Funds", "Connect broker\nOpen Settings"),
         }
         for index, card in enumerate(self.cards.values()):
             grid.addWidget(card, index // 3, index % 3)
         layout.addLayout(grid)
         refresh_button = QPushButton("Refresh Dashboard")
-        refresh_button.clicked.connect(self.refresh)
+        refresh_button.clicked.connect(self.refresh_all)
         layout.addWidget(refresh_button)
         layout.addStretch()
+        self.funds_timer = QTimer(self)
+        self.funds_timer.setInterval(60_000)
+        self.funds_timer.timeout.connect(self.refresh_funds)
+        self.funds_timer.start()
         self.refresh()
 
     def refresh(self):
@@ -42,3 +57,41 @@ class DashboardPage(QWidget):
         self.cards["win_rate"].set_value(f"{summary['win_rate']:.1f}%")
         self.cards["trades"].set_value(summary["trades"])
         self.cards["risk"].set_value("Safe" if summary["trades"] == 0 or summary["pnl"] >= 0 else "Review loss")
+
+    def refresh_all(self):
+        self.refresh()
+        self.refresh_funds()
+
+    def refresh_funds(self):
+        if not LiveSession.connected() or LiveSession.broker_id != "angel_one":
+            self.cards["funds"].set_value("Not connected\nOpen Settings")
+            return
+        if self._funds_refresh_running:
+            return
+        self._funds_refresh_running = True
+        self.cards["funds"].set_value("Refreshing…")
+        Thread(target=self._load_funds, daemon=True).start()
+
+    def _load_funds(self):
+        try:
+            self.funds_loaded.emit(dict(LiveSession.client.get_funds()))
+        except Exception as error:
+            self.funds_failed.emit(str(error))
+
+    def _show_funds(self, values):
+        from core.market_session import IST
+        updated = datetime.now(IST).strftime("%H:%M:%S IST")
+        self.cards["funds"].set_value(
+            f"Available ₹{values['available_cash']:,.2f}\n"
+            f"Net ₹{values['net']:,.2f} | Used ₹{values['utilized']:,.2f}\n"
+            f"Updated {updated}"
+        )
+        self._funds_refresh_running = False
+
+    def _show_funds_error(self, _error):
+        self.cards["funds"].set_value("Refresh failed\nValue not current")
+        self._funds_refresh_running = False
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        QTimer.singleShot(0, self.refresh_all)

@@ -11,6 +11,7 @@ SOFTWARE_UPDATE_VERSION = "v1.5.1"
 LAST_UPDATED_AT = "28-08-2026 07:57:00 IST"
 FOOTER_UPDATE_TEXT = "Software Update v1.5.0 - 28-08-2026 07:57 IST"
 RELEASE_NOTES = (
+    "Moved the live read-only broker balance from Broker Execution to a dedicated Dashboard Broker Funds card; it refreshes after connection, whenever Dashboard opens, on Refresh Dashboard and every 60 seconds with an IST freshness timestamp.",
     "Made Broker Account Funds self-refreshing: balance loads immediately after broker connection and whenever the execution page opens, then refreshes every 60 seconds without blocking the interface; every successful value shows its IST update time and failed responses are marked non-current.",
     "Started Release 1.5.1 Capital Guardian: new installations default to 0.25% per-trade and 0.5% daily loss budgets while existing saved user settings remain preserved across upgrades.",
     "Replaced the fixed option-premium stop with an adaptive volatility/liquidity stop: minimum breathing room, regime adjustment, bid/ask-spread allowance and a bounded wick/sweep buffer are recorded as evidence.",
