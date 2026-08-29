@@ -6,7 +6,8 @@ from pathlib import Path
 from core.settings_store import SettingsStore
 from datetime import datetime, timezone
 
-from services.notification_service import category_enabled, daily_event_key
+from services.notification_service import category_enabled, daily_event_key, live_notification_allowed
+from core.market_session import IST
 
 
 class NotificationSettingsTests(unittest.TestCase):
@@ -37,6 +38,17 @@ class NotificationSettingsTests(unittest.TestCase):
         other_level = daily_event_key("support_resistance", "SENSEX:support:78100", now)
         self.assertEqual(first, second)
         self.assertNotEqual(first, other_level)
+
+    def test_live_suggestions_stop_after_close_and_on_holiday(self):
+        settings = {}
+        self.assertTrue(live_notification_allowed("auto_opportunity", settings, datetime(2026, 8, 3, 10, 0, tzinfo=IST)))
+        self.assertFalse(live_notification_allowed("auto_opportunity", settings, datetime(2026, 8, 3, 16, 0, tzinfo=IST)))
+        self.assertFalse(live_notification_allowed("scalper", settings, datetime(2026, 10, 2, 10, 0, tzinfo=IST)))
+
+    def test_exit_and_post_market_alerts_remain_allowed_after_close(self):
+        closed = datetime(2026, 8, 3, 16, 0, tzinfo=IST)
+        self.assertTrue(live_notification_allowed("target_achieved", {}, closed))
+        self.assertTrue(live_notification_allowed("post_market_analysis", {}, closed))
 
 
 if __name__ == "__main__":

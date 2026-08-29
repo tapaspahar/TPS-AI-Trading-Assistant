@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 
 from services.live_session import LiveSession
 from services.scalper_service import ScalperService
+from core.market_session import market_session
 
 
 class ScalperPage(QWidget):
@@ -65,6 +66,10 @@ class ScalperPage(QWidget):
 
     def analyze(self, force=False):
         if self._running or not LiveSession.connected() or (not force and not self.auto.isChecked()):
+            return
+        session = market_session()
+        if session["state"] != "OPEN":
+            self.status.setText(f"Live scalp monitor paused — {session['label']}. Stale candle par suggestion publish nahi hogi.")
             return
         self._running = True; self.run.setEnabled(False)
         self.status.setText("Future direction aur selected near-expiry option premium ki completed candles analyze ho rahi hain...")

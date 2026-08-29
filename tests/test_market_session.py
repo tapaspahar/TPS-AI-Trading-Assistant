@@ -20,6 +20,17 @@ class MarketSessionTests(unittest.TestCase):
         self.assertEqual(result["state"], "WEEKEND")
         self.assertEqual(result["deadline"].weekday(), 0)
 
+    def test_official_nse_holiday_blocks_market_session(self):
+        result = market_session(datetime(2026, 10, 2, 11, 0, tzinfo=IST), {})
+        self.assertEqual(result["state"], "HOLIDAY")
+        self.assertEqual(result["holiday"], "Mahatma Gandhi Jayanti")
+        self.assertEqual(result["deadline"].date().isoformat(), "2026-10-05")
+
+    def test_next_open_skips_holiday_after_regular_close(self):
+        result = market_session(datetime(2026, 10, 1, 16, 0, tzinfo=IST), {})
+        self.assertEqual(result["state"], "CLOSED")
+        self.assertEqual(result["deadline"].date().isoformat(), "2026-10-05")
+
     def test_saved_custom_market_timing_controls_session(self):
         settings = {
             "market_pre_open_time": "08:45", "market_open_time": "09:00",

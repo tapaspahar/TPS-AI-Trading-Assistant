@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QApplication, QStyle, QSystemTrayIcon
 
 from core.database_manager import Database
 from core.settings_store import SettingsStore
+from core.market_session import market_session
 
 
 NOTIFICATION_LABELS = {
@@ -46,6 +47,21 @@ NOTIFICATION_LABELS = {
     "scalper": "Near-expiry options scalper watch",
     "self_development": "AI Self-Development Decision Center",
 }
+
+# These categories represent fresh live-market suggestions.  They must never
+# be delivered from a stale last candle after close, on weekends or on an NSE
+# holiday. Exit/target/stop and post-market report categories intentionally
+# remain outside this set so position safety and daily audits keep working.
+LIVE_MARKET_NOTIFICATION_CATEGORIES = {
+    "trade_capture", "market_snapshot", "market_structure", "support_resistance",
+    "put_call_ratio", "auto_attempt_report", "early_watch", "equity_research",
+    "chart_capture", "stock_options_watch", "option_strategies", "smart_money_lab",
+    "pre_candle_lab", "powerful_engine", "auto_opportunity", "trend_memory", "scalper",
+}
+
+
+def live_notification_allowed(category: str, settings: dict, now=None) -> bool:
+    return category not in LIVE_MARKET_NOTIFICATION_CATEGORIES or market_session(now, settings)["state"] == "OPEN"
 
 
 def category_enabled(settings: dict, category: str) -> bool:
@@ -93,6 +109,8 @@ class NotificationService(QObject):
     ) -> bool:
         settings = SettingsStore().load()
         if not force and not category_enabled(settings, category):
+            return False
+        if not force and not live_notification_allowed(category, settings):
             return False
         event_key = daily_event_key(category, dedupe_key) if dedupe_key and once_per_day else None
         signature = (category, dedupe_key or title, "" if dedupe_key else message)

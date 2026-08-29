@@ -1,9 +1,10 @@
 """NSE cash-market session countdown using India Standard Time.
 
-Weekend handling is included. Exchange holidays are intentionally shown as normal
-weekdays until an official holiday-calendar sync is added.
+Weekend and official NSE equity/F&O holiday handling are included.
 """
 from datetime import datetime, time, timedelta, timezone
+
+from core.exchange_calendar import next_trading_day, trading_holiday
 
 
 # India does not observe daylight saving time, so a fixed IST offset is reliable
@@ -38,10 +39,7 @@ def parse_session_times(settings=None):
 
 
 def _next_business_day(day):
-    day += timedelta(days=1)
-    while day.weekday() >= 5:
-        day += timedelta(days=1)
-    return day
+    return next_trading_day(day)
 
 
 def market_session(now=None, settings=None):
@@ -51,6 +49,10 @@ def market_session(now=None, settings=None):
     if now.weekday() >= 5:
         opening = datetime.combine(_next_business_day(today), pre_open_at, IST)
         return {"state": "WEEKEND", "deadline": opening, "label": "Weekend — pre-open starts"}
+    holiday = trading_holiday(today)
+    if holiday:
+        opening = datetime.combine(_next_business_day(today), pre_open_at, IST)
+        return {"state": "HOLIDAY", "deadline": opening, "label": f"NSE holiday ({holiday}) — next pre-open", "holiday": holiday}
     pre_open = datetime.combine(today, pre_open_at, IST)
     open_time = datetime.combine(today, market_open_at, IST)
     close_time = datetime.combine(today, market_close_at, IST)

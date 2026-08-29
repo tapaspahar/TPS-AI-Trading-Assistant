@@ -7,6 +7,7 @@ from PySide6.QtCore import QDate, QTimer, Qt
 from PySide6.QtWidgets import QAbstractItemView, QDateEdit, QHBoxLayout, QHeaderView, QLabel, QPlainTextEdit, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 
 from core.database_manager import Database
+from core.market_session import market_session
 from services.index_market_analysis_service import IndexMarketAnalysisService
 from services.live_session import LiveSession
 
@@ -17,6 +18,7 @@ class IndexMarketAnalysisPage(QWidget):
         self.db = Database()
         self.scanning = False
         self.last_auto_bucket = None
+        self.last_finalized_day = None
         layout = QVBoxLayout(self)
         title = QLabel("Live Index Intelligence & After Market Analysis")
         title.setObjectName("pageTitle")
@@ -61,6 +63,19 @@ class IndexMarketAnalysisPage(QWidget):
             if force and LiveSession.client is None: self.status.setText("Live broker data connected nahi hai; saved report available hai.")
             return
         now = datetime.now()
+        session = market_session(now)
+        if session["state"] in {"WEEKEND", "HOLIDAY", "BEFORE_OPEN", "PRE_OPEN"}:
+            self.status.setText(f"Automatic analysis paused — {session['label']}. Saved history available hai.")
+            return
+        if session["state"] == "CLOSED":
+            day = now.date().isoformat()
+            if day == self.last_finalized_day:
+                self.status.setText("Market closed — final index conclusion saved; live scanning paused.")
+                return
+            # Exactly one closing refresh is allowed so the final completed
+            # candle reaches the daily report. Further 30-second/5-minute
+            # polling remains stopped until the next live session.
+            self.last_finalized_day = day
         bucket = (now.date(), now.hour, now.minute // 5)
         if not force and (now.minute % 5 != 0 or now.second > 35 or bucket == self.last_auto_bucket): return
         self.scanning = True; self.scan_button.setEnabled(False); self.status.setText("Teenon indices ki latest completed candle analyze ho rahi hai…")

@@ -283,10 +283,14 @@ class GapProbabilityPage(QWidget):
         if self._load_in_progress or not LiveSession.connected():
             return
         now = datetime.now().astimezone()
-        if now.weekday() >= 5:
-            return
+        from core.market_session import market_session
         stage = self._automatic_stage_due(now.time())
         if not stage:
+            return
+        session_state = market_session(now)["state"]
+        if session_state in {"WEEKEND", "HOLIDAY", "BEFORE_OPEN", "PRE_OPEN"}:
+            return
+        if session_state != "OPEN" and stage != CLOSE_STAGE:
             return
         previous_attempt = self._last_auto_attempt.get(stage)
         if previous_attempt and (now - previous_attempt).total_seconds() < 300:

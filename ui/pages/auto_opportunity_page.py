@@ -15,6 +15,7 @@ from core.auto_universe_store import AutoUniverseStore
 from services.auto_opportunity_service import AutoOpportunityService
 from services.live_session import LiveSession
 from services.notification_service import NotificationService
+from core.market_session import market_session
 from ui.widgets.cards.dashboard_card import DashboardCard
 from ui.widgets.excel_export_dialog import open_excel_export
 
@@ -86,7 +87,7 @@ class AutoOpportunityPage(QWidget):
 
     def _automatic_tick(self):
         now = datetime.now()
-        if now.weekday() >= 5 or not (time(9, 20) <= now.time() <= time(15, 25)):
+        if market_session(now)["state"] != "OPEN" or not (time(9, 20) <= now.time() <= time(15, 25)):
             return
         bucket = now.strftime("%Y-%m-%d-%H-") + f"{(now.minute // 5) * 5:02d}"
         if now.minute % 5 == 0 and now.second >= 8 and bucket != self.last_bucket:
@@ -100,7 +101,9 @@ class AutoOpportunityPage(QWidget):
             self.status.setText("Cutie keh rahi hai: broker live data disconnected hai; main automatically retry karungi.")
             return
         now = datetime.now()
-        if not force and (now.weekday() >= 5 or not (time(9, 20) <= now.time() <= time(15, 25))):
+        session = market_session(now)
+        if session["state"] != "OPEN" or not (time(9, 20) <= now.time() <= time(15, 25)):
+            self.status.setText(f"Live scan paused — {session['label']}. Saved history aur post-market reports available hain.")
             return
         self.scanning = True; self.run.setEnabled(False)
         self.status.setText("Automatic completed-candle scan started. Broker API limits ke liye symbols sequentially check ho rahe hain...")
