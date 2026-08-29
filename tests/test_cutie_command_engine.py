@@ -23,3 +23,8 @@ class CutieCommandEngineTests(unittest.TestCase):
     def test_stop_and_status_are_allowlisted(self):
         self.assertEqual(parse_cutie_command("emergency stop")["intent"], "STOP_ALGO")
         self.assertEqual(parse_cutie_command("algo status")["intent"], "ALGO_STATUS")
+
+    def test_understands_natural_language_page_navigation(self):
+        result = parse_cutie_command("jump to expiry after 3 pm page")
+        self.assertEqual((result["intent"], result["route"]), ("NAVIGATE", 35))
+        self.assertEqual(parse_cutie_command("show settings")["route"], 9)

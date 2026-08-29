@@ -9,3 +9,4 @@
 - Broker Funds now appears on the main Dashboard instead of the Broker Execution console, keeping the balance visible with the everyday overview while the execution page stays focused on safeguards and orders.
 - Added Cutie AI Command Center for allow-listed Hindi/English PAPER algo start, status and emergency-stop commands. Incomplete, ambiguous and safeguard-bypass prompts are rejected.
 - REAL prompt automation remains fail-closed until fill reconciliation and broker-managed exits are proven end to end; no free-form prompt can directly place an unrestricted order.
+- Renamed the workspace to Cutie AI Assistant and added natural Hindi/English page navigation, including commands such as `jump to expiry after 3 pm page`, `show settings` and `go to strategy trades`.

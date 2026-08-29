@@ -24,6 +24,31 @@ def parse_cutie_command(prompt: str) -> dict:
         raise ValueError("Command likhiye; blank prompt execute nahi ho sakta.")
     if any(word in lower for word in ("bypass", "ignore risk", "without stop", "no stop", "disable kill")):
         raise ValueError("Risk, stop ya kill-switch bypass command allowed nahi hai.")
+    page_aliases = (
+        (("expiry after 3", "expiry observation", "3 pm page"), 35, "Expiry After 3 PM"),
+        (("dashboard", "home page"), 0, "Dashboard"),
+        (("market snapshot", "market page"), 1, "Market Snapshot"),
+        (("options workspace", "option workspace"), 2, "Options Workspace"),
+        (("trade journal", "journal page"), 4, "Trade Journal"),
+        (("report page", "reports"), 8, "Reports"),
+        (("settings", "setting page"), 9, "Settings"),
+        (("backtest", "backtesting"), 10, "Backtesting"),
+        (("option strategies", "strategy analysis"), 21, "Option Strategies"),
+        (("post market", "post-market"), 22, "Post Market Analysis"),
+        (("auto opportunity", "opportunity radar"), 27, "Auto Opportunity Radar"),
+        (("trend memory",), 28, "Trend Memory Monitor"),
+        (("notification", "alerts"), 30, "Notification Center"),
+        (("ai development", "development center"), 31, "AI Development Center"),
+        (("strategy trades",), 34, "Strategy Trades"),
+        (("broker execution", "execution page"), 36, "Broker Execution"),
+        (("options algo", "algo page"), 37, "Options Algo Trading"),
+    )
+    navigation_words = ("open", "show", "go to", "jump", "navigate", "le chalo", "kholo")
+    if any(word in lower for word in navigation_words):
+        for aliases, route, label in page_aliases:
+            if any(alias in lower for alias in aliases):
+                return {"intent": "NAVIGATE", "route": route, "page": label, "summary": f"{label} page kholein."}
+        raise ValueError("Page identify nahi hua. Page ka sidebar name command me mention karein.")
     if any(word in lower for word in ("kill switch", "emergency stop", "stop algo", "algo band")):
         return {"intent": "STOP_ALGO", "summary": "Options algo ki new entries stop karein."}
     if "status" in lower or "kya chal" in lower:
@@ -52,4 +77,4 @@ def parse_cutie_command(prompt: str) -> dict:
             "target": target, "max_loss": loss, "max_trades": int(trades), "lots": int(lots),
             "summary": f"{symbol} {mode} algo | target ₹{target:,.2f} | max loss ₹{loss:,.2f} | {int(trades)} trades | {int(lots)} lot(s)",
         }
-    raise ValueError("Command samajh nahi aayi. Supported: start PAPER algo, algo status, ya kill switch.")
+    raise ValueError("Command samajh nahi aayi. Page open, PAPER algo, algo status ya kill switch command try karein.")

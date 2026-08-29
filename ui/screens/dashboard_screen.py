@@ -242,6 +242,9 @@ class DashboardScreen(QWidget):
 
     def apply_cutie_command(self, command):
         """Route a validated command to the existing guarded controller."""
+        if command.get("intent") == "NAVIGATE":
+            self.show_page(int(command["route"]))
+            return
         try:
             message = self.optionsAlgoPage.apply_cutie_command(command)
         except Exception as error:
