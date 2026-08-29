@@ -13,3 +13,4 @@
 - Added Limited REAL Pilot Mode with mandatory target/stop, maximum two accepted entries/day, quantity 65, 0.25% planned risk/trade and 0.5% recorded daily-loss ceilings.
 - Added one-time daily REAL Pilot authorization from Cutie or Broker Execution. Once armed, structured orders can pass automatic preflight without repeating a confirmation phrase per trade; hard limits and mandatory exits still cannot be bypassed.
 - Added OI Flow Intelligence with separate legacy OI and fresh COI ratios, small-base distortion filtering, premium/OI flow quadrants, adaptive near-money wings, dynamic CE/PE wall health, flow score and source-quality warnings.
+- Added a review-only strike shortlist on Options Market Intelligence. It prefers liquid ATM/slightly-ITM contracts, exposes evidence coverage and WAIT/DATA GAP reasons, and shows entry/invalidation/target references plus a safer defined-risk vertical alternative; it does not promise profit or place an order.

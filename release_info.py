@@ -8,9 +8,10 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.1"
-LAST_UPDATED_AT = "29-08-2026 12:36:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.5.1 - 29-08-2026 12:36 IST"
+LAST_UPDATED_AT = "29-08-2026 13:08:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.5.1 - 29-08-2026 13:08 IST"
 RELEASE_NOTES = (
+    "Added a review-only OI-flow strike shortlist to Options Market Intelligence with ATM/slightly-ITM liquidity preference, TRUE/FALSE/UNKNOWN evidence, entry zone, premium/spot invalidation references, two targets and a safer defined-risk vertical alternative.",
     "Added OI Flow Intelligence inside Options Market Intelligence: legacy OI PCR is separated from fresh absolute COI flow, unreliable small-base COI percentages are suppressed, dynamic CE/PE wall health is labelled, and near-money strike coverage adapts between 5 and 7 wings.",
     "OI Flow combines exchange-reported COI, premium-change quadrant, volume participation, ATM proximity and source coverage into BULLISH/BEARISH/BALANCED context; it reports DATA GAP warnings and never turns OI alone into entry permission.",
     "Added one-time daily REAL Pilot authorization: a single Cutie command or Broker Execution button arms the bounded session, after which structured orders may use automatic preflight without repeating a phrase for every order; all pilot caps, mandatory exits, broker, market, data and duplicate locks remain enforced.",

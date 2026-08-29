@@ -11,6 +11,8 @@ from core.database_manager import Database
 from engine.option_chain_engine import analyze_option_chain
 from engine.pcr_sentiment_engine import analyze_pcr_sentiment
 from engine.oi_flow_intelligence import analyze_oi_flow
+from engine.oi_strike_candidate_engine import shortlist_oi_strike
+from core.settings_store import SettingsStore
 from services.live_session import LiveSession
 from services.option_contract_service import OptionContractService, UNDERLYING_QUOTES, contracts_near_spot
 from ui.widgets.cards.dashboard_card import DashboardCard
@@ -74,10 +76,19 @@ class PutCallRatioPage(QWidget):
             "flow": DashboardCard("OI Flow Intelligence", "Waiting"),
             "wall_health": DashboardCard("Dynamic Wall Health", "Waiting"),
             "flow_quality": DashboardCard("Flow Coverage", "Waiting"),
+            "strike_candidate": DashboardCard("Strike Shortlist", "Waiting"),
+            "candidate_status": DashboardCard("Candidate Evidence", "Waiting"),
+            "candidate_levels": DashboardCard("Review Levels", "Waiting"),
         }
         for index, card in enumerate(self.cards.values()):
             card.set_compact(True); card.setMinimumHeight(92); grid.addWidget(card, index // 3, index % 3)
         layout.addLayout(grid)
+        candidate_box = QGroupBox("OI-flow strike shortlist — review only")
+        candidate_layout = QVBoxLayout(candidate_box)
+        self.candidate_details = QLabel("Live analysis ke baad candidate ya transparent WAIT reason yahan dikhega.")
+        self.candidate_details.setWordWrap(True)
+        candidate_layout.addWidget(self.candidate_details)
+        layout.addWidget(candidate_box)
         self.explanation = QLabel("Connect broker data and refresh the page.")
         self.explanation.setWordWrap(True); layout.addWidget(self.explanation)
         chain_box = QGroupBox("Focused nearest-expiry strike OI")
@@ -127,6 +138,7 @@ class PutCallRatioPage(QWidget):
             quotes = LiveSession.client.get_option_chain_quotes(contracts[0]["exchange"], [item["token"] for item in contracts])
             chain = analyze_option_chain(contracts, quotes, spot)
             chain["oi_flow"] = analyze_oi_flow(chain["quote_rows"], spot, wing_count=7 if len(chain["quote_rows"]) >= 26 else 5)
+            chain["strike_candidate"] = shortlist_oi_strike(chain, chain["oi_flow"], spot, SettingsStore().load())
             previous_row = database.get_latest_pcr_observation(symbol, expiry.isoformat())
             previous = dict(previous_row) if previous_row else None
             sentiment = analyze_pcr_sentiment(chain, previous)
@@ -184,6 +196,31 @@ class PutCallRatioPage(QWidget):
         )
         self.cards["flow_quality"].set_value(
             f"{flow['quality']}/100\nLegacy PCR {flow['legacy_pcr'] or '-'} | Fresh {flow['fresh_coi_pcr'] or '-'}"
+        )
+        candidate = chain["strike_candidate"]
+        selected = candidate.get("candidate") or {}
+        candidate_name = (f"{selected.get('strike', 0):,.0f} {selected.get('option_type', '')}"
+                          if selected else "No directional strike")
+        self.cards["strike_candidate"].set_value(f"{candidate_name}\n{candidate.get('state', 'WAIT')}")
+        self.cards["candidate_status"].set_value(
+            f"Score {candidate.get('score', 0)}/100\nKnown evidence {candidate.get('coverage', 0)}%"
+        )
+        zone = candidate.get("entry_zone")
+        self.cards["candidate_levels"].set_value(
+            f"Entry ₹{zone[0]:,.2f}–₹{zone[1]:,.2f}\nT1 ₹{candidate['target_1']:,.2f} | T2 ₹{candidate['target_2']:,.2f}"
+            if zone else "WAIT\nNo executable levels"
+        )
+        evidence_text = " | ".join(f"{item['name']}: {item['state']}" for item in candidate.get("evidence", []))
+        invalidation = (f"Premium invalidation ₹{candidate['premium_invalidation']:,.2f}"
+                        if candidate.get("premium_invalidation") is not None else "Premium invalidation unavailable")
+        spot_invalidation = (f"spot wall {candidate['spot_invalidation']:,.0f}"
+                             if candidate.get("spot_invalidation") is not None else "spot wall unavailable")
+        warnings = "; ".join(candidate.get("warnings") or []) or "No additional warning"
+        self.candidate_details.setText(
+            f"Cutie shortlist: {candidate_name} — {candidate.get('state')}. {candidate.get('reason')}\n"
+            f"{invalidation}; {spot_invalidation}. Safer alternative: {candidate.get('safer_alternative')}.\n"
+            f"Evidence: {evidence_text or 'not available'}\nWarnings: {warnings}. "
+            "Ye profit guarantee ya broker-order permission nahi hai; completed chart confirmation aur defined-risk payoff zaroori hai."
         )
         self.explanation.setText(
             f"Direction context: {sentiment['direction']}\nEvidence: {'; '.join(sentiment['evidence'])}\n"
