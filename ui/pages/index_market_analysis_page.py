@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from PySide6.QtCore import QDate, QTimer
-from PySide6.QtWidgets import QDateEdit, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
+from PySide6.QtCore import QDate, QTimer, Qt
+from PySide6.QtWidgets import QAbstractItemView, QDateEdit, QHBoxLayout, QHeaderView, QLabel, QPlainTextEdit, QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget
 
 from core.database_manager import Database
 from services.index_market_analysis_service import IndexMarketAnalysisService
@@ -32,7 +32,21 @@ class IndexMarketAnalysisPage(QWidget):
         self.cross_index = QLabel(); self.cross_index.setObjectName("sectionTitle"); self.cross_index.setWordWrap(True); layout.addWidget(self.cross_index)
         self.table = QTableWidget(0, 10)
         self.table.setHorizontalHeaderLabels(("Candle", "Index", "Direction", "Move", "Future volume", "Aggression", "OI flow", "Call COI", "Put COI", "Evidence explanation"))
-        self.table.setWordWrap(True); self.table.setAlternatingRowColors(True); self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.setWordWrap(True)
+        self.table.setAlternatingRowColors(True)
+        self.table.setTextElideMode(Qt.ElideNone)
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
+        self.table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
+        header = self.table.horizontalHeader()
+        header.setStretchLastSection(False)
+        header.setMinimumSectionSize(72)
+        for column in range(9):
+            header.setSectionResizeMode(column, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(9, QHeaderView.Interactive)
+        self.table.setColumnWidth(9, 640)
+        self.table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         layout.addWidget(self.table, 2)
         layout.addWidget(QLabel("After Market Analysis of Index — saved conclusion"))
         self.report = QPlainTextEdit(); self.report.setReadOnly(True); layout.addWidget(self.report, 1)
@@ -68,6 +82,12 @@ class IndexMarketAnalysisPage(QWidget):
                       f"{float(row['volume_ratio']):.2f}x" if row["volume_ratio"] is not None else "DATA GAP", row["aggression"],
                       f"{row['oi_direction']} ({int(row['oi_quality'] or 0)}/100)", f"{float(row['call_coi'] or 0):+,.0f}", f"{float(row['put_coi'] or 0):+,.0f}", row["explanation"])
             for j, value in enumerate(values): self.table.setItem(i, j, QTableWidgetItem(str(value)))
+        # Resize the compact evidence columns from their current contents;
+        # the explanation column intentionally keeps a readable fixed width
+        # and uses the horizontal scrollbar on smaller screens.
+        self.table.resizeColumnsToContents()
+        self.table.setColumnWidth(9, min(max(640, self.table.columnWidth(9)), 900))
+        self.table.resizeRowsToContents()
         latest = {s: next((r for r in rows if r["symbol"] == s), None) for s in ("NIFTY", "BANKNIFTY", "SENSEX")}
         present = [f"{s} {r['direction']}" for s, r in latest.items() if r]
         self.cross_index.setText("Cross-index latest: " + (" | ".join(present) if present else "saved candle data unavailable"))

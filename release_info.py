@@ -8,9 +8,10 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.1"
-LAST_UPDATED_AT = "29-08-2026 15:30:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.5.1 - 29-08-2026 15:30 IST"
+LAST_UPDATED_AT = "29-08-2026 15:49:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.5.1 - 29-08-2026 15:49 IST"
 RELEASE_NOTES = (
+    "Made the Index Market Analysis evidence table content-aware: compact columns auto-size, the full explanation keeps a readable bounded width, rows expand for wrapped text, and smooth horizontal/vertical scrollbars appear whenever the screen cannot show all evidence.",
     "Added Live Index Intelligence & After Market Analysis: NIFTY, BANKNIFTY and SENSEX are automatically evaluated on every completed five-minute index-future candle with price anatomy, traded volume, near-ATM OI/COI flow, buyer/seller aggression, cross-index breadth and permanent evidence explanations.",
     "Added automatic date-wise index conclusion reports with explicit source-completeness and FII/DII data-gap labels; SENSEX closing-auction observations are identified as CAS/settlement repricing instead of being misreported as ordinary continuous cash candles.",
     "Added chart-first Candle Anatomy and Chart + OI Confluence: completed-candle displacement, body/wicks, repeated rejection, volume participation and fresh OI-flow alignment now produce an evidence-timed explanation without claiming unknowable participant intent.",

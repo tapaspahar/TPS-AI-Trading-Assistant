@@ -1,4 +1,7 @@
 import json
+import os
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from core.database_manager import Database
 from engine.index_candle_analysis_engine import analyze_index_candle, combine_index_candles
@@ -45,3 +48,18 @@ def test_index_analysis_database_roundtrip(tmp_path):
                                   "source_completeness": 75, "summary_text": "saved", "details_json": "{}"})
     assert db.get_index_daily_analysis("29-08-2026")["summary_text"] == "saved"
     db.close()
+
+
+def test_index_page_has_content_columns_and_both_scrollbars(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication, QHeaderView
+    from ui.pages.index_market_analysis_page import IndexMarketAnalysisPage
+    app = QApplication.instance() or QApplication([])
+    page = IndexMarketAnalysisPage()
+    assert page.table.horizontalScrollBarPolicy() == Qt.ScrollBarAsNeeded
+    assert page.table.verticalScrollBarPolicy() == Qt.ScrollBarAsNeeded
+    assert page.table.horizontalHeader().sectionResizeMode(0) == QHeaderView.ResizeToContents
+    assert page.table.horizontalHeader().sectionResizeMode(9) == QHeaderView.Interactive
+    assert page.table.columnWidth(9) >= 640
+    page.close()
