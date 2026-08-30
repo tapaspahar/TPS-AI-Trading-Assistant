@@ -169,3 +169,28 @@ def test_pair_rejects_invalid_time_exit(_session, tmp_path):
     with pytest.raises(RuntimeError, match="HH:MM"):
         subject.open_pair(underlying="NIFTY", expiry="2026-08-27", strike=24350, ce=ce, pe=pe,
                           lots=1, target_pnl=650, stop_pnl=500, time_exit="25:99")
+
+
+@patch("services.paired_execution_service.market_session", return_value={"state": "OPEN"})
+def test_parity_pair_saves_shared_observation_and_blocks_restart_duplicate(_session, tmp_path):
+    subject, database, _ = service(tmp_path)
+    ce, pe = legs()
+    observed = "2026-08-27T15:04:30+05:30"
+    subject.open_pair(
+        underlying="NIFTY", expiry="2026-08-27", strike=24350, ce=ce, pe=pe,
+        lots=1, target_pnl=650, stop_pnl=500, time_exit="15:25",
+        source_page="EXPIRY_ATM_PARITY", trigger_type="ATM_PREMIUM_PARITY",
+        observed_at=observed, premium_gap=10,
+    )
+    pair = database.get_open_execution_pair("NIFTY")
+    details = __import__("json").loads(pair["details_json"])
+    assert details["ce_observed_at"] == observed == details["pe_observed_at"]
+    assert details["premium_gap"] == 10.0
+    database.update_execution_pair(pair["id"], status="PAPER_CLOSED")
+    with pytest.raises(RuntimeError, match="duplicate entry blocked"):
+        subject.open_pair(
+            underlying="NIFTY", expiry="2026-08-27", strike=24350, ce=ce, pe=pe,
+            lots=1, target_pnl=650, stop_pnl=500, time_exit="15:25",
+            source_page="EXPIRY_ATM_PARITY", trigger_type="ATM_PREMIUM_PARITY",
+            observed_at=observed, premium_gap=10,
+        )

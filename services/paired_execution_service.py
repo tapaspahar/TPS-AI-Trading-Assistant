@@ -38,10 +38,15 @@ class PairedExecutionService:
         self._pair_armed = False
         self.execution.emergency_stop()
 
-    def open_pair(self, *, underlying, expiry, strike, ce, pe, lots, target_pnl, stop_pnl, time_exit, real=False):
+    def open_pair(self, *, underlying, expiry, strike, ce, pe, lots, target_pnl, stop_pnl, time_exit,
+                  real=False, source_page="EXPIRY_AFTER_3PM", trigger_type="MANUAL_OR_SPIKE",
+                  observed_at=None, premium_gap=None):
         settings = self.settings_store.load()
+        trading_date = datetime.now(IST).date().isoformat()
         if self.database.get_open_execution_pair(underlying):
             raise RuntimeError(f"{underlying} ka ek paired position already open/pending hai.")
+        if self.database.has_execution_pair(trading_date, source_page, underlying, strike):
+            raise RuntimeError("Is expiry trigger ka CE+PE pair aaj already record ho chuka hai; duplicate entry blocked.")
         if market_session(settings=settings)["state"] != "OPEN":
             raise RuntimeError("Regular market session open nahi hai.")
         lots = int(lots); lot_size = int(ce["contract"].get("lot_size") or 0)
@@ -58,13 +63,18 @@ class PairedExecutionService:
         mode = "REAL" if real else "PAPER"
         if real and not self.armed:
             raise RuntimeError("Real expiry pair session armed nahi hai.")
-        common = dict(trading_date=datetime.now(IST).date().isoformat(), source_page="EXPIRY_AFTER_3PM",
+        trigger_observed_at = str(observed_at or datetime.now(IST).isoformat())
+        common = dict(trading_date=trading_date, source_page=source_page,
                       mode=mode, underlying=underlying, strike=float(strike), expiry=str(expiry), lots=lots,
                       quantity=quantity, status="REAL_SUBMITTING" if real else "PAPER_OPEN",
                       ce_symbol=ce["contract"]["symbol"], ce_token=ce["contract"]["token"], ce_entry=ce_price,
                       pe_symbol=pe["contract"]["symbol"], pe_token=pe["contract"]["token"], pe_entry=pe_price,
                       target_pnl=float(target_pnl), stop_pnl=float(stop_pnl), time_exit=str(time_exit),
-                      details={"warning": "Long straddle; profit guaranteed nahi hai. IV crush/theta risk active."})
+                      details={"warning": "Long straddle; profit guaranteed nahi hai. IV crush/theta risk active.",
+                               "trigger_type": str(trigger_type), "observed_at": trigger_observed_at,
+                               "ce_observed_at": trigger_observed_at, "pe_observed_at": trigger_observed_at,
+                               "premium_gap": None if premium_gap is None else round(float(premium_gap), 2),
+                               "paired_intent": True})
         pair_id = self.database.create_execution_pair(common)
         if not real:
             return {"id": pair_id, "status": "PAPER_OPEN"}

@@ -20,6 +20,23 @@ from services.option_contract_service import UNDERLYING_QUOTES, OptionContractSe
 from services.paired_execution_service import PairedExecutionService
 
 
+ATM_PARITY_MAX_GAP = 10.0
+
+
+def select_atm_parity_pair(pairs, spot, max_gap=ATM_PARITY_MAX_GAP):
+    """Select only the closest ATM strike when both premiums share one snapshot."""
+    complete = [(float(strike), pair) for strike, pair in (pairs or {}).items()
+                if "CE" in pair and "PE" in pair]
+    if not complete:
+        return None
+    strike, pair = min(complete, key=lambda item: abs(item[0] - float(spot)))
+    ce_price, pe_price = float(pair["CE"]["premium"]), float(pair["PE"]["premium"])
+    gap = abs(ce_price - pe_price)
+    if min(ce_price, pe_price) <= 0 or gap > float(max_gap):
+        return None
+    return {"strike": strike, "pair": pair, "ce_price": ce_price, "pe_price": pe_price, "gap": gap}
+
+
 def expiry_monitor_window(now, enabled, expiry_date, market_close):
     if not enabled:
         return "OFF"
@@ -110,6 +127,10 @@ class ExpiryObservationPage(QWidget):
         self.pair_time = QLineEdit(self.settings.value("expiry_pair/time_exit", "15:25")); self.pair_time.setPlaceholderText("HH:MM")
         self.auto_pair = QCheckBox("Spike confirmed hone par auto pair capture/submit (sirf current session)")
         self.auto_pair.setChecked(False)
+        self.auto_atm_parity = QCheckBox(
+            "3 PM ke baad ATM CE/PE premium gap ≤ ₹10 ho toh same-snapshot pair auto entry (current session)"
+        )
+        self.auto_atm_parity.setChecked(False)
         self.real_pair_money_ack = QCheckBox("I understand CE+PE REAL pair actual money use karega")
         self.real_pair_session_ack = QCheckBox("Is app session ke liye REAL expiry pair activate karein")
         self.paper_pair = QPushButton("Capture PAPER CE+PE Pair"); self.paper_pair.clicked.connect(lambda: self._place_pair(False))
@@ -121,12 +142,13 @@ class ExpiryObservationPage(QWidget):
         execution.addWidget(QLabel("Combined maximum loss"), 1, 0); execution.addWidget(self.pair_stop, 1, 1)
         execution.addWidget(QLabel("Time exit (HH:MM)"), 1, 2); execution.addWidget(self.pair_time, 1, 3)
         execution.addWidget(self.auto_pair, 2, 0, 1, 4)
-        execution.addWidget(self.real_pair_money_ack, 3, 0, 1, 2)
-        execution.addWidget(self.real_pair_session_ack, 3, 2, 1, 2)
-        execution.addWidget(self.paper_pair, 4, 0); execution.addWidget(self.arm_pair, 4, 1)
-        execution.addWidget(self.real_pair, 4, 2); execution.addWidget(self.stop_pair, 4, 3)
+        execution.addWidget(self.auto_atm_parity, 3, 0, 1, 4)
+        execution.addWidget(self.real_pair_money_ack, 4, 0, 1, 2)
+        execution.addWidget(self.real_pair_session_ack, 4, 2, 1, 2)
+        execution.addWidget(self.paper_pair, 5, 0); execution.addWidget(self.arm_pair, 5, 1)
+        execution.addWidget(self.real_pair, 5, 2); execution.addWidget(self.stop_pair, 5, 3)
         self.pair_status = QLabel("No open expiry pair. REAL authority har app restart par locked rahegi.")
-        self.pair_status.setWordWrap(True); execution.addWidget(self.pair_status, 5, 0, 1, 4)
+        self.pair_status.setWordWrap(True); execution.addWidget(self.pair_status, 6, 0, 1, 4)
         layout.addWidget(execution_box)
         for field in (self.pair_lots, self.pair_target, self.pair_stop, self.pair_time):
             if hasattr(field, "valueChanged"): field.valueChanged.connect(self._save_pair_preferences)
@@ -166,7 +188,7 @@ class ExpiryObservationPage(QWidget):
             QMessageBox.warning(self, "Real pair locked", str(error))
 
     def _emergency_stop(self):
-        self.auto_pair.setChecked(False); self.pair_execution.emergency_stop()
+        self.auto_pair.setChecked(False); self.auto_atm_parity.setChecked(False); self.pair_execution.emergency_stop()
         self.real_pair_money_ack.setChecked(False); self.real_pair_session_ack.setChecked(False)
         self.pair_status.setText("Emergency stop active: new REAL pair submission locked. Existing broker positions manually verify karein.")
 
@@ -180,7 +202,8 @@ class ExpiryObservationPage(QWidget):
             raise RuntimeError("Selected strike ke fresh CE aur PE dono quotes nahi mile.")
         return float(strike), pair
 
-    def _place_pair(self, real, strike=None, automatic=False):
+    def _place_pair(self, real, strike=None, automatic=False, trigger_type="MANUAL_OR_SPIKE",
+                    observed_at=None, premium_gap=None):
         try:
             strike, pair = self._candidate_pair(strike)
             if real and not automatic:
@@ -196,6 +219,8 @@ class ExpiryObservationPage(QWidget):
                 ce=pair["CE"], pe=pair["PE"], lots=self.pair_lots.value(),
                 target_pnl=self.pair_target.value(), stop_pnl=self.pair_stop.value(),
                 time_exit=self.pair_time.text().strip(), real=real,
+                source_page="EXPIRY_ATM_PARITY" if trigger_type == "ATM_PREMIUM_PARITY" else "EXPIRY_AFTER_3PM",
+                trigger_type=trigger_type, observed_at=observed_at, premium_gap=premium_gap,
             )
             self.pair_status.setText(f"{result['status']}: {strike:g} CE+PE pair recorded. Combined exits are being monitored.")
         except Exception as error:
@@ -276,6 +301,15 @@ class ExpiryObservationPage(QWidget):
                 paired[strike]["expiry"] = value["contract"]["expiry"]
         self.latest_pairs[symbol] = dict(paired)
         pair_auto_attempted = False
+        if self.auto_atm_parity.isChecked() and symbol == self.underlying.currentText():
+            parity = select_atm_parity_pair(self.latest_pairs[symbol], spot)
+            if parity is not None:
+                real = str(self.settings_store.load().get("execution_mode", "PAPER")).upper() == "REAL"
+                self._place_pair(
+                    real, parity["strike"], automatic=True, trigger_type="ATM_PREMIUM_PARITY",
+                    observed_at=now.isoformat(), premium_gap=parity["gap"],
+                )
+                pair_auto_attempted = True
         # Save or update paired spike events only after all CE and PE quotes from
         # this poll are available, so both sides share the exact same timestamp.
         for item in rows:
@@ -298,7 +332,8 @@ class ExpiryObservationPage(QWidget):
                 if self.auto_pair.isChecked() and not pair_auto_attempted and symbol == self.underlying.currentText():
                     pair_auto_attempted = True
                     real = str(self.settings_store.load().get("execution_mode", "PAPER")).upper() == "REAL"
-                    self._place_pair(real, float(contract["strike"]), automatic=True)
+                    self._place_pair(real, float(contract["strike"]), automatic=True,
+                                     trigger_type="SPIKE_CONFIRMED", observed_at=now.isoformat())
             if active is not None:
                 duration = max(0, int((now - active["started_at"]).total_seconds()))
                 result["elapsed_seconds"] = duration

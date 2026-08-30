@@ -2,10 +2,26 @@ import unittest
 from datetime import date, datetime, time, timedelta, timezone
 
 from engine.expiry_spike_engine import evaluate_spike, predict_expiry_spike, select_nearby_expiry_contracts
-from ui.pages.expiry_observation_page import cas_context, expiry_monitor_window
+from ui.pages.expiry_observation_page import cas_context, expiry_monitor_window, select_atm_parity_pair
 
 
 class ExpirySpikeEngineTests(unittest.TestCase):
+    def test_atm_parity_uses_closest_strike_and_ten_point_boundary(self):
+        pairs = {
+            24350.0: {"CE": {"premium": 50}, "PE": {"premium": 50}},
+            24400.0: {"CE": {"premium": 42}, "PE": {"premium": 52}},
+        }
+        result = select_atm_parity_pair(pairs, 24392)
+        self.assertEqual(result["strike"], 24400.0)
+        self.assertEqual(result["gap"], 10.0)
+
+    def test_atm_parity_does_not_choose_farther_match_when_atm_gap_is_too_wide(self):
+        pairs = {
+            24350.0: {"CE": {"premium": 50}, "PE": {"premium": 50}},
+            24400.0: {"CE": {"premium": 40}, "PE": {"premium": 51}},
+        }
+        self.assertIsNone(select_atm_parity_pair(pairs, 24398))
+
     def test_selects_paired_ce_and_pe_for_each_nearby_expiry_strike(self):
         near, far = date(2026, 8, 27), date(2026, 9, 3)
         contracts = []

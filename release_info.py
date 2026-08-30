@@ -1,16 +1,19 @@
 """Application release metadata kept in one place."""
 
 APP_NAME = "TPS AI Trading Assistant"
-VERSION = "1.5.1"
-DISPLAY_VERSION = "Release 1.5.1"
-RELEASE_DATE = "29-08-2026"
+VERSION = "1.5.2"
+DISPLAY_VERSION = "Release 1.5.2"
+RELEASE_DATE = "30-08-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
-SOFTWARE_UPDATE_VERSION = "v1.5.1"
-LAST_UPDATED_AT = "29-08-2026 16:58:31 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.5.1 - 29-08-2026 16:58 IST"
+SOFTWARE_UPDATE_VERSION = "v1.5.2"
+LAST_UPDATED_AT = "30-08-2026 22:00:59 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.5.2 - 30-08-2026 22:00 IST"
 RELEASE_NOTES = (
+    "Added Expiry ATM Premium Parity entry: after 3 PM on the actual expiry day, the closest ATM same-strike CE and PE can be captured as one paired intent when their premiums differ by no more than ₹10.",
+    "Parity entry uses one quote-batch observation timestamp for both legs, records the exact premium gap and blocks repeat entry for the same dated index/strike even after restart; REAL submission still requires existing session authorization and both-leg preflight.",
+    "Broker APIs cannot guarantee identical exchange fill timestamps for two orders; TPS therefore validates both legs before submission and cancels/unwinds a partial pair if one leg fails or rejects.",
     "Added an official NSE equity/F&O trading-day calendar and a central live-alert firewall: weekends, published exchange holidays and closed sessions can no longer produce fresh opportunity, scalp, OI, structure, early-watch or strategy suggestions from stale candles.",
     "Stopped closed-session background polling in Auto Opportunity Radar, Options Scalper and Index Market Analysis while retaining exactly one final index refresh, target/stop/exit safety monitoring, 3:40 closing confirmation and post-market report generation.",
     "Made the Index Market Analysis evidence table content-aware: compact columns auto-size, the full explanation keeps a readable bounded width, rows expand for wrapped text, and smooth horizontal/vertical scrollbars appear whenever the screen cannot show all evidence.",

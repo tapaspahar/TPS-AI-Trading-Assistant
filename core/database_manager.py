@@ -715,6 +715,20 @@ class Database:
         sql += " ORDER BY id DESC LIMIT 1"
         return self.cursor.execute(sql, params).fetchone()
 
+    def has_execution_pair(self, trading_date, source_page, underlying, strike):
+        """Return whether this exact dated strategy trigger was already recorded.
+
+        Closed and failed rows intentionally count: an automatic multi-leg trigger
+        must never be silently resubmitted after an app restart or broker error.
+        """
+        row = self.cursor.execute(
+            """SELECT 1 FROM execution_pairs
+               WHERE trading_date=? AND source_page=? AND underlying=? AND strike=?
+               LIMIT 1""",
+            (str(trading_date), str(source_page), str(underlying), float(strike)),
+        ).fetchone()
+        return bool(row)
+
     def _backfill_attempt_evidence_states(self) -> int:
         """Recover structured evidence already present in legacy payloads.
 
