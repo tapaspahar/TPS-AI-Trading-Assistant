@@ -8,9 +8,12 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.2"
-LAST_UPDATED_AT = "01-09-2026 09:59:05 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.5.2 - 01-09-2026 09:59 IST"
+LAST_UPDATED_AT = "01-09-2026 10:07:18 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.5.2 - 01-09-2026 10:07 IST"
 RELEASE_NOTES = (
+    "Reworked Options Workspace PAPER Testing Mode into exploratory forward validation: up to 10 independent trades/day may be monitored concurrently, so one running simulation no longer blocks the next completed-candle sample.",
+    "Exploratory capture may tolerate at most two soft checklist misses and a bounded score relaxation, but still requires directional consensus, directional volume, complete data, liquid contract selection, risk-sized quantity and zero hard blockers.",
+    "Each exploratory plan permanently records its validation track, relaxed score floor and soft-miss count; every trade keeps its own target, adaptive stop-loss, trailing/time exit and outcome so daily accuracy remains measurable.",
     "Added a central bounded analysis scheduler: at most three heavy jobs run together, duplicate active work is dropped, and high-frequency page timers start at stable staggered offsets instead of colliding.",
     "Moved three-index candle/OI analysis completely off the UI thread, added incremental unchanged-table suppression, and exposed live scheduler activity, completed runs, saved duplicates and slowest-job timing on Dashboard.",
     "Added shared same-day in-memory instrument/contract parsing plus SQLite WAL, normal synchronization and busy-timeout settings so background writes no longer unnecessarily block UI report reads.",

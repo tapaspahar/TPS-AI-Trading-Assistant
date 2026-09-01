@@ -76,7 +76,7 @@ class OvertradingGuard:
         target = int(settings.get("recovery_min_paper_sessions", 30))
 
         if settings.get("paper_validation_testing_mode", False):
-            testing_limit = min(20, max(1, int(settings.get("paper_validation_daily_limit", 20))))
+            testing_limit = min(10, max(1, int(settings.get("paper_validation_daily_limit", 10))))
             count = int(progress.get("trades", 0) or 0)
             blockers = []
             if count >= testing_limit:
@@ -86,7 +86,8 @@ class OvertradingGuard:
                 "blockers": blockers,
                 "warnings": [
                     "Paper Validation Testing Mode is ON: behavioural recovery locks are temporarily suspended for simulated trades only",
-                    "Target, stop-loss, time-exit, event, data-quality and open-position safety monitoring remain active",
+                    "Up to ten concurrent simulations may be monitored; every target, stop-loss and time-exit remains independent",
+                    "Only two soft checklist misses may be studied; hard risk/data/event blockers remain active",
                 ],
                 "check_in": self.today_check_in(current),
                 "mode": "PAPER VALIDATION TESTING",

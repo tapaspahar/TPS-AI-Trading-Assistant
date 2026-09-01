@@ -43,7 +43,7 @@ class RecoveryCenterPage(QWidget):
         intro = QLabel(
             "Capital protection pehle. Normal mode daily emotional check-in, bounded paper limit aur "
             "consecutive-loss cooling lock enforce karta hai. Temporary testing mode accuracy validation ke liye "
-            "maximum 20 simulated trades/day allow kar sakta hai. "
+            "maximum 10 simulated Options Workspace trades/day allow karta hai. "
             "TPS ab bhi broker order place nahi karta."
         )
         intro.setWordWrap(True)
@@ -56,8 +56,8 @@ class RecoveryCenterPage(QWidget):
             "Temporary testing mode ON — recovery/overtrading locks suspend karein (sirf paper trades)"
         )
         self.testing_limit = QSpinBox()
-        self.testing_limit.setRange(1, 20)
-        self.testing_limit.setValue(20)
+        self.testing_limit.setRange(1, 10)
+        self.testing_limit.setValue(10)
         self.testing_limit.setSuffix(" paper trades/day")
         self.testing_controls_dirty = False
         self.testing_mode.toggled.connect(self._mark_testing_controls_dirty)
@@ -69,7 +69,8 @@ class RecoveryCenterPage(QWidget):
         testing_form.addRow(save_testing)
         testing_note = QLabel(
             "Testing mode sirf simulated paper capture ko unlock karta hai. Target, stop-loss, time-exit, "
-            "event/data-quality checks aur open-position monitoring hamesha active rahenge."
+            "event/data-quality checks aur open-position monitoring hamesha active rahenge. Near-valid setup me maximum "
+            "2 soft checklist misses allow honge; hard blockers kabhi bypass nahi honge."
         )
         testing_note.setWordWrap(True)
         testing_form.addRow(testing_note)
@@ -104,7 +105,8 @@ class RecoveryCenterPage(QWidget):
         rules = QLabel(
             "Active safeguards\n"
             "• Default maximum: 1 new paper trade per day in Recovery Mode.\n"
-            "• Testing Mode: selected limit tak maximum 20 simulated trades/day; target/stop/time exits active.\n"
+            "• Testing Mode: maximum 10 simulated trades/day aur 10 independently monitored open samples; target/stop/time exits active.\n"
+            "• Near-valid testing capture maximum 2 soft checklist misses tolerate karta hai; hard blockers strict hain.\n"
             "• 2 consecutive paper losses: 48-hour cooling lock.\n"
             "• STRESSED, ANGRY, FOMO or REVENGE state: new captures paused for the day.\n"
             "• At least 30 separate paper sessions are required before real-money eligibility can even be reviewed.\n"
@@ -143,7 +145,7 @@ class RecoveryCenterPage(QWidget):
             self.testing_mode.blockSignals(True)
             self.testing_limit.blockSignals(True)
             self.testing_mode.setChecked(bool(settings.get("paper_validation_testing_mode", False)))
-            self.testing_limit.setValue(int(settings.get("paper_validation_daily_limit", 20)))
+            self.testing_limit.setValue(min(10, int(settings.get("paper_validation_daily_limit", 10))))
             self.testing_mode.blockSignals(False)
             self.testing_limit.blockSignals(False)
         mode = assessment.get("mode", "RECOVERY PROTECTION")

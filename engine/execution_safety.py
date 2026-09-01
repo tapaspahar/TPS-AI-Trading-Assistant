@@ -59,8 +59,9 @@ def assess_execution_safety(*, now, candle_time, quote, plan, settings, progress
         blockers.append(f"Risk:reward {rr:.2f} is below minimum {settings.get('minimum_rr_ratio', 1.5):.2f}")
     if not plan.get("risk_within_cap", False):
         blockers.append("Planned quantity exceeds the configured per-trade risk cap")
-    if progress.get("open_trades"):
-        blockers.append("An open paper trade is already being monitored")
+    max_open = max(1, int(settings.get("max_concurrent_paper_trades", 1)))
+    if int(progress.get("open_trades", 0) or 0) >= max_open:
+        blockers.append(f"Concurrent open paper-trade limit reached ({progress.get('open_trades', 0)}/{max_open})")
     if progress.get("trades", 0) >= int(settings["max_trades_per_day"]):
         blockers.append(f"Daily trade limit reached ({progress['trades']}/{settings['max_trades_per_day']})")
     if progress.get("daily_remaining", 1) <= 0:

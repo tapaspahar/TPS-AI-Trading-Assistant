@@ -21,6 +21,43 @@ from services.economic_calendar_service import EconomicCalendarService
 from services.provider_telemetry import record_request, start_request
 
 
+def exploratory_paper_eligibility(strategy: dict, settings: dict) -> dict:
+    """Allow a near-valid setup only for explicitly enabled PAPER validation.
+
+    Direction, volume, data completeness and every hard blocker remain strict;
+    only the configured checklist/score finish line may be relaxed.
+    """
+    candidate = str(strategy.get("candidate") or "").upper()
+    side = (strategy.get("side_evaluations") or {}).get(candidate) or {}
+    required = int(side.get("required", strategy.get("required", 0)) or 0)
+    passed = int(side.get("passed", strategy.get("passed", 0)) or 0)
+    score = int(side.get("score", strategy.get("score", 0)) or 0)
+    allowance = max(0, min(2, int(settings.get("paper_validation_soft_miss_allowance", 2))))
+    configured_score = int(strategy.get("minimum_score", settings.get("trade_plan_min_score", 95)) or 95)
+    score_floor = max(60, configured_score - 25)
+    misses = max(0, required - passed)
+    confirmations = side.get("selected_confirmations") or strategy.get("selected_confirmations") or []
+    volume_pass = any(
+        item.get("name") == "Directional volume" and item.get("applicable", True) and item.get("passed")
+        for item in confirmations
+    )
+    directional = bool((side.get("directional_consensus") or {}).get("passed"))
+    hard_blockers = unique_messages(side.get("hard_blockers") or strategy.get("hard_blockers"))
+    data_gaps = unique_messages(side.get("data_gaps") or strategy.get("data_gaps"))
+    allowed = bool(
+        settings.get("paper_validation_testing_mode") and candidate in {"CE", "PE"}
+        and not strategy.get("trade_ready") and required > 0 and misses <= allowance
+        and score >= score_floor and directional and volume_pass
+        and not hard_blockers and not data_gaps
+    )
+    return {
+        "allowed": allowed, "candidate": candidate, "soft_misses": misses,
+        "allowance": allowance, "score": score, "score_floor": score_floor,
+        "directional_consensus": directional, "volume_confirmed": volume_pass,
+        "hard_blockers": hard_blockers, "data_gaps": data_gaps,
+    }
+
+
 def _attempt(status, checked_at, *, capture=None, chart=None, candidate=None, future=None, blockers=None, chain=None, timing=None,
              outcome=None, data_gaps=None, safety_blockers=None, warnings=None):
     """Return a transparent audit record for every automatic decision."""
@@ -173,12 +210,15 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
         expiry_strategy = analyze_expiry_strategy(spot, chain, environment, (expiry_date - checked_at.date()).days)
         environment["expiry_strategy"] = expiry_strategy
         testing_mode = bool(settings.get("paper_validation_testing_mode", False))
-        testing_limit = min(20, max(1, int(settings.get("paper_validation_daily_limit", 20))))
+        # Options Workspace validation is deliberately capped at ten samples
+        # per day even if an older settings file contains the legacy value 20.
+        testing_limit = min(10, max(1, int(settings.get("paper_validation_daily_limit", 10))))
         environment["adaptive_max_trades"] = testing_limit if testing_mode else min(
             int(settings.get("max_trades_per_day", 5)),
             1 if environment["vix_zone"] == "EXTREME RISK" else 2 if environment["regime"] == "LOW VOLATILITY" else int(settings.get("max_trades_per_day", 5)),
         )
         strategy = evaluate_tps_entry_v2(candles, capture, chain, settings, environment)
+        exploratory = exploratory_paper_eligibility(strategy, settings)
         candidate = strategy["candidate"]
         selected_confirmations = strategy.get("selected_confirmations") or strategy.get("confirmations") or []
         side_evaluations = strategy.get("side_evaluations") or {}
@@ -226,7 +266,9 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
         if settings.get("news_risk_pause"): operational_blockers.append("Emergency News Risk Pause is ON")
         if event_risk.get("blocked") and not settings.get("event_risk_override"): operational_blockers.append("High-impact economic event no-trade window is active")
         if not event_risk.get("available") and settings.get("event_feed_fail_closed"): operational_blockers.append("Economic-calendar feed unavailable (fail-closed)")
-        if progress["open_trades"]: operational_blockers.append("An open paper trade is already being monitored")
+        max_open = min(10, max(1, int(settings.get("paper_validation_max_open_trades", 10)))) if testing_mode else 1
+        if int(progress["open_trades"]) >= max_open:
+            operational_blockers.append(f"Concurrent open paper-trade limit reached ({progress['open_trades']}/{max_open})")
         adaptive_limit = environment["adaptive_max_trades"]
         if progress["trades"] >= adaptive_limit: operational_blockers.append(f"Adaptive daily paper-trade limit reached ({progress['trades']}/{adaptive_limit})")
         if progress["daily_remaining"] <= 0: operational_blockers.append("Daily loss limit exhausted")
@@ -242,7 +284,7 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
                 data_gaps=strategy.get("data_gaps"), warnings=strategy.get("quality_warnings"),
             )
             return _record(database, symbol, result)
-        if not strategy["trade_ready"]:
+        if not strategy["trade_ready"] and not exploratory["allowed"]:
             data_gaps = unique_messages(strategy.get("data_gaps"))
             result = _attempt(
                 f"No paper trade: {candidate} checklist {strategy['passed']}/{strategy.get('total', 7)} "
@@ -261,10 +303,24 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
                 data_gaps=data_gaps, warnings=strategy.get("quality_warnings"),
             )
             return _record(database, symbol, result)
+        if exploratory["allowed"]:
+            chart["exploratory_validation"] = exploratory
+            chart["decision"] = f"EXPLORATORY PAPER {candidate} — {exploratory['soft_misses']} soft checklist miss(es)"
+            chart["trade_ready"] = False
+            chart["warnings"].append(
+                f"PAPER exploratory capture: {exploratory['soft_misses']}/{exploratory['allowance']} soft misses; "
+                f"score {exploratory['score']}/{exploratory['score_floor']} exploratory floor"
+            )
+        plan_chart = dict(chart)
+        if exploratory["allowed"]:
+            plan_chart["direction"] = "BULLISH" if candidate == "CE" else "BEARISH"
+            plan_chart["score"] = exploratory["score"]
+            plan_chart["volume_confirmed"] = True
+        plan_minimum_score = exploratory["score_floor"] if exploratory["allowed"] else int(settings.get("trade_plan_min_score", 95))
         plan = create_review_plan(
-            symbol, spot, contracts, chain["quote_rows"], chart, chain, settings,
+            symbol, spot, contracts, chain["quote_rows"], plan_chart, chain, settings,
             requested_lots=max(1, min(100, int(requested_lots))),
-            minimum_score=int(settings.get("trade_plan_min_score", 95)),
+            minimum_score=plan_minimum_score,
         )
         plan["confidence"] = chart["final_confidence"]
         plan["event_context"] = event_risk
@@ -275,6 +331,8 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
             "required_matches": strategy.get("required"), "required_score": strategy.get("minimum_score"),
             "hard_blockers": strategy.get("hard_blockers", []),
             "event_context": event_risk, "market_environment": environment,
+            "validation_track": "EXPLORATORY PAPER" if exploratory["allowed"] else "STRICT PAPER",
+            "exploratory_validation": exploratory if exploratory["allowed"] else None,
         }
         plan["strategy"] = {
             "candidate": candidate, "direction": strategy.get("direction"),
@@ -285,7 +343,10 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
         cooldown = 0 if testing_mode else database.paper_trade_cooldown_remaining(
             settings.get("paper_trade_cooldown_minutes", 15), checked_at
         )
-        safety_settings = {**settings, "max_trades_per_day": adaptive_limit}
+        safety_settings = {
+            **settings, "max_trades_per_day": adaptive_limit,
+            "max_concurrent_paper_trades": max_open,
+        }
         safety = assess_execution_safety(
             now=checked_at, candle_time=capture.get("candle_time"), quote=selected_quote, plan=plan,
             settings=safety_settings, progress=progress, cooldown_remaining=cooldown, event_risk=event_risk, expiry_day=expiry_day,

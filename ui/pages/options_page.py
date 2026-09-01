@@ -12,6 +12,7 @@ from engine.tps_entry_confirmation import CONDITION_WEIGHTS
 from engine.trade_plan_engine import create_review_plan
 from engine.greeks_engine import calculate_greeks
 from services.auto_paper_trader import run_auto_paper_cycle
+from services.analysis_scheduler import AnalysisScheduler
 from core.overtrading_guard import OvertradingGuard
 from services.live_session import LiveSession
 from services.option_contract_service import UNDERLYING_QUOTES, OptionContractService, buying_risk, contracts_near_spot
@@ -475,6 +476,7 @@ class OptionsPage(QWidget):
         chart_text = "✓ Score above 75" if chart_ready else "• Score above 75 required"
         chain_text = "✓ OI/PCR analysis ready" if chain_ready else "• Selected-expiry OI/PCR analysis required"
         open_trade = self.db.has_open_trade(underlying)
+        testing_mode = bool(SettingsStore().load().get("paper_validation_testing_mode", False))
         expiry_day = self.expiry.currentData() == date.today()
         event_ready = self.event_check.currentText() == "No known high-impact event" and not expiry_day and not self.news_pause.isChecked()
         event_text = "⚠ Expiry-day caution: TPS blocks new plans; review manually" if expiry_day else (
@@ -482,7 +484,12 @@ class OptionsPage(QWidget):
         )
         if self.news_pause.isChecked():
             event_text = "[BLOCK] Emergency News Risk Pause is ON"
-        open_text = "[!] Close/review the active open trade before a new plan" if open_trade else "[OK] No active open trade for this underlying"
+        open_text = (
+            "[TEST] Existing PAPER trade monitoring active; exploratory validation may capture another independent sample"
+            if open_trade and testing_mode else
+            "[!] Close/review the active open trade before a new plan" if open_trade else
+            "[OK] No active open trade for this underlying"
+        )
         self.plan_status.setText(
             f"{score_text} (minimum: {minimum_score})  |  "
             f"{'✓ Configured score and high-volume confirmation met' if chart_ready else f'• Score {minimum_score}+ and Volume > Volume EMA 20 required'}  |  "
@@ -493,7 +500,7 @@ class OptionsPage(QWidget):
                 self.plan_status.text() +
                 "  |  [TEST MODE] Low score does not bypass volume, direction, OI, event, or open-trade safety checks."
             )
-        ready = chart_ready and chain_ready and event_ready and not open_trade
+        ready = chart_ready and chain_ready and event_ready and (testing_mode or not open_trade)
         self.create_plan_button.setEnabled(ready)
         self.paper_button.setEnabled(ready)
 
@@ -736,7 +743,10 @@ class OptionsPage(QWidget):
             settings = SettingsStore().load()
             settings["auto_paper_monitor_enabled"] = True
             SettingsStore().save(settings)
-            self.auto_paper_progress.setText("Enabled: waits for each new completed 5-minute candle. One open paper trade at a time; daily cap comes from Risk Settings.")
+            self.auto_paper_progress.setText(
+                "Enabled: har completed 5-minute candle check hogi. PAPER testing mode me maximum 10 trades/day aur "
+                "10 concurrent monitored trades; maximum 2 soft checklist misses allowed. Hard safety/data/event blockers strict rahenge."
+            )
             self.auto_paper_timer.start(30_000)
             self.check_auto_paper_cycle()
         else:
@@ -792,7 +802,9 @@ class OptionsPage(QWidget):
             f"Checking completed 5-minute candle independently for CE and PE: {mode}, "
             f"score {settings['trade_plan_min_score']}+, then hard-risk blockers..."
         )
-        Thread(target=self._run_auto_paper_cycle, args=(self.underlying.currentText(), bucket, bucket_start), daemon=True).start()
+        args = (self.underlying.currentText(), bucket, bucket_start)
+        if not AnalysisScheduler.submit_unique("options-workspace-auto-paper", lambda: self._run_auto_paper_cycle(*args)):
+            self.auto_paper_running = False
 
     def _run_auto_paper_cycle(self, symbol, bucket, bucket_start):
         try:

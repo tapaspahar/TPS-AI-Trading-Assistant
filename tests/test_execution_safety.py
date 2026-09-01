@@ -21,6 +21,16 @@ class ExecutionSafetyTests(unittest.TestCase):
     def test_valid_execution_context_is_allowed(self):
         self.assertTrue(assess_execution_safety(**self.base())["allowed"])
 
+    def test_testing_context_allows_multiple_open_samples_until_its_cap(self):
+        values = self.base()
+        values["settings"]["max_concurrent_paper_trades"] = 10
+        values["progress"]["open_trades"] = 9
+        self.assertTrue(assess_execution_safety(**values)["allowed"])
+        values["progress"]["open_trades"] = 10
+        result = assess_execution_safety(**values)
+        self.assertFalse(result["allowed"])
+        self.assertTrue(any("10/10" in item for item in result["blockers"]))
+
     def test_spread_cooldown_and_event_are_hard_blockers(self):
         values = self.base(); values["quote"].update({"bid": 90, "ask": 110})
         values["cooldown_remaining"] = 8

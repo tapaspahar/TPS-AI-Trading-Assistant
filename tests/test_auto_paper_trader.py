@@ -2,10 +2,47 @@ import unittest
 from datetime import datetime
 from unittest.mock import patch
 
-from services.auto_paper_trader import _completed_candles, run_auto_paper_cycle, signal_timing_stage
+from services.auto_paper_trader import (_completed_candles, exploratory_paper_eligibility,
+                                        run_auto_paper_cycle, signal_timing_stage)
 
 
 class AutoPaperTraderTests(unittest.TestCase):
+    def test_exploratory_testing_allows_two_soft_misses_with_anchors_and_volume(self):
+        strategy = {
+            "candidate": "CE", "trade_ready": False, "required": 6, "passed": 4,
+            "score": 75, "minimum_score": 95, "hard_blockers": [], "data_gaps": [],
+            "side_evaluations": {"CE": {
+                "required": 6, "passed": 4, "score": 75,
+                "selected_confirmations": [
+                    {"name": "Directional volume", "passed": True, "applicable": True},
+                    {"name": "OI/PCR context", "passed": False, "applicable": True},
+                ],
+                "directional_consensus": {"passed": True},
+                "hard_blockers": [], "data_gaps": [],
+            }},
+        }
+        result = exploratory_paper_eligibility(
+            strategy, {"paper_validation_testing_mode": True,
+                       "paper_validation_soft_miss_allowance": 2, "trade_plan_min_score": 95},
+        )
+        self.assertTrue(result["allowed"])
+        self.assertEqual(result["soft_misses"], 2)
+
+    def test_exploratory_testing_never_bypasses_hard_blocker(self):
+        strategy = {
+            "candidate": "PE", "trade_ready": False, "required": 5, "passed": 4,
+            "score": 80, "minimum_score": 95,
+            "side_evaluations": {"PE": {
+                "required": 5, "passed": 4, "score": 80,
+                "selected_confirmations": [{"name": "Directional volume", "passed": True}],
+                "directional_consensus": {"passed": True},
+                "hard_blockers": ["Late PE entry"], "data_gaps": [],
+            }},
+        }
+        result = exploratory_paper_eligibility(strategy, {"paper_validation_testing_mode": True})
+        self.assertFalse(result["allowed"])
+        self.assertIn("Late PE entry", result["hard_blockers"])
+
     def test_signal_timing_stage_separates_watch_from_final_approval(self):
         settings = {"tps_required_matches": 5, "trade_plan_min_score": 80}
         early = {
@@ -46,7 +83,7 @@ class AutoPaperTraderTests(unittest.TestCase):
         client.get_option_chain_quotes.return_value = []
         result = run_auto_paper_cycle(client, "NIFTY", {"max_trades_per_day": 5})
         self.assertIn("operational safety limit", result["status"])
-        self.assertTrue(any("open paper trade" in reason for reason in result["attempt"]["blockers"]))
+        self.assertTrue(any("open paper-trade limit" in reason for reason in result["attempt"]["blockers"]))
         database.save_auto_trade_attempt.assert_called_once()
         database.close.assert_called_once()
 

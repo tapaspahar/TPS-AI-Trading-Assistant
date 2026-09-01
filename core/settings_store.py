@@ -25,7 +25,9 @@ DEFAULT_SETTINGS = {
     # Explicit paper-only validation mode. It suspends behavioural recovery
     # locks, but keeps a bounded daily capture limit and never enables orders.
     "paper_validation_testing_mode": False,
-    "paper_validation_daily_limit": 20,
+    "paper_validation_daily_limit": 10,
+    "paper_validation_soft_miss_allowance": 2,
+    "paper_validation_max_open_trades": 10,
     "recovery_loss_streak_limit": 2,
     "recovery_lock_hours": 48,
     "recovery_min_paper_sessions": 30,
@@ -191,6 +193,9 @@ class SettingsStore:
         if not saved:
             saved = self._read_file(self.backup_path)
         values = {**DEFAULT_SETTINGS, **saved}
+        # Release 1.5.2 Options Workspace validation uses a fixed safe testing
+        # ceiling of ten; transparently migrate the older 20-trade preference.
+        values["paper_validation_daily_limit"] = min(10, max(1, int(values.get("paper_validation_daily_limit", 10))))
         values["notification_preferences"] = {
             **DEFAULT_SETTINGS["notification_preferences"],
             **(saved.get("notification_preferences") or {}),
@@ -231,6 +236,8 @@ class SettingsStore:
             "recovery_daily_trade_limit": int(settings.get("recovery_daily_trade_limit", current["recovery_daily_trade_limit"])),
             "paper_validation_testing_mode": bool(settings.get("paper_validation_testing_mode", current["paper_validation_testing_mode"])),
             "paper_validation_daily_limit": int(settings.get("paper_validation_daily_limit", current["paper_validation_daily_limit"])),
+            "paper_validation_soft_miss_allowance": max(0, min(2, int(settings.get("paper_validation_soft_miss_allowance", current["paper_validation_soft_miss_allowance"])))),
+            "paper_validation_max_open_trades": max(1, min(10, int(settings.get("paper_validation_max_open_trades", current["paper_validation_max_open_trades"])))),
             "recovery_loss_streak_limit": int(settings.get("recovery_loss_streak_limit", current["recovery_loss_streak_limit"])),
             "recovery_lock_hours": int(settings.get("recovery_lock_hours", current["recovery_lock_hours"])),
             "recovery_min_paper_sessions": int(settings.get("recovery_min_paper_sessions", current["recovery_min_paper_sessions"])),
@@ -303,8 +310,8 @@ class SettingsStore:
             raise ValueError("Algo entry start must be earlier than last-entry time.")
         if not 1 <= values["recovery_daily_trade_limit"] <= values["max_trades_per_day"]:
             raise ValueError("Recovery daily limit must be between 1 and the normal maximum-trades limit.")
-        if not 1 <= values["paper_validation_daily_limit"] <= 20:
-            raise ValueError("Paper-validation testing limit must be between 1 and 20 trades per day.")
+        if not 1 <= values["paper_validation_daily_limit"] <= 10:
+            raise ValueError("Paper-validation testing limit must be between 1 and 10 trades per day.")
         if not 1 <= values["recovery_loss_streak_limit"] <= 10:
             raise ValueError("Recovery loss-streak limit must be between 1 and 10.")
         if not 1 <= values["recovery_lock_hours"] <= 168:

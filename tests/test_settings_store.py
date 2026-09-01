@@ -102,11 +102,11 @@ class SettingsStoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             store = SettingsStore(Path(directory) / "settings.json")
             settings = store.load()
-            settings.update({"paper_validation_testing_mode": True, "paper_validation_daily_limit": 20})
+            settings.update({"paper_validation_testing_mode": True, "paper_validation_daily_limit": 10})
             saved = store.save(settings)
             self.assertTrue(saved["paper_validation_testing_mode"])
-            self.assertEqual(store.load()["paper_validation_daily_limit"], 20)
-            settings["paper_validation_daily_limit"] = 21
+            self.assertEqual(store.load()["paper_validation_daily_limit"], 10)
+            settings["paper_validation_daily_limit"] = 11
             with self.assertRaisesRegex(ValueError, "testing limit"):
                 store.save(settings)
 
