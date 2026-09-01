@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from threading import Thread
 
 from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import (
@@ -11,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 
 from services.live_session import LiveSession
+from services.analysis_scheduler import AnalysisScheduler
 from services.scalper_service import ScalperService
 from core.market_session import market_session
 
@@ -58,7 +58,8 @@ class ScalperPage(QWidget):
         safety = QLabel("Safety: SCALP WATCH is not execution advice. Verify option premium, spread, liquidity, expiry, event risk and quantity before any manual/paper action.")
         safety.setWordWrap(True); layout.addWidget(safety); layout.addStretch()
         self.analysis_ready.connect(self.show_result); self.analysis_failed.connect(self.show_error)
-        self.timer = QTimer(self); self.timer.setInterval(20_000); self.timer.timeout.connect(self.analyze); self.timer.start()
+        self.timer = QTimer(self); self.timer.setInterval(20_000); self.timer.timeout.connect(self.analyze)
+        QTimer.singleShot(AnalysisScheduler.stagger_ms("options-scalper"), self.timer.start)
 
     def start_monitoring(self):
         if self.auto.isChecked():
@@ -74,7 +75,9 @@ class ScalperPage(QWidget):
         self._running = True; self.run.setEnabled(False)
         self.status.setText("Future direction aur selected near-expiry option premium ki completed candles analyze ho rahi hain...")
         refresh_global = self._global_at is None or datetime.now() - self._global_at > timedelta(minutes=5)
-        Thread(target=self._worker, args=(self.index.currentText(), self.threshold.value(), self.strike_mode.currentText(), refresh_global), daemon=True).start()
+        args = (self.index.currentText(), self.threshold.value(), self.strike_mode.currentText(), refresh_global)
+        if not AnalysisScheduler.submit_unique("options-scalper", lambda: self._worker(*args)):
+            self._running = False; self.run.setEnabled(True)
 
     def _worker(self, symbol, threshold, strike_mode, refresh_global):
         try:

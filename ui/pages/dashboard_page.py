@@ -1,11 +1,11 @@
 from datetime import datetime
-from threading import Thread
 
 from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import QGridLayout, QPushButton, QVBoxLayout, QWidget
 
 from core.database_manager import Database
 from services.live_session import LiveSession
+from services.analysis_scheduler import AnalysisScheduler
 from ui.widgets.cards.dashboard_card import DashboardCard
 
 
@@ -33,6 +33,7 @@ class DashboardPage(QWidget):
             "risk": DashboardCard("Risk Status", "Review each trade"),
             "trades": DashboardCard("Recorded Trades", "0"),
             "funds": DashboardCard("Broker Funds", "Connect broker\nOpen Settings"),
+            "performance": DashboardCard("Analysis Performance", "Queue ready"),
         }
         for index, card in enumerate(self.cards.values()):
             grid.addWidget(card, index // 3, index % 3)
@@ -44,7 +45,7 @@ class DashboardPage(QWidget):
         self.funds_timer = QTimer(self)
         self.funds_timer.setInterval(60_000)
         self.funds_timer.timeout.connect(self.refresh_funds)
-        self.funds_timer.start()
+        QTimer.singleShot(AnalysisScheduler.stagger_ms("dashboard-funds"), self.funds_timer.start)
         self.refresh()
 
     def refresh(self):
@@ -57,6 +58,14 @@ class DashboardPage(QWidget):
         self.cards["win_rate"].set_value(f"{summary['win_rate']:.1f}%")
         self.cards["trades"].set_value(summary["trades"])
         self.cards["risk"].set_value("Safe" if summary["trades"] == 0 or summary["pnl"] >= 0 else "Review loss")
+        metrics = AnalysisScheduler.metrics()
+        active = sum(bool(item.get("active")) for item in metrics.values())
+        runs = sum(int(item.get("runs", 0)) for item in metrics.values())
+        skipped = sum(int(item.get("skipped", 0)) for item in metrics.values())
+        slowest = max((float(item.get("last_seconds", 0)) for item in metrics.values()), default=0)
+        self.cards["performance"].set_value(
+            f"Active {active}/3 | Completed {runs}\nDuplicates saved {skipped} | Slowest {slowest:.1f}s"
+        )
 
     def refresh_all(self):
         self.refresh()
@@ -70,7 +79,8 @@ class DashboardPage(QWidget):
             return
         self._funds_refresh_running = True
         self.cards["funds"].set_value("Refreshing…")
-        Thread(target=self._load_funds, daemon=True).start()
+        if not AnalysisScheduler.submit_unique("dashboard-funds", self._load_funds):
+            self._funds_refresh_running = False
 
     def _load_funds(self):
         try:

@@ -3,14 +3,17 @@
 APP_NAME = "TPS AI Trading Assistant"
 VERSION = "1.5.2"
 DISPLAY_VERSION = "Release 1.5.2"
-RELEASE_DATE = "30-08-2026"
+RELEASE_DATE = "01-09-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.2"
-LAST_UPDATED_AT = "30-08-2026 22:00:59 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.5.2 - 30-08-2026 22:00 IST"
+LAST_UPDATED_AT = "01-09-2026 09:59:05 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.5.2 - 01-09-2026 09:59 IST"
 RELEASE_NOTES = (
+    "Added a central bounded analysis scheduler: at most three heavy jobs run together, duplicate active work is dropped, and high-frequency page timers start at stable staggered offsets instead of colliding.",
+    "Moved three-index candle/OI analysis completely off the UI thread, added incremental unchanged-table suppression, and exposed live scheduler activity, completed runs, saved duplicates and slowest-job timing on Dashboard.",
+    "Added shared same-day in-memory instrument/contract parsing plus SQLite WAL, normal synchronization and busy-timeout settings so background writes no longer unnecessarily block UI report reads.",
     "Added Expiry ATM Premium Parity entry: after 3 PM on the actual expiry day, the closest ATM same-strike CE and PE can be captured as one paired intent when their premiums differ by no more than ₹10.",
     "Parity entry uses one quote-batch observation timestamp for both legs, records the exact premium gap and blocks repeat entry for the same dated index/strike even after restart; REAL submission still requires existing session authorization and both-leg preflight.",
     "Broker APIs cannot guarantee identical exchange fill timestamps for two orders; TPS therefore validates both legs before submission and cancels/unwinds a partial pair if one leg fails or rejects.",

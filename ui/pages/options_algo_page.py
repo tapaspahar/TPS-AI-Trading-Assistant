@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from threading import Thread
 
 from PySide6.QtCore import QObject, QTime, QTimer, Signal
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QGridLayout, QGroupBox,
@@ -14,6 +13,7 @@ from core.market_session import IST, market_session
 from core.settings_store import SettingsStore
 from services.auto_paper_trader import run_auto_paper_cycle
 from services.live_session import LiveSession
+from services.analysis_scheduler import AnalysisScheduler
 from services.options_algo_service import calculate_algo_day_state, calculate_validation_metrics
 
 
@@ -97,7 +97,8 @@ class OptionsAlgoPage(QWidget):
             "REAL mode: automatic broker entry tabhi available hogi jab broker fill reconciliation aur managed target/stop exit chain verified ho. "
             "Current controller incomplete real exits ko expose nahi karta; PAPER mode end-to-end automatic validation ke liye hai. Profit guaranteed nahi hai."
         ); disclosure.setWordWrap(True); layout.addWidget(disclosure); layout.addStretch()
-        self.timer = QTimer(self); self.timer.setInterval(10_000); self.timer.timeout.connect(self.tick); self.timer.start()
+        self.timer = QTimer(self); self.timer.setInterval(10_000); self.timer.timeout.connect(self.tick)
+        QTimer.singleShot(AnalysisScheduler.stagger_ms("options-algo"), self.timer.start)
         self.refresh()
 
     def save_settings(self):
@@ -180,7 +181,8 @@ class OptionsAlgoPage(QWidget):
         if not LiveSession.connected() or self.running: return
         if not self.monitoring:
             self.monitoring = True
-            Thread(target=self._monitor_worker, daemon=True).start()
+            if not AnalysisScheduler.submit_unique("options-algo-exit-monitor", self._monitor_worker):
+                self.monitoring = False
         settings = self.store.load(); state = calculate_algo_day_state(self._progress(), settings, session_active=self.session_active)
         if not state.allow_new_entry or market_session(settings=settings)["state"] != "OPEN": return
         now = datetime.now(IST)
@@ -194,7 +196,8 @@ class OptionsAlgoPage(QWidget):
         if candle_key == self.last_candle_key: return
         self.last_candle_key = candle_key; self.running = True
         self.pending_symbol = self.symbol.currentText(); self.pending_lots = self.lots.value()
-        Thread(target=self._cycle_worker, daemon=True).start()
+        if not AnalysisScheduler.submit_unique("options-algo-entry-cycle", self._cycle_worker):
+            self.running = False
 
     def _monitor_worker(self):
         db = Database()

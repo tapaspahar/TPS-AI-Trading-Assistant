@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, time
-from threading import Thread
 
 from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import (
@@ -15,6 +14,7 @@ from core.auto_universe_store import AutoUniverseStore
 from services.auto_opportunity_service import AutoOpportunityService
 from services.live_session import LiveSession
 from services.notification_service import NotificationService
+from services.analysis_scheduler import AnalysisScheduler
 from core.market_session import market_session
 from ui.widgets.cards.dashboard_card import DashboardCard
 from ui.widgets.excel_export_dialog import open_excel_export
@@ -81,7 +81,8 @@ class AutoOpportunityPage(QWidget):
 
         self.results_ready.connect(self.show_results); self.scan_failed.connect(self.show_error)
         self.progress_ready.connect(self.show_progress)
-        self.timer = QTimer(self); self.timer.setInterval(15_000); self.timer.timeout.connect(self._automatic_tick); self.timer.start()
+        self.timer = QTimer(self); self.timer.setInterval(15_000); self.timer.timeout.connect(self._automatic_tick)
+        QTimer.singleShot(AnalysisScheduler.stagger_ms("auto-opportunity"), self.timer.start)
         self.refresh_history()
         QTimer.singleShot(2500, self._automatic_tick)
 
@@ -107,7 +108,8 @@ class AutoOpportunityPage(QWidget):
             return
         self.scanning = True; self.run.setEnabled(False)
         self.status.setText("Automatic completed-candle scan started. Broker API limits ke liye symbols sequentially check ho rahe hain...")
-        Thread(target=self._worker, daemon=True).start()
+        if not AnalysisScheduler.submit_unique("auto-opportunity", self._worker):
+            self.scanning = False; self.run.setEnabled(True)
 
     def _worker(self):
         try:

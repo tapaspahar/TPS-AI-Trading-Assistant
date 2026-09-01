@@ -34,6 +34,9 @@ class Database:
         self.connection = sqlite3.connect(self.db_path)
         self.connection.row_factory = sqlite3.Row
         self.cursor = self.connection.cursor()
+        self.cursor.execute("PRAGMA journal_mode=WAL")
+        self.cursor.execute("PRAGMA synchronous=NORMAL")
+        self.cursor.execute("PRAGMA busy_timeout=5000")
         self.create_tables()
 
     def create_tables(self) -> None:

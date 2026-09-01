@@ -5,6 +5,7 @@ import json
 import os
 from datetime import date, datetime
 from pathlib import Path
+from threading import RLock
 from time import perf_counter, sleep
 from urllib.request import Request, urlopen
 
@@ -174,6 +175,12 @@ def contracts_near_spot(contracts, spot_price, wings=20):
 
 
 class OptionContractService:
+    _memory_lock = RLock()
+    _memory_master = None
+    _memory_day = None
+    _memory_source = None
+    _parsed_contracts = {}
+    _parsed_futures = {}
     def __init__(self, cache_path=None):
         base = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "TPS AI Trading Assistant" / "cache"
         self.cache_path = Path(cache_path) if cache_path else base / "angel_instruments.json"
@@ -229,10 +236,19 @@ class OptionContractService:
         os.replace(temporary_path, self.cache_path)
 
     def _load_master(self, progress_callback=None):
+        today = date.today()
+        with self._memory_lock:
+            if (self._memory_day == today and self._memory_master is not None
+                    and self._memory_source == str(self.cache_path.resolve())):
+                return self._memory_master
         cached_rows = self._read_cache()
         if cached_rows is not None and datetime.fromtimestamp(self.cache_path.stat().st_mtime).date() == date.today():
             if progress_callback:
                 progress_callback(100, "Using today's saved Angel One instrument list.")
+            with self._memory_lock:
+                self.__class__._memory_master = cached_rows
+                self.__class__._memory_day = today
+                self.__class__._memory_source = str(self.cache_path.resolve())
             return cached_rows
         last_error = None
         rows = None
@@ -251,6 +267,10 @@ class OptionContractService:
                 cache_date = datetime.fromtimestamp(self.cache_path.stat().st_mtime).strftime("%d-%m-%Y")
                 if progress_callback:
                     progress_callback(100, f"Live list unavailable; using verified saved list from {cache_date}.")
+                with self._memory_lock:
+                    self.__class__._memory_master = cached_rows
+                    self.__class__._memory_day = today
+                    self.__class__._memory_source = str(self.cache_path.resolve())
                 return cached_rows
             raise RuntimeError(
                 "Could not download Angel One's instrument master and no verified saved list is available. Check internet and try again."
@@ -258,20 +278,39 @@ class OptionContractService:
         self._write_cache(rows)
         if progress_callback:
             progress_callback(100, "Download complete. Preparing the share list…")
+        with self._memory_lock:
+            self.__class__._memory_master = rows
+            self.__class__._memory_day = today
+            self.__class__._memory_source = str(self.cache_path.resolve())
+            self.__class__._parsed_contracts.clear()
+            self.__class__._parsed_futures.clear()
         return rows
 
     def get_contracts(self, underlying):
         if underlying not in UNDERLYINGS:
             raise ValueError("Choose NIFTY, BANKNIFTY, or SENSEX.")
-        contracts = parse_option_contracts(self._load_master(), underlying)
+        self._load_master()
+        cache_key = (date.today(), str(self.cache_path.resolve()), underlying)
+        with self._memory_lock:
+            contracts = self._parsed_contracts.get(cache_key)
+            if contracts is None:
+                contracts = parse_option_contracts(self._memory_master, underlying)
+                self.__class__._parsed_contracts[cache_key] = contracts
         if not contracts:
             raise RuntimeError(f"No current {underlying} option contracts were found.")
-        return contracts
+        return list(contracts)
 
     def get_front_month_future(self, underlying):
         if underlying not in UNDERLYINGS:
             raise ValueError("Choose NIFTY, BANKNIFTY, or SENSEX.")
-        return parse_front_month_future(self._load_master(), underlying)
+        self._load_master()
+        cache_key = (date.today(), str(self.cache_path.resolve()), underlying)
+        with self._memory_lock:
+            future = self._parsed_futures.get(cache_key)
+            if future is None:
+                future = parse_front_month_future(self._memory_master, underlying)
+                self.__class__._parsed_futures[cache_key] = future
+        return dict(future)
 
     def get_india_vix_instrument(self):
         """Discover India VIX from the daily master instead of hard-coding a token."""

@@ -1,5 +1,4 @@
 from datetime import datetime
-from threading import Thread
 
 from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import (
@@ -8,6 +7,7 @@ from PySide6.QtWidgets import (
 )
 
 from services.live_session import LiveSession
+from services.analysis_scheduler import AnalysisScheduler
 from services.option_strategy_service import OptionStrategyService
 from engine.strategy_adjustment_engine import monitor_strategy_plan
 from core.settings_store import SettingsStore
@@ -221,7 +221,8 @@ class OptionStrategiesPage(QWidget):
         self._analysis_generation += 1
         generation = self._analysis_generation
         symbol = self.index.currentText(); self.status.setText(cutie_says(f"Main {symbol} ke completed candles, VIX aur live defined-risk spreads analyze kar rahi hoon..."))
-        Thread(target=self._worker, args=(symbol, generation), daemon=True).start()
+        if not AnalysisScheduler.submit_unique("option-strategy-analysis", lambda: self._worker(symbol, generation)):
+            self.running = False; self.run.setEnabled(True)
         QTimer.singleShot(self._analysis_timeout_ms, lambda: self._analysis_watchdog(generation, symbol))
 
     def _worker(self, symbol, generation):
