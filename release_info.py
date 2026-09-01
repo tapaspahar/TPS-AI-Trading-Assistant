@@ -8,8 +8,8 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.2"
-LAST_UPDATED_AT = "01-09-2026 15:05:39 IST"
-FOOTER_UPDATE_TEXT = "Software Build v1.5.2 - 01-09-2026 15:05 IST"
+LAST_UPDATED_AT = "01-09-2026 15:20:50 IST"
+FOOTER_UPDATE_TEXT = "Software Build v1.5.2 - 01-09-2026 15:20 IST"
 RELEASE_NOTES = (
     "Added a Reliability Cockpit with a saved trade-decision timeline, missed-opportunity replay shortlist, regime-wise strategy performance matrix, execution-quality evidence and statistically gated shadow-mode eligibility.",
     "Added a common REAL execution data-quality gate: market session, broker connection, shared snapshot freshness and provider health must be valid, and REAL review remains paper-only until 30 outcomes, positive expectancy, profit factor and confidence gates pass.",
