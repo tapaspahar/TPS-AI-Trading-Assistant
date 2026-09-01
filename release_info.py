@@ -8,8 +8,8 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.2"
-LAST_UPDATED_AT = "01-09-2026 13:00:00 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.5.2 - 01-09-2026 13:00 IST"
+LAST_UPDATED_AT = "01-09-2026 11:00:08 IST"
+FOOTER_UPDATE_TEXT = "Software Build v1.5.2 - 01-09-2026 11:00 IST"
 RELEASE_NOTES = (
     "Added Angel One official publisher login with a local security-state callback, secure broker-issued session storage and read-only funds verification; direct MPIN/TOTP login remains a fallback.",
     "Added a canonical Market Data Hub, unique paper-thesis sampling, executable bid/ask paper fills, net-of-friction outcomes, dashboard health controls and conservative strategy ranking for the Release 1.5.2 reliability upgrade.",

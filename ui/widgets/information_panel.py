@@ -21,7 +21,10 @@ class InformationPanel(QFrame):
         brand = QLabel(FOOTER_UPDATE_TEXT)
         brand.setObjectName("informationBrand")
         brand.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        brand.setToolTip("Open Help → Release Notes to review everything included in this development update.")
+        brand.setToolTip(
+            "Yeh live system clock nahi hai. Yeh is software build/update ka actual local IST timestamp hai; "
+            "current date/time header ke top-right me dikhte hain."
+        )
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(16, 6, 16, 6)
