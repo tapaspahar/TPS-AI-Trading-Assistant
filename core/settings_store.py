@@ -28,6 +28,9 @@ DEFAULT_SETTINGS = {
     "paper_validation_daily_limit": 10,
     "paper_validation_soft_miss_allowance": 2,
     "paper_validation_max_open_trades": 10,
+    # A successful broker HTTP call is not usable evidence when its completed
+    # candle is old. This fail-closed threshold preserves paper/real safety.
+    "market_data_max_age_seconds": 420,
     "paper_execution_fixed_cost": 40.0,
     "paper_execution_slippage_points": 0.25,
     "paper_unique_thesis_window_minutes": 15,

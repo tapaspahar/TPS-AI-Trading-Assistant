@@ -58,8 +58,9 @@ def build_self_development_review(database: Database, trade_date: str, now: date
     slot_health = database.get_evaluation_health(trade_date, "ALL")
     if slot_health["expected_slots"]:
         coverage = float(slot_health["coverage_percent"])
-        evaluated = max(evaluated, int(slot_health["evaluated_slots"]))
-        attempts = max(attempts, int(slot_health["expected_slots"]))
+        # Expected scheduler slots are a coverage denominator, not attempts.
+        # Keeping these separate prevents AI Development and Post Market from
+        # reporting different attempt counts for the same immutable evidence.
     best = list(metrics.get("best_attempts") or [])
     repeats = _historical_repeat_context(database, metrics)
     trades = database.get_trades_for_date(trade_date)

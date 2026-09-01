@@ -11,8 +11,8 @@ from core.settings_store import SettingsStore
 from services.live_session import LiveSession
 from services.market_data_hub import MarketDataHub
 from services.reliability_intelligence import (
-    data_quality_gate, execution_quality, missed_opportunities, shadow_eligibility,
-    strategy_matrix, trade_timeline,
+    automatic_counterfactual_replay, broker_freshness, data_quality_gate, execution_quality,
+    score_calibration, shadow_eligibility, strategy_matrix, strategy_portfolio_risk, trade_timeline,
 )
 from ui.widgets.cards.dashboard_card import DashboardCard
 
@@ -36,6 +36,8 @@ class ReliabilityCenterPage(QWidget):
             "shadow": DashboardCard("Shadow-Mode Eligibility", "Waiting"),
             "execution": DashboardCard("Execution Quality", "Waiting"),
             "missed": DashboardCard("Missed Opportunity Review", "Waiting"),
+            "freshness": DashboardCard("Fresh Market Evidence", "Waiting"),
+            "portfolio": DashboardCard("Strategy Portfolio Risk", "Waiting"),
         }
         for i, card in enumerate(self.cards.values()): grid.addWidget(card, i // 2, i % 2)
         layout.addLayout(grid)
@@ -45,11 +47,17 @@ class ReliabilityCenterPage(QWidget):
         self.timeline = self._table(("Time", "Candle", "Index", "Side", "Stage", "Score", "Outcome", "Primary reason", "Delay"), 260)
         layout.addWidget(self.timeline)
         layout.addWidget(QLabel("Missed Opportunity Analyzer — replay shortlist, not entry permission"))
-        self.missed = self._table(("Priority", "Time", "Index", "Side", "Score", "Checks", "Outcome", "Primary blocker", "Replay status"), 230)
+        self.missed = self._table(("Priority", "Time", "Index", "Side", "Score", "Checks", "Primary blocker", "MFE", "MAE", "Replay outcome"), 230)
         layout.addWidget(self.missed)
         layout.addWidget(QLabel("Strategy Performance Matrix — regime-wise observed outcomes"))
         self.matrix = self._table(("Strategy", "Family", "Regime", "Samples", "Days", "Win %", "95% lower", "Expectancy", "PF", "Drawdown", "Validation"), 260)
         layout.addWidget(self.matrix)
+        layout.addWidget(QLabel("Observed Score Calibration — saved score is not a probability"))
+        self.calibration = self._table(("Score band", "Samples", "Wins", "Observed win %", "95% lower", "Expectancy", "Confidence"), 210)
+        layout.addWidget(self.calibration)
+        layout.addWidget(QLabel("Correlated Strategy Exposure — strike variants grouped by family and direction"))
+        self.portfolio = self._table(("Family", "Bias", "Variants", "Closed", "Combined P&L", "Defined loss", "Capital", "Win %", "Expectancy"), 220)
+        layout.addWidget(self.portfolio)
         scroll.setWidget(body); outer.addWidget(scroll); self.refresh()
 
     @staticmethod
@@ -75,11 +83,22 @@ class ReliabilityCenterPage(QWidget):
             hub_health=MarketDataHub.health(), broker_health=self.db.get_broker_health(limit=200),
         )
         shadow = shadow_eligibility(self.db); quality = execution_quality(self.db)
-        missed = missed_opportunities(self.db, date); timeline = trade_timeline(self.db, date)
+        freshness = broker_freshness(self.db); portfolio = strategy_portfolio_risk(self.db, date)
+        missed = automatic_counterfactual_replay(self.db, date); timeline = trade_timeline(self.db, date)
         self.cards["gate"].set_value(f"{gate['status']}\n{'; '.join(gate['reasons'][:2]) or 'Verified sources ready'}")
         self.cards["shadow"].set_value(f"{shadow['state']}\n{shadow['wins']}/{shadow['samples']} wins | lower {shadow['wilson_lower_bound']:.1f}%\nExpectancy ₹{shadow['expectancy']:,.2f}")
         self.cards["execution"].set_value(f"Verified fills {quality['verified_fills']}/{quality['real_submissions']}\nFill coverage {quality['fill_coverage']:.1f}% | Slippage {quality['slippage_status']}")
         self.cards["missed"].set_value(f"{len(missed)} replay candidate(s) today\nSafety locks remain active")
+        self.cards["freshness"].set_value(
+            f"{freshness['status']}\nFresh {freshness['fresh_success']}/{freshness['timestamped_success']} | "
+            f"p95 {freshness['p95_latency_ms'] or 0} ms"
+        )
+        self.cards["portfolio"].set_value(
+            f"{portfolio['concentration_status']}\n{portfolio['variants']} variants | "
+            f"defined loss ₹{portfolio['total_defined_loss']:,.2f}"
+        )
         self._fill(self.timeline, [(x['time'], x['candle'], x['symbol'], x['side'], x['stage'], x['score'], x['outcome'], x['reason'], x['delay']) for x in timeline])
-        self._fill(self.missed, [(x['priority'], x['time'], x['symbol'], x['side'], x['score'], x['checks'], x['outcome'], x['blocker'], x['replay_status']) for x in missed])
+        self._fill(self.missed, [(x['priority'], x['time'], x['symbol'], x['side'], x['score'], x['checks'], x['blocker'], x['mfe_points'], x['mae_points'], x['replay_outcome']) for x in missed])
         self._fill(self.matrix, [(x['strategy'], x['family'], x['regime'], x['samples'], x['independent_days'], f"{x['win_rate']:.1f}%", f"{x['lower_bound']:.1f}%", f"₹{x['expectancy']:,.2f}", x['profit_factor'], f"₹{x['drawdown']:,.2f}", x['tier']) for x in strategy_matrix(self.db)])
+        self._fill(self.calibration, [(x['band'], x['samples'], x['wins'], f"{x['win_rate']:.1f}%", f"{x['wilson_lower_bound']:.1f}%", f"₹{x['expectancy']:,.2f}", x['confidence']) for x in score_calibration(self.db)])
+        self._fill(self.portfolio, [(x['family'], x['bias'], x['variants'], x['closed'], f"₹{x['combined_pnl']:,.2f}", f"₹{x['maximum_defined_loss']:,.2f}", f"₹{x['capital_required']:,.2f}", f"{x['metrics']['win_rate']:.1f}%", f"₹{x['metrics']['expectancy']:,.2f}") for x in portfolio['groups']])

@@ -81,7 +81,7 @@ class AutoPaperTraderTests(unittest.TestCase):
         client.get_recent_candles.return_value = [{"time": "2026-08-04T11:10:00+05:30"}] * 51
         client.get_option_quote.return_value = {"ltp": 25010}
         client.get_option_chain_quotes.return_value = []
-        result = run_auto_paper_cycle(client, "NIFTY", {"max_trades_per_day": 5})
+        result = run_auto_paper_cycle(client, "NIFTY", {"max_trades_per_day": 5, "market_data_max_age_seconds": 9_999_999})
         self.assertIn("operational safety limit", result["status"])
         self.assertTrue(any("open paper-trade limit" in reason for reason in result["attempt"]["blockers"]))
         database.save_auto_trade_attempt.assert_called_once()
@@ -132,7 +132,7 @@ class AutoPaperTraderTests(unittest.TestCase):
         client.get_option_quote.return_value = {"ltp": 25010}
         client.get_option_chain_quotes.return_value = []
 
-        result = run_auto_paper_cycle(client, "NIFTY", {"max_trades_per_day": 5})
+        result = run_auto_paper_cycle(client, "NIFTY", {"max_trades_per_day": 5, "market_data_max_age_seconds": 9_999_999})
 
         attempt = result["attempt"]
         self.assertEqual(attempt["candle_time"], "2026-08-04T11:10:00+05:30")

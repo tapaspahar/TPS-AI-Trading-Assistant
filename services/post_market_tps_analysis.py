@@ -7,6 +7,9 @@ from collections import Counter
 from datetime import datetime, time, timedelta
 
 from core.database_manager import Database
+from services.reliability_intelligence import (
+    automatic_counterfactual_replay, broker_freshness, score_calibration, strategy_portfolio_risk,
+)
 
 
 def _json(value: str | None, fallback):
@@ -89,6 +92,8 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
     strategy_wins = [row for row in strategy_closed if float(row["realized_pnl"] or 0) > 0]
     strategy_losses = [row for row in strategy_closed if float(row["realized_pnl"] or 0) < 0]
     strategy_pnl = round(sum(float(row["realized_pnl"] or 0) for row in strategy_closed), 2)
+    freshness = broker_freshness(database)
+    portfolio = strategy_portfolio_risk(database, trade_date)
 
     evaluated = [row for row in attempts if row["outcome"] in ("STRATEGY REJECT", "SAFETY BLOCK", "CANDIDATE", "CAPTURED", "NO TRADE", "TRADE CAPTURED")]
     captured = [row for row in attempts if row["outcome"] in ("CAPTURED", "TRADE CAPTURED")]
@@ -286,6 +291,18 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
             "Note: Ye paper-trading audit hai, guaranteed prediction ya broker order nahi.",
         ]
     )
+    replay = automatic_counterfactual_replay(database, trade_date, 10)
+    calibration = score_calibration(database)
+    lines.extend(["", "8. Release 1.5.3 reliability evidence"])
+    lines.append(
+        f"Fresh timestamped broker responses {freshness['fresh_success']}/{freshness['timestamped_success']}; "
+        f"stale responses {freshness['stale_success']}; p95 latency {freshness['p95_latency_ms'] or 0} ms."
+    )
+    lines.append(
+        f"Strategy portfolio me {portfolio['variants']} strike variants the; correlated concentration "
+        f"{portfolio['concentration_status']} aur combined defined-loss exposure ₹{portfolio['total_defined_loss']:,.2f} tha."
+    )
+    lines.append(f"One-blocker replay ne {len(replay)} near-setup(s) ko later saved candles par evaluate kiya.")
 
     metrics = {
         "source_attempt_count": len(attempts),
@@ -320,6 +337,10 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
         "strategy_wins": len(strategy_wins),
         "strategy_losses": len(strategy_losses),
         "strategy_pnl": strategy_pnl,
+        "broker_freshness": freshness,
+        "strategy_portfolio_risk": portfolio,
+        "score_calibration": calibration,
+        "counterfactual_replay": replay,
     }
     return {
         "trade_date": trade_date,

@@ -3,7 +3,10 @@ from datetime import datetime, timedelta
 from core.database_manager import Database
 from engine.three_pm_research_engine import evaluate_three_pm_shadow
 from services.market_data_hub import MarketDataHub
-from services.reliability_intelligence import data_quality_gate, execution_quality, shadow_eligibility
+from services.reliability_intelligence import (
+    broker_freshness, data_quality_gate, execution_quality, score_calibration,
+    shadow_eligibility, strategy_portfolio_risk,
+)
 
 
 def test_data_quality_gate_blocks_open_session_without_verified_sources():
@@ -54,3 +57,44 @@ def test_three_pm_shadow_requires_confluence_not_price_alone():
     }], spot_move=-20, spot_reference=24000)
     assert candidate["state"] == "SHADOW CANDIDATE"
     assert candidate["side"] == "PE"
+
+
+def test_broker_success_is_not_freshness_success(tmp_path):
+    db = Database(tmp_path / "freshness.db")
+    for age in (30, 90, 900):
+        db.save_broker_telemetry({
+            "provider": "TEST", "operation": "candles", "started_at": "2026-09-01T10:00:00",
+            "completed_at": "2026-09-01T10:00:01", "duration_ms": 100 + age,
+            "outcome": "SUCCESS", "attempt_count": 1, "cache_hit": False,
+            "data_timestamp": "x", "data_age_seconds": age, "details": {},
+        })
+    result = broker_freshness(db, stale_seconds=300)
+    assert result["provider_success"] == 3
+    assert result["fresh_success"] == 2
+    assert result["stale_success"] == 1
+    assert result["status"] == "DEGRADED"
+
+
+def test_strategy_portfolio_groups_correlated_variants(tmp_path):
+    db = Database(tmp_path / "portfolio.db")
+    candidate = {
+        "strategy": "Bull Call Debit Spread", "friendly_name": "Cutie", "family": "DIRECTIONAL",
+        "bias": "BULLISH", "legs": [{"action": "BUY", "option_type": "CE", "strike": 100, "lots": 1}],
+        "max_profit": 100, "max_loss": 50, "capital_required": 50, "entry_cashflow": -50,
+        "return_on_capital": 20, "breakevens": [105], "profit_zone": "ABOVE", "scenario_profitable_percent": 60,
+        "rank_score": 70, "explanation": "test",
+    }
+    for minute in (30, 35):
+        trade_id = db.save_strategy_trade(candidate, {"symbol": "NIFTY", "spot": 100, "expiry": "TEST", "candle_time": f"2026-09-01T09:{minute}:00"})
+        db.cursor.execute("UPDATE strategy_trades SET trade_date='01-09-2026',status='CLOSED',realized_pnl=10 WHERE id=?", (trade_id,))
+    db.connection.commit()
+    result = strategy_portfolio_risk(db, "01-09-2026")
+    assert result["variants"] == 2
+    assert len(result["groups"]) == 1
+    assert result["groups"][0]["maximum_defined_loss"] == 100
+
+
+def test_score_calibration_uses_only_closed_linked_outcomes(tmp_path):
+    db = Database(tmp_path / "calibration.db")
+    # No linked closed paper outcomes means the score remains explicitly uncalibrated.
+    assert score_calibration(db) == []

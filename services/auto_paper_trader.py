@@ -165,6 +165,25 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
             ).total_seconds()))
         except (TypeError, ValueError):
             capture["provider_data_age_seconds"] = None
+        maximum_age = max(60, int(settings.get("market_data_max_age_seconds", 420) or 420))
+        if capture["provider_data_age_seconds"] is None:
+            reason = "Completed-candle timestamp is unavailable; provider success cannot be treated as fresh market data"
+            result = _attempt(
+                f"No paper trade: {reason}.", checked_at, capture=capture, candidate=None, future=future,
+                outcome="DATA GAP", data_gaps=[reason],
+            )
+            return _record(database, symbol, result)
+        if int(capture["provider_data_age_seconds"]) > maximum_age:
+            reason = (
+                f"Completed market candle is stale ({capture['provider_data_age_seconds']}s old; "
+                f"maximum {maximum_age}s)"
+            )
+            result = _attempt(
+                f"No paper trade: {reason}.", checked_at, capture=capture, candidate=None, future=future,
+                outcome="DATA GAP", data_gaps=[reason],
+                warnings=["Transport request succeeded, but the returned market evidence was not fresh"],
+            )
+            return _record(database, symbol, result)
         snapshot = ChartSnapshot(
             price=float(capture["close"]), ema_5=float(capture["ema_5"]), ema_20=float(capture["ema_20"]), ema_50=float(capture["ema_50"]),
             vwap=float(capture["vwap"]) if capture["vwap"] else None, supertrend=float(capture["supertrend"]),

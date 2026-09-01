@@ -1,16 +1,18 @@
 """Application release metadata kept in one place."""
 
 APP_NAME = "TPS AI Trading Assistant"
-VERSION = "1.5.2"
-DISPLAY_VERSION = "Release 1.5.2"
+VERSION = "1.5.3"
+DISPLAY_VERSION = "Release 1.5.3"
 RELEASE_DATE = "01-09-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
-SOFTWARE_UPDATE_VERSION = "v1.5.2"
-LAST_UPDATED_AT = "01-09-2026 15:20:50 IST"
-FOOTER_UPDATE_TEXT = "Software Build v1.5.2 - 01-09-2026 15:20 IST"
+SOFTWARE_UPDATE_VERSION = "v1.5.3"
+LAST_UPDATED_AT = "01-09-2026 16:00:00 IST"
+FOOTER_UPDATE_TEXT = "Software Build v1.5.3 - 01-09-2026 16:00 IST"
 RELEASE_NOTES = (
+    "Added Release 1.5.3 reliability controls: fresh-data hard gating, one-blocker candle replay, score-band outcome calibration, correlated strategy portfolio exposure, and consistent attempt-versus-slot reporting.",
+    "Separated broker transport success from usable market freshness and added stale-response ratio plus p50/p95 latency evidence to the Reliability Cockpit.",
     "Added a Reliability Cockpit with a saved trade-decision timeline, missed-opportunity replay shortlist, regime-wise strategy performance matrix, execution-quality evidence and statistically gated shadow-mode eligibility.",
     "Added a common REAL execution data-quality gate: market session, broker connection, shared snapshot freshness and provider health must be valid, and REAL review remains paper-only until 30 outcomes, positive expectancy, profit factor and confidence gates pass.",
     "Broker reconciliation now persists average fill, filled quantity and adverse limit-to-fill slippage; missing fill evidence stays DATA GAP instead of being estimated.",
