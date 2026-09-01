@@ -21,6 +21,7 @@ from services.notification_service import NOTIFICATION_LABELS, NotificationServi
 class SettingsPage(QWidget):
     auto_connection_succeeded = Signal(object, str)
     auto_connection_failed = Signal(str)
+    publisher_tokens_received = Signal(dict)
     live_connected = Signal()
 
     def __init__(self):
@@ -270,6 +271,10 @@ class SettingsPage(QWidget):
         self.open_broker_login.clicked.connect(self.open_selected_broker_login)
         self.open_broker_login.setMinimumHeight(38)
         broker_form.addRow(self.open_broker_login)
+        self.official_broker_connect = QPushButton("Connect with Angel One — Official Login")
+        self.official_broker_connect.clicked.connect(self.start_angel_one_publisher_login)
+        self.official_broker_connect.setMinimumHeight(42)
+        broker_form.addRow(self.official_broker_connect)
         connect = QPushButton("Connect Live Data")
         connect.clicked.connect(self.connect_broker)
         connect.setMinimumHeight(38)
@@ -280,7 +285,10 @@ class SettingsPage(QWidget):
         layout.addStretch()
         self.auto_connection_succeeded.connect(self.complete_auto_connection)
         self.auto_connection_failed.connect(self.show_auto_connection_error)
+        self.publisher_tokens_received.connect(self.verify_angel_one_publisher_session)
         self._auto_connection_started = False
+        self._publisher_login = None
+        self._publisher_api_key = ""
 
     def save(self):
         try:
@@ -376,12 +384,57 @@ class SettingsPage(QWidget):
         self.open_broker_login.setText(
             "Open Paytm Authorization Login" if broker_id == "paytm_money" else f"Open Official {definition.name} API Setup"
         )
+        self.official_broker_connect.setVisible(broker_id == "angel_one")
         if definition.login_summary:
             self.broker_note.setText(
                 definition.login_summary
                 + " Broker ID alone cannot fetch market data because the broker must issue an authenticated API session. "
                 "TPS keeps the advanced values in Windows Credential Manager, never in GitHub."
             )
+
+    def start_angel_one_publisher_login(self):
+        """Open Angel One's page; TPS never receives broker PIN or TOTP."""
+        if self.broker_provider.currentData() != "angel_one":
+            return
+        api_key = self.current_broker_credentials().get("api_key", "").strip()
+        if not api_key:
+            QMessageBox.warning(
+                self, "Angel One official login",
+                "Enter your Angel One SmartAPI App API Key first. The callback URL registered in SmartAPI My Apps must be "
+                "http://127.0.0.1:8765/angel-one/callback",
+            )
+            return
+        try:
+            from services.angel_one_publisher_login import AngelOnePublisherLogin
+            self._publisher_login = AngelOnePublisherLogin(api_key)
+            url = self._publisher_login.start(
+                lambda tokens: self.publisher_tokens_received.emit(tokens),
+                lambda message: self.auto_connection_failed.emit(message),
+            )
+        except (ValueError, RuntimeError) as error:
+            QMessageBox.warning(self, "Angel One official login", str(error))
+            return
+        self._publisher_api_key = api_key
+        self.broker_status.setText("Connection status: waiting for authorization on official Angel One page…")
+        if not QDesktopServices.openUrl(QUrl(url)):
+            self.broker_status.setText("Connection status: official Angel One login page could not be opened")
+
+    def verify_angel_one_publisher_session(self, tokens):
+        self.broker_status.setText("Connection status: authorization received; verifying funds and data access…")
+        Thread(target=self._verify_angel_one_publisher_session, args=(dict(tokens),), daemon=True).start()
+
+    def _verify_angel_one_publisher_session(self, tokens):
+        try:
+            from services.angel_one_client import AngelOneClient
+            client = AngelOneClient.from_publisher_tokens(
+                self._publisher_api_key, tokens.get("auth_token", ""),
+                tokens.get("feed_token", ""), tokens.get("client_code", ""),
+            )
+            self.credential_store.save_session("angel_one", {**tokens, "api_key": self._publisher_api_key})
+        except (ValueError, RuntimeError) as error:
+            self.auto_connection_failed.emit(str(error))
+            return
+        self.auto_connection_succeeded.emit(client, "angel_one")
 
     def open_selected_broker_login(self):
         broker_id = self.broker_provider.currentData()
@@ -420,6 +473,7 @@ class SettingsPage(QWidget):
         broker_id = self.broker_provider.currentData()
         try:
             self.credential_store.clear(broker_id)
+            self.credential_store.clear_session(broker_id)
         except RuntimeError as error:
             QMessageBox.warning(self, "Secure credential storage", str(error))
             return
@@ -450,16 +504,38 @@ class SettingsPage(QWidget):
         try:
             broker_id = self.store.load().get("broker_provider", "angel_one")
             credentials = self.credential_store.load(broker_id)
+            publisher_session = self.credential_store.load_session("angel_one") if broker_id == "angel_one" else {}
         except RuntimeError as error:
             self.broker_status.setText(f"Connection status: secure storage unavailable ({error})")
             return
         definition = broker_definition(broker_id)
+        if broker_id == "angel_one" and publisher_session.get("api_key") and publisher_session.get("auth_token") and publisher_session.get("feed_token"):
+            self.broker_status.setText("Connection status: restoring official Angel One session…")
+            self._auto_connection_started = True
+            Thread(target=self._connect_saved_publisher_session, args=(publisher_session,), daemon=True).start()
+            return
         if not broker_credentials_complete(broker_id, credentials):
             self.broker_status.setText("Connection status: save credentials once to enable auto-connect")
             return
         self.broker_status.setText("Connection status: connecting saved credentials…")
         self._auto_connection_started = True
         Thread(target=self._connect_saved_credentials, args=(broker_id, credentials), daemon=True).start()
+
+    def _connect_saved_publisher_session(self, values):
+        try:
+            from services.angel_one_client import AngelOneClient
+            client = AngelOneClient.from_publisher_tokens(
+                values.get("api_key", ""), values.get("auth_token", ""),
+                values.get("feed_token", ""), values.get("client_code", ""),
+            )
+        except (ValueError, RuntimeError) as error:
+            try:
+                self.credential_store.clear_session("angel_one")
+            except RuntimeError:
+                pass
+            self.auto_connection_failed.emit(f"saved Angel One session expired; use Official Login ({error})")
+            return
+        self.auto_connection_succeeded.emit(client, "angel_one")
 
     def _connect_saved_credentials(self, broker_id, credentials):
         try:

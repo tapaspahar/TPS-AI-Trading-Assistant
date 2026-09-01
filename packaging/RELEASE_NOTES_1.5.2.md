@@ -15,3 +15,5 @@
 - Paper BUY entries prefer executable ask, monitored exits prefer executable bid, and saved net P&L deducts configured round-trip cost and slippage.
 - Dashboard now includes a Today Control Center, Market Data freshness/cache health and a conservative Paper Accuracy Lab with Wilson lower bound, expectancy and profit factor.
 - Strategy ranking now prioritizes evidence tier and conservative confidence before raw win rate, and shows independent days, max drawdown and average capital requirement.
+- Added an Angel One official publisher-login button: TPS opens the broker page, validates a CSRF state, captures only broker-issued auth/feed tokens on a bounded localhost callback and verifies the session through the read-only funds endpoint.
+- Publisher session tokens are isolated in Windows Credential Manager, restored while valid and removed automatically after an expired-session verification failure; MPIN/TOTP direct login remains an explicit fallback.

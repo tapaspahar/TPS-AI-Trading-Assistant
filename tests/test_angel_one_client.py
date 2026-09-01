@@ -1,4 +1,5 @@
 import unittest
+import types
 from unittest.mock import patch
 
 from services.angel_one_client import AngelOneClient
@@ -28,6 +29,20 @@ class AngelOneClientTests(unittest.TestCase):
     def test_missing_credentials_are_rejected_before_network_access(self):
         with self.assertRaisesRegex(ValueError, "API Key"):
             AngelOneClient("", "", "", "").connect()
+
+    def test_publisher_tokens_create_verified_session_without_pin_or_totp(self):
+        class PublisherSession:
+            def __init__(self, **values):
+                self.values = values
+
+            def rmsLimit(self):
+                return {"status": True, "data": {"availablecash": "1000"}}
+
+        with patch.dict("sys.modules", {"SmartApi": types.SimpleNamespace(SmartConnect=PublisherSession)}):
+            client = AngelOneClient.from_publisher_tokens("key", "jwt", "feed", "A1")
+        self.assertEqual(client.auth_token, "jwt")
+        self.assertEqual(client.feed_token, "feed")
+        self.assertEqual(client.session.values["access_token"], "jwt")
 
     def test_recent_candles_are_cached_for_a_short_period(self):
         client = AngelOneClient("key", "client", "pin", "secret")

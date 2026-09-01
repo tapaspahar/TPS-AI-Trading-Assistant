@@ -40,6 +40,33 @@ class AngelOneClient:
         self._last_candle_request_at = 0.0
         self._candle_cache = {}
 
+    @classmethod
+    def from_publisher_tokens(cls, api_key: str, auth_token: str, feed_token: str, client_code: str = ""):
+        """Create a session from tokens issued by Angel One's official login page."""
+        if not all((str(api_key).strip(), str(auth_token).strip(), str(feed_token).strip())):
+            raise ValueError("API key, auth token and feed token are required.")
+        try:
+            from SmartApi import SmartConnect
+        except ImportError as error:
+            raise RuntimeError("Angel One packages are not installed. Run the project requirements install.") from error
+        value = cls(api_key, client_code, "", "")
+        value._suppress_sensitive_smartapi_logs()
+        value.session = SmartConnect(
+            api_key=value.api_key, access_token=str(auth_token).strip(),
+            feed_token=str(feed_token).strip(), userId=value.client_code or None,
+        )
+        value.auth_token = str(auth_token).strip()
+        value.feed_token = str(feed_token).strip()
+        try:
+            response = value.session.rmsLimit()
+        except Exception as error:
+            value.session = None
+            raise RuntimeError("Angel One issued a session but TPS could not verify it with the funds endpoint.") from error
+        if not response or not response.get("status"):
+            value.session = None
+            raise RuntimeError(str((response or {}).get("message", "Angel One publisher session verification failed.")))
+        return value
+
     def connect(self) -> dict:
         if not all((self.api_key, self.client_code, self.pin, self.totp_secret)):
             raise ValueError("Enter API Key, Client Code, MPIN and TOTP secret.")

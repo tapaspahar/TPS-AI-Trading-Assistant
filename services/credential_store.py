@@ -65,6 +65,32 @@ class BrokerCredentialStore:
             if error.__class__.__name__ != "PasswordDeleteError":
                 raise
 
+    def save_session(self, broker_id, values):
+        """Persist broker-issued tokens separately from long-lived app setup."""
+        cleaned = {str(key): str(value or "").strip() for key, value in dict(values).items()}
+        if not cleaned.get("auth_token") or not cleaned.get("feed_token"):
+            raise ValueError("Broker session did not include auth and feed tokens.")
+        account = f"broker-session-{str(broker_id).lower()}"
+        self._get_backend().set_password(self.SERVICE_NAME, account, json.dumps(cleaned))
+
+    def load_session(self, broker_id):
+        account = f"broker-session-{str(broker_id).lower()}"
+        saved = self._get_backend().get_password(self.SERVICE_NAME, account)
+        if not saved:
+            return {}
+        try:
+            return {str(key): str(value or "") for key, value in json.loads(saved).items()}
+        except (TypeError, json.JSONDecodeError):
+            return {}
+
+    def clear_session(self, broker_id):
+        account = f"broker-session-{str(broker_id).lower()}"
+        try:
+            self._get_backend().delete_password(self.SERVICE_NAME, account)
+        except Exception as error:
+            if error.__class__.__name__ != "PasswordDeleteError":
+                raise
+
 
 class AngelOneCredentialStore(BrokerCredentialStore):
     """Backward-compatible Angel One profile used by older code and tests."""

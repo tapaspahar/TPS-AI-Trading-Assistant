@@ -44,3 +44,13 @@ class CredentialStoreTests(unittest.TestCase):
         store.save("angel_one", self.values)
         self.assertEqual(store.load("dhan"), {"client_id": "DH123", "pin": "123456", "totp_secret": "secret"})
         self.assertEqual(store.load("angel_one"), self.values)
+
+    def test_broker_session_tokens_are_stored_separately(self):
+        backend = FakeKeyring()
+        store = BrokerCredentialStore(backend)
+        session = {"api_key": "key", "auth_token": "jwt", "feed_token": "feed", "client_code": "A1"}
+        store.save_session("angel_one", session)
+        self.assertEqual(store.load_session("angel_one"), session)
+        self.assertEqual(store.load("angel_one"), {})
+        store.clear_session("angel_one")
+        self.assertEqual(store.load_session("angel_one"), {})
