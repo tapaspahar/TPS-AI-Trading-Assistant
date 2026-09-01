@@ -1,5 +1,6 @@
 # TPS AI Trading Assistant 1.5.2
 
+- Replaced the long scrolling sidebar with five compact workspace groups and visible tabs for every existing page; legacy Help links and automatic routes remain compatible.
 - Expiry-day ATM CE+PE premium-parity trigger after 3:00 PM.
 - Closest ATM, same strike and one quote snapshot; maximum premium gap ₹10.
 - Duplicate-safe paired intent with combined target, maximum-loss and time exit monitoring.

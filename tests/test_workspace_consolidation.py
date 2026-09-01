@@ -39,41 +39,33 @@ class WorkspaceConsolidationTests(unittest.TestCase):
 
     def test_sidebar_contains_only_primary_workspaces(self):
         labels = "\n".join(button.text() for button in self.screen.sidebar.buttons)
-        self.assertEqual(len(self.screen.sidebar.buttons), 29)
-        self.assertIn("Index Market Analysis", labels)
-        self.assertIn("Options Algo Trading", labels)
-        self.assertIn("Cutie AI Commands", labels)
-        self.assertIn("Strategy Trades", labels)
-        self.assertIn("Expiry After 3 PM", labels)
-        for retired_label in (
-            "Checklist",
-            "Stock Options Watch",
-            "Post-Market Report",
-            "Next-Day Bias",
-            "Smart Money Lab",
-            "Pre-Candle Probability",
-            "Options Intelligence",
-            "Volatility Intelligence",
-            "Chart Capture",
-            "Risk Manager",
+        self.assertEqual(len(self.screen.sidebar.buttons), 5)
+        for workspace_label in (
+            "Dashboard",
+            "Market Intelligence",
+            "Trading & Strategies",
+            "Reports & Learning",
+            "Controls & Settings",
         ):
-            self.assertNotIn(retired_label, labels)
+            self.assertIn(workspace_label, labels)
+        self.assertLessEqual(self.screen.sidebar.menu_widget.minimumHeight(), 260)
 
     def test_legacy_routes_open_the_matching_consolidated_tabs(self):
         cases = (
-            (5, 2, self.screen.optionsHub, 0),
-            (25, 2, self.screen.optionsHub, 1),
-            (11, 22, self.screen.postMarketHub, 1),
-            (17, 26, self.screen.gapHub, 0),
-            (18, 24, self.screen.powerfulHub, 1),
-            (23, 24, self.screen.powerfulHub, 2),
-            (20, 27, self.screen.autoOpportunityHub, 1),
-            (33, 21, self.screen.strategyHub, 1),
+            (5, 2, self.screen.tradingCenter, 0, self.screen.optionsHub, 0),
+            (25, 2, self.screen.tradingCenter, 0, self.screen.optionsHub, 1),
+            (11, 4, self.screen.reportsCenter, 4, self.screen.postMarketHub, 1),
+            (17, 1, self.screen.marketCenter, 6, self.screen.gapHub, 0),
+            (18, 1, self.screen.marketCenter, 3, self.screen.powerfulHub, 1),
+            (23, 1, self.screen.marketCenter, 3, self.screen.powerfulHub, 2),
+            (20, 2, self.screen.tradingCenter, 3, self.screen.autoOpportunityHub, 1),
+            (33, 2, self.screen.tradingCenter, 1, self.screen.strategyHub, 1),
         )
-        for route, stack_index, hub, tab_index in cases:
+        for route, stack_index, center, center_tab, hub, tab_index in cases:
             with self.subTest(route=route):
                 self.screen.show_page(route)
                 self.assertEqual(self.screen.stack.currentIndex(), stack_index)
+                self.assertEqual(center.tabs.currentIndex(), center_tab)
                 self.assertEqual(hub.tabs.currentIndex(), tab_index)
 
     def test_retired_manual_routes_open_automatic_replacements(self):
@@ -103,15 +95,43 @@ class WorkspaceConsolidationTests(unittest.TestCase):
 
         self.screen.show_page(34)
 
-        self.assertEqual(self.screen.stack.currentIndex(), 34)
-        self.assertIs(self.screen.stack.currentWidget(), self.screen.strategyTradesPage)
-        self.assertTrue(self.screen.sidebar.strategyTradesButton.isChecked())
+        self.assertEqual(self.screen.stack.currentIndex(), 2)
+        self.assertEqual(self.screen.tradingCenter.tabs.currentIndex(), 2)
+        self.assertIs(self.screen.tradingCenter.tabs.currentWidget(), self.screen.strategyTradesPage)
+        self.assertTrue(self.screen.sidebar.tradingCenterButton.isChecked())
 
     def test_header_settings_shortcut_opens_settings_page(self):
         self.screen.show_page(0)
         self.screen.header.settingsButton.click()
         self.assertEqual(self.screen.stack.currentIndex(), 9)
-        self.assertTrue(self.screen.sidebar.settingsButton.isChecked())
+        self.assertEqual(self.screen.controlsCenter.tabs.currentIndex(), 3)
+        self.assertTrue(self.screen.sidebar.controlsCenterButton.isChecked())
+
+    def test_master_workspace_tabs_keep_every_page_easy_to_reach(self):
+        expected = {
+            self.screen.marketCenter: (
+                "Market Snapshot", "Index Candle Analysis", "Equity Research",
+                "Signal Intelligence", "CAS Analysis", "Trend Memory", "Gap Probability",
+            ),
+            self.screen.tradingCenter: (
+                "Options Workspace", "Option Strategies", "Strategy Trades",
+                "Opportunity Radar", "Options Scalper", "Expiry After 3 PM", "Options Algo",
+            ),
+            self.screen.reportsCenter: (
+                "Trade Journal", "Auto Attempts", "Notifications", "All Reports",
+                "Post Market", "Backtesting", "Candle Replay", "AI Development",
+            ),
+            self.screen.controlsCenter: (
+                "Overtrading Protection", "Broker Execution", "Cutie AI Commands",
+                "Settings", "About", "Help",
+            ),
+        }
+        for center, labels in expected.items():
+            with self.subTest(center=center):
+                self.assertEqual(
+                    tuple(center.tabs.tabText(i) for i in range(center.tabs.count())),
+                    labels,
+                )
 
 
 if __name__ == "__main__":

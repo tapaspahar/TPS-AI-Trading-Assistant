@@ -8,9 +8,10 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.2"
-LAST_UPDATED_AT = "01-09-2026 11:00:08 IST"
-FOOTER_UPDATE_TEXT = "Software Build v1.5.2 - 01-09-2026 11:00 IST"
+LAST_UPDATED_AT = "01-09-2026 11:23:58 IST"
+FOOTER_UPDATE_TEXT = "Software Build v1.5.2 - 01-09-2026 11:23 IST"
 RELEASE_NOTES = (
+    "Replaced the long scrolling sidebar with five compact workspace groups; every existing TPS page is now one-click accessible through visible Market, Trading, Reports or Controls tabs while legacy Help routes and automatic navigation remain compatible.",
     "Added Angel One official publisher login with a local security-state callback, secure broker-issued session storage and read-only funds verification; direct MPIN/TOTP login remains a fallback.",
     "Added a canonical Market Data Hub, unique paper-thesis sampling, executable bid/ask paper fills, net-of-friction outcomes, dashboard health controls and conservative strategy ranking for the Release 1.5.2 reliability upgrade.",
     "Reworked Options Workspace PAPER Testing Mode into exploratory forward validation: up to 10 independent trades/day may be monitored concurrently, so one running simulation no longer blocks the next completed-candle sample.",

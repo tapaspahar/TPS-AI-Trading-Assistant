@@ -149,17 +149,49 @@ class DashboardScreen(QWidget):
             (self.autoOpportunityPage, "Automatic Opportunities"),
             (self.stockOptionsWatchPage, "Pinned F&O Watchlist"),
         ))
+        self.marketCenter = ConsolidatedWorkspace((
+            (self.liveMarketPage, "Market Snapshot"),
+            (self.indexMarketAnalysisPage, "Index Candle Analysis"),
+            (self.equityPage, "Equity Research"),
+            (self.powerfulHub, "Signal Intelligence"),
+            (self.casAnalysisPage, "CAS Analysis"),
+            (self.trendMemoryPage, "Trend Memory"),
+            (self.gapHub, "Gap Probability"),
+        ))
+        self.tradingCenter = ConsolidatedWorkspace((
+            (self.optionsHub, "Options Workspace"),
+            (self.strategyHub, "Option Strategies"),
+            (self.strategyTradesPage, "Strategy Trades"),
+            (self.autoOpportunityHub, "Opportunity Radar"),
+            (self.scalperPage, "Options Scalper"),
+            (self.expiryObservationPage, "Expiry After 3 PM"),
+            (self.optionsAlgoPage, "Options Algo"),
+        ))
+        self.reportsCenter = ConsolidatedWorkspace((
+            (self.journalPage, "Trade Journal"),
+            (self.autoAttemptReportPage, "Auto Attempts"),
+            (self.notificationCenterPage, "Notifications"),
+            (self.reportsPage, "All Reports"),
+            (self.postMarketHub, "Post Market"),
+            (self.backtestPage, "Backtesting"),
+            (self.replayPage, "Candle Replay"),
+            (self.selfDevelopmentPage, "AI Development"),
+        ))
+        self.controlsCenter = ConsolidatedWorkspace((
+            (self.recoveryCenterPage, "Overtrading Protection"),
+            (self.executionControlPage, "Broker Execution"),
+            (self.cutieCommandPage, "Cutie AI Commands"),
+            (self.settingsPage, "Settings"),
+            (self.aboutPage, "About"),
+            (self.helpPage, "Help"),
+        ))
         retired = lambda: QWidget()
         pages = (
-            self.dashboardPage, self.liveMarketPage, self.optionsHub, self.retiredChartCaptureSlot, self.journalPage,
-            retired(), self.retiredAiPageSlot, self.retiredRiskPageSlot, self.reportsPage, self.settingsPage,
-            self.backtestPage, retired(), self.replayPage, self.equityPage,
-            self.autoAttemptReportPage, self.aboutPage, self.helpPage, retired(), retired(),
-            self.casAnalysisPage, retired(), self.strategyHub, self.postMarketHub, retired(),
-            self.powerfulHub, retired(), self.gapHub, self.autoOpportunityHub, self.trendMemoryPage,
-            self.scalperPage, self.notificationCenterPage, self.selfDevelopmentPage, self.recoveryCenterPage, retired(),
-            self.strategyTradesPage, self.expiryObservationPage, self.executionControlPage, self.optionsAlgoPage,
-            self.cutieCommandPage, self.indexMarketAnalysisPage,
+            self.dashboardPage, self.marketCenter, self.tradingCenter, retired(), self.reportsCenter,
+            retired(), retired(), retired(), retired(), self.controlsCenter,
+            retired(), retired(), retired(), retired(), retired(), retired(), retired(), retired(), retired(),
+            retired(), retired(), retired(), retired(), retired(), retired(), retired(), retired(), retired(), retired(),
+            retired(), retired(), retired(), retired(), retired(), retired(), retired(), retired(), retired(), retired(), retired(),
         )
         for page in pages:
             self.stack.addWidget(page)
@@ -196,32 +228,23 @@ class DashboardScreen(QWidget):
         self.scalperPage.scalp_alert.connect(self.notify_scalp_watch)
         self.notifier.notification_sent.connect(self.notificationCenterPage.refresh)
         self.notificationCenterPage.unread_count_changed.connect(self.sidebar.set_notification_count)
-        for button, index in ((self.sidebar.dashboardButton, 0), (self.sidebar.liveMarketButton, 1),
-                              (self.sidebar.optionsButton, 2),
-                              (self.sidebar.journalButton, 4),
-                              (self.sidebar.reportButton, 8), (self.sidebar.settingsButton, 9),
-                              (self.sidebar.backtestButton, 10), (self.sidebar.replayButton, 12),
-                              (self.sidebar.equityButton, 13), (self.sidebar.autoAttemptReportButton, 14),
-                              (self.sidebar.aboutButton, 15), (self.sidebar.helpButton, 16)):
+        for button, index in ((self.sidebar.dashboardButton, 0), (self.sidebar.marketCenterButton, 1),
+                              (self.sidebar.tradingCenterButton, 2),
+                              (self.sidebar.reportsCenterButton, 4),
+                              (self.sidebar.controlsCenterButton, 9)):
             button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
-        self.sidebar.expiryObservationButton.clicked.connect(lambda: self.show_page(35))
-        self.sidebar.executionControlButton.clicked.connect(lambda: self.show_page(36))
-        self.sidebar.optionsAlgoButton.clicked.connect(lambda: self.show_page(37))
-        self.sidebar.cutieCommandButton.clicked.connect(lambda: self.show_page(38))
-        self.sidebar.indexMarketAnalysisButton.clicked.connect(lambda: self.show_page(39))
-        for button, index in ((self.sidebar.casAnalysisButton, 19),):
-            button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
-        self.sidebar.optionStrategiesButton.clicked.connect(lambda _checked=False: self.show_page(21))
-        self.sidebar.strategyTradesButton.clicked.connect(lambda _checked=False: self.show_page(34))
-        self.sidebar.postMarketTpsAnalysisButton.clicked.connect(lambda _checked=False: self.show_page(22))
-        self.sidebar.powerfulEngineButton.clicked.connect(lambda _checked=False: self.show_page(24))
-        self.sidebar.gapProbabilityButton.clicked.connect(lambda _checked=False: self.show_page(26))
-        self.sidebar.autoOpportunityButton.clicked.connect(lambda _checked=False: self.show_page(27))
-        self.sidebar.trendMemoryButton.clicked.connect(lambda _checked=False: self.show_page(28))
-        self.sidebar.scalperButton.clicked.connect(lambda _checked=False: self.show_page(29))
-        self.sidebar.notificationCenterButton.clicked.connect(lambda _checked=False: self.show_page(30))
-        self.sidebar.selfDevelopmentButton.clicked.connect(lambda _checked=False: self.show_page(31))
-        self.sidebar.recoveryCenterButton.clicked.connect(lambda _checked=False: self.show_page(32))
+        # A master-tab click follows the same route as the former sidebar
+        # button, including that page's normal refresh/preparation work.
+        for center, routes in (
+            (self.marketCenter, (1, 39, 13, 24, 19, 28, 26)),
+            (self.tradingCenter, (2, 21, 34, 27, 29, 35, 37)),
+            (self.reportsCenter, (4, 14, 30, 8, 22, 10, 12, 31)),
+            (self.controlsCenter, (32, 36, 38, 9, 15, 16)),
+        ):
+            center.tabs.currentChanged.connect(
+                lambda tab_index, route_list=routes: self.show_page(route_list[tab_index])
+                if 0 <= tab_index < len(route_list) else None
+            )
         body_layout.addWidget(self.stack)
         main_layout.addLayout(body_layout, 1)
         self.informationPanel = InformationPanel()
@@ -274,7 +297,7 @@ class DashboardScreen(QWidget):
             # A temporary database lock must not interrupt the trading UI;
             # the one-minute scheduler will retry automatically.
             return
-        if updated and self.stack.currentIndex() == 22:
+        if updated:
             self.postMarketTpsAnalysisPage.refresh(auto_generate=False)
         if updated:
             count = len(updated) if hasattr(updated, "__len__") else updated
@@ -286,7 +309,7 @@ class DashboardScreen(QWidget):
             development_updates = ensure_completed_self_development_reviews(self.selfDevelopmentPage.db)
         except Exception:
             return
-        if development_updates and self.stack.currentIndex() == 31:
+        if development_updates:
             self.selfDevelopmentPage.refresh(auto_generate=False)
         if development_updates:
             self.notifier.notify(
@@ -300,7 +323,7 @@ class DashboardScreen(QWidget):
             live = get_live_trend_analogs(self.trendMemoryPage.db)
         except Exception:
             return
-        if updated and self.stack.currentIndex() == 28:
+        if updated:
             self.trendMemoryPage.refresh()
         for item in live:
             if not item.get("matches"):
@@ -412,63 +435,82 @@ class DashboardScreen(QWidget):
 
     def show_page(self, index: int):
         requested_index = index
-        aliases = {
-            3: (2, self.optionsHub, 0),
-            5: (2, self.optionsHub, 0),
-            11: (22, self.postMarketHub, 1),
-            7: (9, None, 0),
-            17: (26, self.gapHub, 0),
-            18: (24, self.powerfulHub, 1),
-            20: (27, self.autoOpportunityHub, 1),
-            23: (24, self.powerfulHub, 2),
-            25: (2, self.optionsHub, 1),
-            33: (21, self.strategyHub, 1),
+        routes = {
+            1: (1, self.marketCenter, 0, None, 0),
+            39: (1, self.marketCenter, 1, None, 0),
+            13: (1, self.marketCenter, 2, None, 0),
+            24: (1, self.marketCenter, 3, self.powerfulHub, 0),
+            18: (1, self.marketCenter, 3, self.powerfulHub, 1),
+            23: (1, self.marketCenter, 3, self.powerfulHub, 2),
+            19: (1, self.marketCenter, 4, None, 0),
+            28: (1, self.marketCenter, 5, None, 0),
+            26: (1, self.marketCenter, 6, self.gapHub, 0),
+            17: (1, self.marketCenter, 6, self.gapHub, 0),
+            2: (2, self.tradingCenter, 0, self.optionsHub, 0),
+            3: (2, self.tradingCenter, 0, self.optionsHub, 0),
+            5: (2, self.tradingCenter, 0, self.optionsHub, 0),
+            25: (2, self.tradingCenter, 0, self.optionsHub, 1),
+            21: (2, self.tradingCenter, 1, self.strategyHub, 0),
+            33: (2, self.tradingCenter, 1, self.strategyHub, 1),
+            34: (2, self.tradingCenter, 2, None, 0),
+            27: (2, self.tradingCenter, 3, self.autoOpportunityHub, 0),
+            20: (2, self.tradingCenter, 3, self.autoOpportunityHub, 1),
+            29: (2, self.tradingCenter, 4, None, 0),
+            35: (2, self.tradingCenter, 5, None, 0),
+            37: (2, self.tradingCenter, 6, None, 0),
+            4: (4, self.reportsCenter, 0, None, 0),
+            14: (4, self.reportsCenter, 1, None, 0),
+            30: (4, self.reportsCenter, 2, None, 0),
+            8: (4, self.reportsCenter, 3, None, 0),
+            22: (4, self.reportsCenter, 4, self.postMarketHub, 0),
+            11: (4, self.reportsCenter, 4, self.postMarketHub, 1),
+            10: (4, self.reportsCenter, 5, None, 0),
+            12: (4, self.reportsCenter, 6, None, 0),
+            31: (4, self.reportsCenter, 7, None, 0),
+            32: (9, self.controlsCenter, 0, None, 0),
+            36: (9, self.controlsCenter, 1, None, 0),
+            38: (9, self.controlsCenter, 2, None, 0),
+            9: (9, self.controlsCenter, 3, None, 0),
+            7: (9, self.controlsCenter, 3, None, 0),
+            15: (9, self.controlsCenter, 4, None, 0),
+            16: (9, self.controlsCenter, 5, None, 0),
         }
-        if requested_index in aliases:
-            index, hub, tab = aliases[requested_index]
-            if hub is not None:
-                hub.select_tab(tab)
+        if requested_index == 0:
+            index = 0
         else:
-            primary_tabs = {
-                2: self.optionsHub,
-                21: self.strategyHub,
-                22: self.postMarketHub,
-                24: self.powerfulHub,
-                26: self.gapHub,
-                27: self.autoOpportunityHub,
-            }
-            hub = primary_tabs.get(requested_index)
-            if hub is not None:
-                hub.select_tab(0)
+            index, center, center_tab, inner, inner_tab = routes.get(requested_index, routes[2])
+            center.select_tab(center_tab)
+            if inner is not None:
+                inner.select_tab(inner_tab)
         self.sidebar.set_active(index)
         if index == 0:
             self.dashboardPage.refresh()
-        elif index == 8:
+        elif requested_index == 8:
             self.reportsPage.refresh()
-        elif index == 1:
+        elif requested_index == 1:
             self.liveMarketPage.refresh_status()
             self.liveMarketPage.start_market_overview()
-        elif index == 2:
+        elif requested_index in {2, 3, 5}:
             self.optionsPage.prepare_live_workspace()
         elif requested_index == 11:
             self.postMarketPage.refresh()
-        elif index == 14:
+        elif requested_index == 14:
             self.autoAttemptReportPage.refresh()
-        elif index == 22:
+        elif requested_index == 22:
             self.postMarketTpsAnalysisPage.refresh(auto_generate=True)
         elif requested_index == 25:
             self.putCallRatioPage.refresh()
-        elif index == 26:
+        elif requested_index in {17, 26}:
             self.gapProbabilityPage.refresh_history()
-        elif index == 27:
+        elif requested_index == 27:
             self.autoOpportunityPage.refresh_history()
-        elif index == 28:
+        elif requested_index == 28:
             self.trendMemoryPage.refresh()
-        elif index == 29:
+        elif requested_index == 29:
             self.scalperPage.analyze(force=True)
-        elif index == 30:
+        elif requested_index == 30:
             self.notificationCenterPage.refresh()
-        elif index == 31:
+        elif requested_index == 31:
             self.selfDevelopmentPage.refresh(auto_generate=True)
         elif requested_index == 33 and LiveSession.connected():
             self.volatilityIntelligencePage.analyze()

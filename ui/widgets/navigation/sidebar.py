@@ -56,51 +56,26 @@ class Sidebar(QFrame):
         self.autoOpportunityButton = nav("Auto Opportunity Radar")
         self.trendMemoryButton = nav("Trend Memory Monitor")
         self.scalperButton = nav("Options Scalper")
-        # Keep the visual journey in the same order a trader uses the app:
-        # market context -> chart confirmation -> option plan -> journal.
+        # Release 1.5.2 compact navigation. Existing named buttons remain as
+        # route identities for compatibility, while only five workspace
+        # launchers are visible; related pages live in tabs inside each hub.
+        self.marketCenterButton = nav("Market Intelligence")
+        self.tradingCenterButton = nav("Trading & Strategies")
+        self.reportsCenterButton = nav("Reports & Learning")
+        self.controlsCenterButton = nav("Controls & Settings")
         self.buttons = (
-            self.dashboardButton, self.liveMarketButton, self.indexMarketAnalysisButton,
-            self.equityButton,
-            self.optionsButton, self.autoOpportunityButton, self.autoAttemptReportButton,
-            self.notificationCenterButton, self.recoveryCenterButton, self.journalButton,
-            self.reportButton, self.backtestButton, self.replayButton,
-            self.postMarketTpsAnalysisButton, self.selfDevelopmentButton, self.casAnalysisButton,
-            self.optionStrategiesButton, self.strategyTradesButton, self.expiryObservationButton, self.gapProbabilityButton, self.scalperButton, self.trendMemoryButton,
-            self.powerfulEngineButton, self.cutieCommandButton, self.optionsAlgoButton, self.executionControlButton, self.settingsButton, self.aboutButton, self.helpButton,
+            self.dashboardButton, self.marketCenterButton, self.tradingCenterButton,
+            self.reportsCenterButton, self.controlsCenterButton,
         )
         # Stack page numbers intentionally remain stable even when the visual
         # menu order changes.  This prevents the wrong sidebar item being
         # highlighted after an automatic screen change.
         self.page_buttons = {
             0: self.dashboardButton,
-            1: self.liveMarketButton,
-            2: self.optionsButton,
-            4: self.journalButton,
-            8: self.reportButton,
-            9: self.settingsButton,
-            10: self.backtestButton,
-            12: self.replayButton,
-            13: self.equityButton,
-            14: self.autoAttemptReportButton,
-            15: self.aboutButton,
-            16: self.helpButton,
-            19: self.casAnalysisButton,
-            21: self.optionStrategiesButton,
-            22: self.postMarketTpsAnalysisButton,
-            24: self.powerfulEngineButton,
-            26: self.gapProbabilityButton,
-            27: self.autoOpportunityButton,
-            28: self.trendMemoryButton,
-            29: self.scalperButton,
-            30: self.notificationCenterButton,
-            31: self.selfDevelopmentButton,
-            32: self.recoveryCenterButton,
-            34: self.strategyTradesButton,
-            35: self.expiryObservationButton,
-            36: self.executionControlButton,
-            37: self.optionsAlgoButton,
-            38: self.cutieCommandButton,
-            39: self.indexMarketAnalysisButton,
+            1: self.marketCenterButton,
+            2: self.tradingCenterButton,
+            4: self.reportsCenterButton,
+            9: self.controlsCenterButton,
         }
         self.menu_group = QButtonGroup(self)
         self.menu_group.setExclusive(True)
@@ -125,3 +100,4 @@ class Sidebar(QFrame):
     def set_notification_count(self, count: int):
         suffix = f" ({int(count)})" if count else ""
         self.notificationCenterButton.setText(f"{self.NAV_BULLET}  Notification Center{suffix}")
+        self.reportsCenterButton.setText(f"{self.NAV_BULLET}  Reports & Learning{suffix}")
