@@ -8,6 +8,7 @@ from core.database_manager import Database
 from engine.index_candle_analysis_engine import analyze_index_candle, combine_index_candles
 from engine.oi_flow_intelligence import analyze_oi_flow
 from services.option_contract_service import UNDERLYING_QUOTES, OptionContractService, contracts_near_spot
+from services.market_data_hub import MarketDataHub
 
 
 INDICES = ("NIFTY", "BANKNIFTY", "SENSEX")
@@ -50,16 +51,16 @@ class IndexMarketAnalysisService:
 
     def _scan(self, symbol, now):
         future = self.contracts.get_front_month_future(symbol)
-        candles = _completed(self.client.get_recent_candles(future["exchange"], future["token"], "FIVE_MINUTE", 5), now)
+        candles = _completed(MarketDataHub.candles(self.client, future["exchange"], future["token"], "FIVE_MINUTE", 5), now)
         if len(candles) < 10:
             raise ValueError("completed 5-minute future candles insufficient")
         candle_time = _time(candles[-1]) or now.replace(second=0, microsecond=0)
         quote_config = UNDERLYING_QUOTES[symbol]
-        spot = float(self.client.get_option_quote(quote_config["exchange"], quote_config["token"]).get("ltp", 0) or 0)
+        spot = float(MarketDataHub.quote(self.client, quote_config["exchange"], quote_config["token"]).get("ltp", 0) or 0)
         contracts = contracts_near_spot(self.contracts.get_contracts(symbol), spot, wings=5)
         expiry = min(c["expiry"] for c in contracts)
         contracts = [c for c in contracts if c["expiry"] == expiry]
-        quotes = self.client.get_option_chain_quotes(contracts[0]["exchange"], [c["token"] for c in contracts])
+        quotes = MarketDataHub.option_chain(self.client, contracts[0]["exchange"], [c["token"] for c in contracts])
         from engine.option_chain_engine import analyze_option_chain
         chain = analyze_option_chain(contracts, quotes, spot)
         flow = analyze_oi_flow(chain["quote_rows"], spot, wing_count=5)

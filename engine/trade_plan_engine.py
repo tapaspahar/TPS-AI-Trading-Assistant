@@ -33,10 +33,13 @@ def create_review_plan(underlying, spot_price, contracts, quote_rows, chart_cont
         if contract["option_type"] != option_type:
             continue
         quote = quote_by_token.get(str(contract["token"]), {})
-        premium = float(quote.get("ltp", 0) or 0)
+        ltp = float(quote.get("ltp", 0) or 0)
         volume = float(quote.get("volume", quote.get("tradeVolume", 0)) or 0)
         bid, ask = float(quote.get("bid", 0) or 0), float(quote.get("ask", 0) or 0)
         spread = (ask - bid) / max((ask + bid) / 2, .01) * 100 if bid > 0 and ask >= bid else None
+        # A BUY paper fill is only realistically available near the ask. LTP
+        # remains a fallback when depth is absent and is explicitly audited.
+        premium = ask if ask > 0 else ltp
         if premium > 0 and volume >= float(settings.get("minimum_option_volume", 100)) and (
             spread is None or spread <= float(settings.get("maximum_option_spread_percent", 8))
         ):
@@ -109,6 +112,7 @@ def create_review_plan(underlying, spot_price, contracts, quote_rows, chart_cont
         "underlying_target": underlying_target,
         "market_environment": environment,
         "spread_percent": round(spread, 2) if spread is not None else None,
+        "entry_price_source": "ASK" if float(quote.get("ask", 0) or 0) > 0 else "LTP_FALLBACK",
         "adaptive_risk_percent": round(adjusted_risk_percent, 3),
         "stop_method": stop_evidence["method"],
         "stop_distance_percent": stop_evidence["distance_percent"],

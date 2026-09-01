@@ -55,6 +55,26 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual((closed_trade["exit"], closed_trade["pnl"], closed_trade["rr_ratio"]), (145.0, 1875.0, 3.0))
         self.assertEqual(closed_trade["outcome"], "TARGET HIT")
 
+    def test_paper_close_deducts_saved_round_trip_friction(self):
+        plan = {
+            "underlying": "NIFTY", "option_type": "CE", "entry": 100, "stoploss": 80,
+            "target": 130, "quantity": 10, "confidence": 80, "estimated_round_trip_cost": 25,
+            "contract": {"exchange": "NFO", "token": "1", "symbol": "NIFTYCE", "strike": 25000, "expiry": "", "lot_size": 10},
+        }
+        trade_id = self.db.save_paper_trade(plan)
+        self.assertTrue(self.db.close_trade(trade_id, 110, "TARGET HIT"))
+        self.assertEqual(self.db.get_trade(trade_id)["pnl"], 75)
+
+    def test_duplicate_paper_thesis_is_detected(self):
+        plan = {
+            "underlying": "NIFTY", "option_type": "CE", "entry": 100, "stoploss": 80,
+            "target": 130, "quantity": 10, "confidence": 80, "validation_fingerprint": "NIFTY|CE|10:00|25000|TRENDING",
+            "contract": {"exchange": "NFO", "token": "1", "symbol": "NIFTYCE", "strike": 25000, "expiry": "", "lot_size": 10},
+        }
+        self.db.save_paper_trade(plan)
+        self.assertTrue(self.db.has_recent_paper_thesis(plan["validation_fingerprint"], 15))
+        self.assertFalse(self.db.has_recent_paper_thesis("different", 15))
+
     def test_market_snapshots_are_saved_once_per_timeframe_bucket(self):
         snapshot = {
             "captured_at": "2026-08-03T10:15", "trade_date": "03-08-2026", "symbol": "NIFTY", "timeframe": "5m",

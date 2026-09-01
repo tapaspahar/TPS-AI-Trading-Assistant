@@ -28,6 +28,11 @@ def calibrate_outcomes(pnls, minimum_samples: int = 30, target_win_rate: float =
     expectancy = sum(values) / samples if samples else 0.0
     profit_factor = gross_profit / gross_loss if gross_loss else (float("inf") if gross_profit else 0.0)
     lower_bound = wilson_lower_bound(wins, samples)
+    running = peak = max_drawdown = 0.0
+    for value in values:
+        running += value
+        peak = max(peak, running)
+        max_drawdown = max(max_drawdown, peak - running)
 
     if samples == 0:
         tier = "UNPROVEN"
@@ -50,6 +55,7 @@ def calibrate_outcomes(pnls, minimum_samples: int = 30, target_win_rate: float =
         "win_rate": round(win_rate, 2), "expectancy": round(expectancy, 2),
         "total_pnl": round(sum(values), 2), "profit_factor": round(profit_factor, 2),
         "wilson_lower_bound": round(lower_bound, 2), "validation_tier": tier,
+        "max_drawdown": round(max_drawdown, 2),
         "validation_reason": reason, "minimum_samples": minimum_samples,
         "target_win_rate": target_win_rate,
     }

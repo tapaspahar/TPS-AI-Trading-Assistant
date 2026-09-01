@@ -52,6 +52,11 @@ class FakeDatabase:
     def get_execution_audit(self, audit_id):
         return self.rows[audit_id - 1]
 
+    def get_pending_execution_audits(self):
+        return [row for row in self.rows if row["status"] in {
+            "SUBMITTING", "SUBMISSION_UNKNOWN", "ACCEPTED_NOT_FILLED", "OPEN", "PARTIAL", "PENDING"
+        }]
+
 
 class FakeClient:
     def place_limit_order(self, _order):
@@ -144,6 +149,18 @@ def test_refresh_status_keeps_broker_fill_state_distinct(monkeypatch):
     result = service.submit(order(), "PLACE LIMIT ORDER")
     row = service.refresh_status(result["audit_id"])
     assert row["status"] == "complete"
+    assert database.rows[0]["status"] == "COMPLETE"
+
+
+def test_restart_reconciliation_updates_known_orders_without_unlocking_auto_real(monkeypatch):
+    open_market(monkeypatch)
+    database = FakeDatabase()
+    service = ExecutionService(database, FakeSettings(), FakeLiveSession)
+    service.arm("ENABLE REAL TRADING")
+    service.submit(order(), "PLACE LIMIT ORDER")
+    result = service.reconcile_pending()
+    assert result["reconciliation_complete"] is True
+    assert result["automatic_real_unlocked"] is False
     assert database.rows[0]["status"] == "COMPLETE"
 
 

@@ -6,6 +6,10 @@ from PySide6.QtWidgets import QGridLayout, QPushButton, QVBoxLayout, QWidget
 from core.database_manager import Database
 from services.live_session import LiveSession
 from services.analysis_scheduler import AnalysisScheduler
+from services.market_data_hub import MarketDataHub
+from core.settings_store import SettingsStore
+from core.market_session import market_session
+from engine.performance_calibration import calibrate_outcomes
 from ui.widgets.cards.dashboard_card import DashboardCard
 
 
@@ -34,6 +38,9 @@ class DashboardPage(QWidget):
             "trades": DashboardCard("Recorded Trades", "0"),
             "funds": DashboardCard("Broker Funds", "Connect broker\nOpen Settings"),
             "performance": DashboardCard("Analysis Performance", "Queue ready"),
+            "feed": DashboardCard("Data Freshness & Cache", "Waiting for first snapshot"),
+            "validation": DashboardCard("Paper Accuracy Lab", "No closed outcomes"),
+            "today": DashboardCard("Today Control Center", "Loading controls"),
         }
         for index, card in enumerate(self.cards.values()):
             grid.addWidget(card, index // 3, index % 3)
@@ -65,6 +72,31 @@ class DashboardPage(QWidget):
         slowest = max((float(item.get("last_seconds", 0)) for item in metrics.values()), default=0)
         self.cards["performance"].set_value(
             f"Active {active}/3 | Completed {runs}\nDuplicates saved {skipped} | Slowest {slowest:.1f}s"
+        )
+        feed = MarketDataHub.health()
+        self.cards["feed"].set_value(
+            f"{feed['state']} | cache hit {feed['hit_rate']:.1f}%\n"
+            f"Snapshots {feed['cached_snapshots']} | failures {feed['failures']}\n"
+            f"Source {feed.get('last_source_timestamp') or 'waiting'}"
+        )
+        paper_rows = self.db.get_paper_outcome_quality(5000)
+        calibration = calibrate_outcomes([row.get("pnl") for row in paper_rows])
+        factor = "∞" if calibration["profit_factor"] == float("inf") else f"{calibration['profit_factor']:.2f}"
+        self.cards["validation"].set_value(
+            f"{calibration['validation_tier']} | {calibration['wins']}/{calibration['samples']} wins\n"
+            f"Win {calibration['win_rate']:.1f}% | lower bound {calibration['wilson_lower_bound']:.1f}%\n"
+            f"Expectancy ₹{calibration['expectancy']:,.2f} | PF {factor}"
+        )
+        settings = SettingsStore().load()
+        today = datetime.now().strftime("%d-%m-%Y")
+        progress = self.db.paper_trade_progress(today)
+        session = market_session(settings=settings)
+        mode = "PAPER TEST" if settings.get("paper_validation_testing_mode") else str(settings.get("execution_mode", "PAPER"))
+        limit = int(settings.get("paper_validation_daily_limit", 10)) if mode == "PAPER TEST" else int(settings.get("max_trades_per_day", 5))
+        self.cards["today"].set_value(
+            f"{mode} | Market {session['state']}\n"
+            f"Samples {progress['trades']}/{limit} | Open {progress['open_trades']}\n"
+            f"Net paper P&L ₹{progress['realized_pnl']:,.2f}"
         )
 
     def refresh_all(self):

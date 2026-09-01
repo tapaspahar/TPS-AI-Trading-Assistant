@@ -662,6 +662,13 @@ class Database:
     def get_execution_audit(self, audit_id):
         return self.cursor.execute("SELECT * FROM execution_audit WHERE id=?", (int(audit_id),)).fetchone()
 
+    def get_pending_execution_audits(self):
+        return self.cursor.execute(
+            """SELECT * FROM execution_audit
+               WHERE status IN ('SUBMITTING','SUBMISSION_UNKNOWN','ACCEPTED_NOT_FILLED','OPEN','PARTIAL','PENDING')
+               ORDER BY id"""
+        ).fetchall()
+
     def count_execution_orders(self, trading_date):
         row = self.cursor.execute(
             "SELECT COUNT(*) n FROM execution_audit WHERE trading_date=? AND status NOT IN ('BLOCKED','REJECTED','PAPER_PLAN')",
@@ -1482,6 +1489,24 @@ class Database:
         self.connection.commit()
         return trade_id
 
+    def has_recent_paper_thesis(self, fingerprint: str, minutes: int = 15) -> bool:
+        """Do not count the same market thesis as independent validation evidence."""
+        from datetime import timedelta
+
+        cutoff = (datetime.now() - timedelta(minutes=max(1, int(minutes)))).isoformat(timespec="seconds")
+        rows = self.cursor.execute(
+            """SELECT p.plan_json FROM trades t JOIN paper_trade_links p ON p.trade_id=t.id
+               WHERE t.created_at >= ? ORDER BY t.id DESC LIMIT 50""", (cutoff,),
+        ).fetchall()
+        for row in rows:
+            try:
+                saved = json.loads(row["plan_json"] or "{}")
+            except (TypeError, ValueError):
+                continue
+            if str(saved.get("validation_fingerprint") or "") == str(fingerprint):
+                return True
+        return False
+
     def monitor_paper_trades(self, client, settings=None, now=None) -> list[dict]:
         """Close simulated trades on a verified option quote only; no order API is used."""
         from core.market_session import IST, parse_session_times
@@ -1521,8 +1546,11 @@ class Database:
 
         for row in rows:
             try:
-                quote = client.get_option_quote(row["exchange"], row["token"])
-                ltp = float(quote.get("ltp", 0) or 0)
+                from services.market_data_hub import MarketDataHub
+                quote = MarketDataHub.quote(client, row["exchange"], row["token"], ttl_seconds=1.0, force=True)
+                # A long option can normally be exited near the executable bid,
+                # not at an optimistic last-traded price.
+                ltp = float(quote.get("bid", quote.get("bestBidPrice", 0)) or quote.get("ltp", 0) or 0)
             except (RuntimeError, ValueError, TypeError, KeyError) as error:
                 # One unavailable contract must never pause monitoring for all
                 # other open paper positions. Time exit can use the last
@@ -1678,7 +1706,16 @@ class Database:
             return False
         if row["status"] != "OPEN":
             raise ValueError("This trade is already closed.")
-        pnl = round((float(exit_price) - float(row["entry"])) * int(row["quantity"]), 2)
+        gross_pnl = (float(exit_price) - float(row["entry"])) * int(row["quantity"])
+        friction = 0.0
+        link = self.cursor.execute("SELECT plan_json FROM paper_trade_links WHERE trade_id=?", (int(trade_id),)).fetchone()
+        if link:
+            try:
+                plan = json.loads(link["plan_json"] or "{}")
+                friction = float(plan.get("estimated_round_trip_cost") or 0)
+            except (TypeError, ValueError):
+                friction = 0.0
+        pnl = round(gross_pnl - friction, 2)
         risk = abs(float(row["entry"]) - float(row["stoploss"]))
         reward = abs(float(row["target"]) - float(row["entry"]))
         rr_ratio = round(reward / risk, 2) if risk else 0.0
@@ -1691,7 +1728,8 @@ class Database:
             self.cursor.execute(
                 "INSERT OR IGNORE INTO trade_alerts (trade_id, created_at, alert_type, title, message) VALUES (?, ?, ?, ?, ?)",
                 (int(trade_id), datetime.now().isoformat(timespec="seconds"), f"PAPER_EXIT_{outcome}",
-                 f"Paper trade closed: {outcome}", f"Exit {float(exit_price):.2f}; P&L {pnl:.2f}; R:R {rr_ratio:.2f}."),
+                 f"Paper trade closed: {outcome}",
+                 f"Exit {float(exit_price):.2f}; gross P&L {gross_pnl:.2f}; friction {friction:.2f}; net P&L {pnl:.2f}; R:R {rr_ratio:.2f}."),
             )
         self.connection.commit()
         if closed:
@@ -2393,7 +2431,9 @@ class Database:
         rows = self.cursor.execute(
             """SELECT strategy_name, COALESCE(friendly_name, strategy_name) friendly_name,
                       GROUP_CONCAT(DISTINCT COALESCE(market_regime, 'UNKNOWN')) market_regimes,
-                      ROUND(AVG(return_on_capital), 2) average_model_roc
+                      ROUND(AVG(return_on_capital), 2) average_model_roc,
+                      ROUND(AVG(capital_required), 2) average_capital_required,
+                      COUNT(DISTINCT trade_date) independent_sessions
                FROM strategy_trades WHERE status='CLOSED'
                GROUP BY strategy_name, friendly_name"""
         ).fetchall()
@@ -2407,7 +2447,12 @@ class Database:
             item.update(calibrate_outcomes([value["realized_pnl"] for value in pnl_rows]))
             item["average_pnl"] = item["expectancy"]
             result.append(item)
-        return sorted(result, key=lambda x: (-x["win_rate"], -x["samples"], -x["total_pnl"], x["strategy_name"]))
+        tier_rank = {"VALIDATED LOW-RISK": 0, "PAPER VALIDATION": 1, "PAPER ONLY": 2,
+                     "UNPROVEN": 3, "REJECTED BY EVIDENCE": 4}
+        return sorted(result, key=lambda x: (
+            tier_rank.get(x["validation_tier"], 9), -x["wilson_lower_bound"],
+            -x["profit_factor"], -x["expectancy"], -x["samples"], x["strategy_name"],
+        ))
 
     def get_paper_outcome_quality(self, limit: int = 500) -> list[dict]:
         """Return the complete timing/execution/excursion dataset used for post-mortem review."""

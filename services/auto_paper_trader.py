@@ -19,6 +19,7 @@ from engine.trade_outcome_memory import build_trade_fingerprint
 from services.option_contract_service import UNDERLYING_QUOTES, OptionContractService, contracts_near_spot
 from services.economic_calendar_service import EconomicCalendarService
 from services.provider_telemetry import record_request, start_request
+from services.market_data_hub import MarketDataHub
 
 
 def exploratory_paper_eligibility(strategy: dict, settings: dict) -> dict:
@@ -144,7 +145,7 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
         provider = getattr(client, "provider_name", "Broker")
         request_started = start_request()
         try:
-            candles = client.get_recent_candles(future["exchange"], future["token"], "FIVE_MINUTE", 5)
+            candles = MarketDataHub.candles(client, future["exchange"], future["token"], "FIVE_MINUTE", 5)
         except Exception as error:
             record_request(provider, "auto-paper-candles", request_started, outcome="FAILURE",
                            error_code=type(error).__name__, details={"message": str(error)})
@@ -175,7 +176,7 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
         legacy_candidate = "CE" if snapshot.price > snapshot.supertrend else "PE"
         legacy_chart = DecisionEngine().evaluate(snapshot, legacy_candidate, "Calm")
         spot_config = UNDERLYING_QUOTES[symbol]
-        spot = float(client.get_option_quote(spot_config["exchange"], spot_config["token"]).get("ltp", 0) or 0)
+        spot = float(MarketDataHub.quote(client, spot_config["exchange"], spot_config["token"]).get("ltp", 0) or 0)
         if spot <= 0:
             reason = "Usable underlying spot quote is unavailable"
             result = _attempt(
@@ -186,10 +187,10 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
         contracts = contracts_near_spot(service.get_contracts(symbol), spot, wings=5)
         expiry = min(contract["expiry"] for contract in contracts)
         contracts = [contract for contract in contracts if contract["expiry"] == expiry]
-        chain = analyze_option_chain(contracts, client.get_option_chain_quotes(contracts[0]["exchange"], [contract["token"] for contract in contracts]))
+        chain = analyze_option_chain(contracts, MarketDataHub.option_chain(client, contracts[0]["exchange"], [contract["token"] for contract in contracts]))
         try:
             vix_config = service.get_india_vix_instrument()
-            india_vix = float(client.get_option_quote(vix_config["exchange"], vix_config["token"]).get("ltp", 0) or 0)
+            india_vix = float(MarketDataHub.quote(client, vix_config["exchange"], vix_config["token"]).get("ltp", 0) or 0)
         except (RuntimeError, ValueError, TypeError, KeyError):
             india_vix = None
         event_risk = EconomicCalendarService(settings.get("economic_calendar_api_key", "")).assess(
@@ -366,6 +367,26 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
         current_fingerprint = build_trade_fingerprint(
             {"symbol": symbol, "option_type": candidate, "ai_score": strategy.get("score", 0)}, plan
         )
+        validation_fingerprint = "|".join((
+            symbol, str(candidate), str(capture.get("candle_time") or ""),
+            str(plan.get("contract", {}).get("strike") or ""), str(environment.get("regime") or "UNKNOWN"),
+        ))
+        plan["validation_fingerprint"] = validation_fingerprint
+        fixed_cost = max(0.0, float(settings.get("paper_execution_fixed_cost", 40.0)))
+        slip_points = max(0.0, float(settings.get("paper_execution_slippage_points", 0.25)))
+        plan["estimated_round_trip_cost"] = round(fixed_cost + 2 * slip_points * int(plan["quantity"]), 2)
+        if database.has_recent_paper_thesis(
+            validation_fingerprint, int(settings.get("paper_unique_thesis_window_minutes", 15))
+        ):
+            reason = "Same symbol/side/candle/strike/regime thesis is already under validation"
+            result = _attempt(
+                "No new paper trade: duplicate market thesis is not counted as an independent accuracy sample.",
+                checked_at, capture=capture, chart=chart, candidate=candidate, future=future,
+                blockers=[reason], chain=chain, timing=timing, outcome="SAFETY BLOCK",
+                safety_blockers=[reason], warnings=["Existing trade monitoring continues"],
+            )
+            result["proposed_plan"] = plan
+            return _record(database, symbol, result)
         plan["historical_outcome_matches"] = database.find_trade_outcome_analogs(current_fingerprint)
         if not safety["allowed"]:
             chart["warnings"].extend(safety["blockers"])
@@ -381,7 +402,7 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
         # new candle closes before capture, discard every stale tick and let the
         # next cycle calculate the checklist from the new market scenario.
         final_candles = _completed_candles(
-            client.get_recent_candles(future["exchange"], future["token"], "FIVE_MINUTE", 5),
+            MarketDataHub.candles(client, future["exchange"], future["token"], "FIVE_MINUTE", 5, force=True),
             datetime.now(),
         )
         final_candle_time = str(final_candles[-1].get("time", "")) if final_candles else ""

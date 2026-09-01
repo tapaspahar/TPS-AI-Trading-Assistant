@@ -8,9 +8,10 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.2"
-LAST_UPDATED_AT = "01-09-2026 10:07:18 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.5.2 - 01-09-2026 10:07 IST"
+LAST_UPDATED_AT = "01-09-2026 12:00:00 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.5.2 - 01-09-2026 12:00 IST"
 RELEASE_NOTES = (
+    "Added a canonical Market Data Hub, unique paper-thesis sampling, executable bid/ask paper fills, net-of-friction outcomes, dashboard health controls and conservative strategy ranking for the Release 1.5.2 reliability upgrade.",
     "Reworked Options Workspace PAPER Testing Mode into exploratory forward validation: up to 10 independent trades/day may be monitored concurrently, so one running simulation no longer blocks the next completed-candle sample.",
     "Exploratory capture may tolerate at most two soft checklist misses and a bounded score relaxation, but still requires directional consensus, directional volume, complete data, liquid contract selection, risk-sized quantity and zero hard blockers.",
     "Each exploratory plan permanently records its validation track, relaxed score floor and soft-miss count; every trade keeps its own target, adaptive stop-loss, trailing/time exit and outcome so daily accuracy remains measurable.",

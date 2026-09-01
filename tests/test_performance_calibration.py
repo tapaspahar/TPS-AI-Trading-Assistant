@@ -28,6 +28,10 @@ class PerformanceCalibrationTests(unittest.TestCase):
         self.assertGreater(result["profit_factor"], 1.2)
         self.assertGreater(wilson_lower_bound(27, 30), 55)
 
+    def test_max_drawdown_is_measured_in_sequence(self):
+        result = calibrate_outcomes([100, -40, -80, 50])
+        self.assertEqual(result["max_drawdown"], 120)
+
 
 if __name__ == "__main__":
     unittest.main()

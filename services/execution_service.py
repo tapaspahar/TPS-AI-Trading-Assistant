@@ -185,3 +185,28 @@ class ExecutionService:
         status = str(row.get("status") or row.get("orderstatus") or "UNKNOWN").upper()
         self.database.update_execution_audit(audit_id, status, str(audit["broker_order_id"]), str(row.get("text") or row.get("message") or ""))
         return row
+
+    def reconcile_pending(self) -> dict:
+        """Reconcile restart-surviving order intents without guessing fills."""
+        if not self.live_session.connected() or self.live_session.broker_id != "angel_one":
+            raise RuntimeError("Connected Angel One session required for reconciliation.")
+        pending = list(self.database.get_pending_execution_audits())
+        order_book = list(self.live_session.client.get_order_book())
+        by_id = {
+            str(item.get("orderid") or item.get("orderId") or ""): item
+            for item in order_book if item.get("orderid") or item.get("orderId")
+        }
+        updated, unresolved = [], []
+        for audit in pending:
+            order_id = str(audit["broker_order_id"] or "")
+            row = by_id.get(order_id) if order_id else None
+            if not row:
+                unresolved.append(int(audit["id"]))
+                continue
+            status = str(row.get("status") or row.get("orderstatus") or "UNKNOWN").upper()
+            message = str(row.get("text") or row.get("message") or "Reconciled from broker order book")
+            self.database.update_execution_audit(int(audit["id"]), status, order_id, message)
+            updated.append({"audit_id": int(audit["id"]), "order_id": order_id, "status": status})
+        return {"checked": len(pending), "updated": updated, "unresolved": unresolved,
+                "reconciliation_complete": not unresolved and len(updated) == len(pending),
+                "automatic_real_unlocked": False}

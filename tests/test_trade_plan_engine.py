@@ -97,7 +97,11 @@ class TradePlanEngineTests(unittest.TestCase):
             {"capital": 1_000_000, "risk_percent": 1, "adaptive_stop_min_percent": 18,
              "adaptive_stop_max_percent": 35, "stop_sweep_buffer_percent": 3},
         )
-        self.assertEqual(plan["stoploss"], 66.5)
+        # Executable BUY entry uses ask 101, so the same 33.5% adaptive
+        # breathing room produces a 67.17 stop instead of an LTP-based 66.50.
+        self.assertEqual(plan["entry"], 101)
+        self.assertEqual(plan["entry_price_source"], "ASK")
+        self.assertEqual(plan["stoploss"], 67.17)
         self.assertEqual(plan["stop_distance_percent"], 33.5)
         self.assertEqual(plan["lots"], 3)
         self.assertLessEqual(plan["estimated_risk"], plan["risk_cap"])

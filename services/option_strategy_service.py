@@ -9,6 +9,7 @@ from engine.market_environment import analyze_market_environment
 from engine.option_chain_engine import analyze_option_chain
 from engine.option_strategy_engine import recommend_option_strategy
 from services.option_contract_service import OptionContractService, contracts_near_spot
+from services.market_data_hub import MarketDataHub
 
 
 def _completed(candles):
@@ -39,16 +40,17 @@ class OptionStrategyService:
         settings = settings or SettingsStore().load()
         spot_exchange, spot_token = INSTRUMENTS[symbol]
         future = self.contract_service.get_front_month_future(symbol)
-        candles = _completed(self.client.get_recent_candles(future["exchange"], future["token"], "FIVE_MINUTE", 5))
+        candles = _completed(MarketDataHub.candles(self.client, future["exchange"], future["token"], "FIVE_MINUTE", 5))
         provider = getattr(self.client, "provider_name", "Broker")
         capture = build_live_capture(symbol, "5m", candles, f"{provider} {future['symbol']} index-future candles")
-        spot = float(self.client.get_option_quote(spot_exchange, spot_token).get("ltp", 0) or capture["close"])
+        spot = float(MarketDataHub.quote(self.client, spot_exchange, spot_token).get("ltp", 0) or capture["close"])
         try:
             vix_instrument = self.contract_service.get_india_vix_instrument()
-            vix = float(self.client.get_option_quote(vix_instrument["exchange"], vix_instrument["token"]).get("ltp", 0) or 0) or None
+            vix = float(MarketDataHub.quote(self.client, vix_instrument["exchange"], vix_instrument["token"]).get("ltp", 0) or 0) or None
             try:
-                vix_history = self.client.get_recent_candles(
-                    vix_instrument["exchange"], vix_instrument["token"], "ONE_DAY", 365
+                vix_history = MarketDataHub.candles(
+                    self.client, vix_instrument["exchange"], vix_instrument["token"], "ONE_DAY", 365,
+                    ttl_seconds=1800,
                 )
             except (RuntimeError, ValueError, TypeError):
                 vix_history = []
@@ -61,7 +63,7 @@ class OptionStrategyService:
         expiry = min(expiries)
         expiry_contracts = [contract for contract in contracts if contract["expiry"] == expiry]
         focused = contracts_near_spot(expiry_contracts, spot, wings=10)
-        quotes = self.client.get_option_chain_quotes(focused[0]["exchange"], [contract["token"] for contract in focused])
+        quotes = MarketDataHub.option_chain(self.client, focused[0]["exchange"], [contract["token"] for contract in focused])
         chain = analyze_option_chain(focused, quotes, spot)
         result = recommend_option_strategy(symbol, spot, candles, capture, chain, environment, settings)
         result.update({
