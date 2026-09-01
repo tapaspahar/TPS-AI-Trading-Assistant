@@ -18,7 +18,7 @@ class HelpCenterTests(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def test_all_routes_exist_in_each_language(self):
-        self.assertEqual(len(PAGES), 32)
+        self.assertEqual(len(PAGES), 33)
         self.assertTrue({"Chart Capture", "Risk Control Center", "Next-Day Bias"}.isdisjoint({page[1] for page in PAGES}))
         self.assertNotIn("AI Analysis", {page[1] for page in PAGES})
         for language in ("en", "roman", "hi"):

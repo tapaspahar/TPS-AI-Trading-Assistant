@@ -14,6 +14,7 @@ from core.database_manager import Database
 from core.market_session import IST, parse_session_times
 from core.settings_store import SettingsStore
 from engine.expiry_spike_engine import evaluate_spike, format_spike_event, predict_expiry_spike, select_nearby_expiry_contracts
+from engine.three_pm_research_engine import evaluate_three_pm_shadow
 from services.expiry_observation_store import ExpiryObservationStore
 from services.live_session import LiveSession
 from services.option_contract_service import UNDERLYING_QUOTES, OptionContractService
@@ -157,6 +158,8 @@ class ExpiryObservationPage(QWidget):
         self.cards = QLabel("Spot: - | Expiry: - | Tracked contracts: 0 | CAS: -"); self.cards.setObjectName("sectionCard"); layout.addWidget(self.cards)
         self.prediction = QLabel("Historical prediction: observation data collect ho raha hai.")
         self.prediction.setObjectName("sectionCard"); self.prediction.setWordWrap(True); layout.addWidget(self.prediction)
+        self.three_pm_research = QLabel("3 PM shadow research: observation data collect ho raha hai.")
+        self.three_pm_research.setObjectName("sectionCard"); self.three_pm_research.setWordWrap(True); layout.addWidget(self.three_pm_research)
         layout.addWidget(QLabel("Spike Events — same-strike CE/PE paired movement log")); self.events_table = QTableWidget(0, 12)
         self.events_table.setHorizontalHeaderLabels(("Time", "Index", "Contract", "Strike", "Type", "Start", "Spike", "Latest",
                                                      "Opposite", "Opp. start", "Opp. event", "Opp. latest")); self.events_table.setMinimumHeight(220); layout.addWidget(self.events_table)
@@ -275,6 +278,7 @@ class ExpiryObservationPage(QWidget):
             self.status.setText("Today selected index ki expiry nahi hai; observation save nahi hua."); return
         current = {}
         results = {}
+        research_rows = []
         for item in rows:
             contract, quote = item["contract"], item["quote"]
             premium = float(quote.get("ltp", 0) or 0); volume = float(quote.get("tradeVolume", quote.get("volume", 0)) or 0)
@@ -294,12 +298,19 @@ class ExpiryObservationPage(QWidget):
                    "theta": quote.get("theta"), "vega": quote.get("vega"), "sustain_seconds": result.get("elapsed_seconds", 0) if result.get("event") else 0,
                    "cas_context": context, "source_completeness": result.get("source_completeness", "PARTIAL")}
             self.store.save_observation(row)
+            research_rows.append(row)
         paired = defaultdict(dict)
         for (strike, option_type), value in current.items():
             if value["premium"] > 0:
                 paired[strike][option_type] = {"contract": value["contract"], "premium": value["premium"]}
                 paired[strike]["expiry"] = value["contract"]["expiry"]
         self.latest_pairs[symbol] = dict(paired)
+        shadow = evaluate_three_pm_shadow(research_rows, spot_move=spot-prior_spot, spot_reference=prior_spot)
+        self.three_pm_research.setText(
+            f"3 PM shadow research: {shadow['state']} | {shadow['side']} | Score {shadow['score']}/100 | "
+            f"{shadow.get('contract') or 'contract waiting'}\n"
+            f"Evidence: {', '.join(shadow['evidence']) or 'insufficient'}\n{shadow['policy']}"
+        )
         pair_auto_attempted = False
         if self.auto_atm_parity.isChecked() and symbol == self.underlying.currentText():
             parity = select_atm_parity_pair(self.latest_pairs[symbol], spot)

@@ -1,5 +1,8 @@
 # TPS AI Trading Assistant 1.5.2
 
+- Added Reliability Cockpit: decision timeline, missed-opportunity replay shortlist, regime-wise strategy matrix, execution quality and shadow eligibility.
+- REAL execution now requires recent shared market data and statistically sufficient paper evidence; broker fills persist measured slippage instead of an invented estimate.
+- Added Ctrl+K Quick Open and an expiry 3 PM shadow-research score using premium, volume, OI, spot and source-completeness confluence.
 - Replaced the long scrolling sidebar with five compact workspace groups and visible tabs for every existing page; legacy Help links and automatic routes remain compatible.
 - Expiry-day ATM CE+PE premium-parity trigger after 3:00 PM.
 - Closest ATM, same strike and one quote snapshot; maximum premium gap ₹10.

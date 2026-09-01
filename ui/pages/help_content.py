@@ -250,6 +250,13 @@ PAGES = (
      "Keep persistent execution OFF unless needed. To submit: save strict caps, type the session unlock phrase, stage token/symbol/side/quantity/limit, type the final phrase and approve the final dialog. Every launch and every submission returns to LOCKED. Broker acceptance is not a fill; refresh status and verify the broker order book. Emergency Stop blocks new submissions but does not cancel existing broker orders.",
      "Normally execution OFF rakhein. Zarurat par caps save karein, session phrase type karein, token/symbol/side/quantity/LIMIT price stage karein, final phrase aur dialog approve karein. Har launch aur submission ke baad LOCKED. Broker acceptance fill nahi hai—status refresh aur broker order book verify karein. Emergency Stop naye order rokta hai; purane order automatic cancel nahi karta.",
      "सामान्यतः execution बंद रखें। आवश्यकता पर सीमाएँ सुरक्षित करें, session phrase लिखें, token/symbol/side/quantity/LIMIT price भरें, final phrase और dialog स्वीकार करें। हर launch और submission के बाद फिर LOCKED होता है। Broker acceptance fill नहीं है—status refresh और broker order book जाँचें। Emergency Stop नए ऑर्डर रोकता है, मौजूदा ऑर्डर स्वतः cancel नहीं करता।"),
+    (40, "Reliability Cockpit",
+     "A combined evidence workspace for the decision timeline, missed-opportunity replay shortlist, regime-wise strategy matrix, execution fill/slippage quality and shadow-mode eligibility.",
+     "Decision timeline, missed-opportunity replay shortlist, regime-wise strategy matrix, execution fill/slippage quality aur shadow-mode eligibility ka combined evidence workspace.",
+     "निर्णय टाइमलाइन, छूटे अवसर की रीप्ले सूची, बाज़ार अवस्था अनुसार रणनीति मैट्रिक्स, निष्पादन गुणवत्ता और शैडो-मोड पात्रता का संयुक्त प्रमाण कार्यक्षेत्र।",
+     "Open from Dashboard or Reports & Learning. A replay shortlist is not entry permission; REAL review remains blocked until live-data and minimum paper-evidence gates pass.",
+     "Dashboard ya Reports & Learning se kholen. Replay shortlist entry permission nahi hai; live-data aur minimum paper-evidence gate pass hone tak REAL review blocked rahega.",
+     "Dashboard या Reports & Learning से खोलें। रीप्ले सूची एंट्री अनुमति नहीं है; लाइव डेटा और न्यूनतम पेपर प्रमाण पूरा होने तक REAL समीक्षा अवरुद्ध रहती है।"),
 )
 
 # Release 1.4 keeps these specialist tools but presents them as tabs inside

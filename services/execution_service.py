@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from core.market_session import IST, market_session
+from services.market_data_hub import MarketDataHub
+from services.reliability_intelligence import shadow_eligibility
 
 
 @dataclass(frozen=True)
@@ -115,6 +117,16 @@ class ExecutionService:
         if confirmation.strip().upper() != "PLACE LIMIT ORDER": failures.append("Final confirmation phrase is missing")
         if not self.live_session.connected() or self.live_session.broker_id != "angel_one": failures.append("Connected Angel One session required")
         if market_session(settings=settings)["state"] != "OPEN": failures.append("Regular market session is not open")
+        if bool(settings.get("execution_require_live_data_gate", False)):
+            data_gate = MarketDataHub.execution_gate(15)
+            failures.extend(data_gate["reasons"])
+        if bool(settings.get("real_require_shadow_eligibility", False)):
+            shadow = shadow_eligibility(self.database)
+            if not shadow["eligible"]:
+                failures.append(
+                    f"Shadow validation not eligible: {shadow['samples']}/30 samples, "
+                    f"95% lower confidence {shadow['wilson_lower_bound']:.1f}%"
+                )
         if not order.symbol_token.strip(): failures.append("Symbol token is required")
         if not order.trading_symbol.strip(): failures.append("Trading symbol is required")
         if order.side.upper() not in {"BUY", "SELL"}: failures.append("Side must be BUY or SELL")
@@ -183,7 +195,16 @@ class ExecutionService:
         row = next((item for item in rows if str(item.get("orderid") or item.get("orderId")) == str(audit["broker_order_id"])), None)
         if not row: raise RuntimeError("Order is not visible in the broker order book yet.")
         status = str(row.get("status") or row.get("orderstatus") or "UNKNOWN").upper()
-        self.database.update_execution_audit(audit_id, status, str(audit["broker_order_id"]), str(row.get("text") or row.get("message") or ""))
+        average = row.get("averageprice") or row.get("averagePrice") or row.get("avgPrice")
+        filled = row.get("filledshares") or row.get("filledQuantity") or row.get("filledqty")
+        if average not in (None, "") or filled not in (None, ""):
+            self.database.update_execution_fill(
+                audit_id, status=status, average_fill_price=float(average or 0) or None,
+                filled_quantity=int(float(filled or 0)) or None,
+                message=str(row.get("text") or row.get("message") or "Broker fill reconciled"),
+            )
+        else:
+            self.database.update_execution_audit(audit_id, status, str(audit["broker_order_id"]), str(row.get("text") or row.get("message") or ""))
         return row
 
     def reconcile_pending(self) -> dict:
@@ -205,7 +226,15 @@ class ExecutionService:
                 continue
             status = str(row.get("status") or row.get("orderstatus") or "UNKNOWN").upper()
             message = str(row.get("text") or row.get("message") or "Reconciled from broker order book")
-            self.database.update_execution_audit(int(audit["id"]), status, order_id, message)
+            average = row.get("averageprice") or row.get("averagePrice") or row.get("avgPrice")
+            filled = row.get("filledshares") or row.get("filledQuantity") or row.get("filledqty")
+            if average not in (None, "") or filled not in (None, ""):
+                self.database.update_execution_fill(
+                    int(audit["id"]), status=status, average_fill_price=float(average or 0) or None,
+                    filled_quantity=int(float(filled or 0)) or None, message=message,
+                )
+            else:
+                self.database.update_execution_audit(int(audit["id"]), status, order_id, message)
             updated.append({"audit_id": int(audit["id"]), "order_id": order_id, "status": status})
         return {"checked": len(pending), "updated": updated, "unresolved": unresolved,
                 "reconciliation_complete": not unresolved and len(updated) == len(pending),

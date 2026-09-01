@@ -119,7 +119,7 @@ class WorkspaceConsolidationTests(unittest.TestCase):
             ),
             self.screen.reportsCenter: (
                 "Trade Journal", "Auto Attempts", "Notifications", "All Reports",
-                "Post Market", "Backtesting", "Candle Replay", "AI Development",
+                "Post Market", "Backtesting", "Candle Replay", "AI Development", "Reliability Cockpit",
             ),
             self.screen.controlsCenter: (
                 "Overtrading Protection", "Broker Execution", "Cutie AI Commands",

@@ -92,3 +92,20 @@ class MarketDataHub:
         result["hit_rate"] = round(100.0 * int(result["hits"]) / requests, 1) if requests else 0.0
         result["state"] = "DEGRADED" if result["last_error"] else "READY" if result["last_success_at"] else "WAITING"
         return result
+
+    @classmethod
+    def execution_gate(cls, max_age_seconds=15):
+        """Fail closed when a REAL order lacks a recent successful shared read."""
+        health = cls.health()
+        stamp = health.get("last_success_at")
+        age = None
+        if stamp:
+            try:
+                age = max(0.0, (datetime.now() - datetime.fromisoformat(str(stamp)).replace(tzinfo=None)).total_seconds())
+            except (TypeError, ValueError):
+                stamp = None
+        reasons = []
+        if health.get("state") != "READY": reasons.append(f"Market Data Hub is {health.get('state', 'WAITING')}")
+        if not stamp: reasons.append("No verified live market-data read")
+        elif age is not None and age > float(max_age_seconds): reasons.append(f"Shared market data is stale ({age:.1f}s)")
+        return {"allowed": not reasons, "reasons": reasons, "age_seconds": age, "health": health}

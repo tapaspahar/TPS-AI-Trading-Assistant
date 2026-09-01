@@ -18,6 +18,7 @@ class DashboardPage(QWidget):
 
     funds_loaded = Signal(dict)
     funds_failed = Signal(str)
+    reliability_requested = Signal()
 
     def __init__(self):
         super().__init__()
@@ -41,6 +42,7 @@ class DashboardPage(QWidget):
             "feed": DashboardCard("Data Freshness & Cache", "Waiting for first snapshot"),
             "validation": DashboardCard("Paper Accuracy Lab", "No closed outcomes"),
             "today": DashboardCard("Today Control Center", "Loading controls"),
+            "reliability": DashboardCard("Reliability & Shadow Gate", "Loading evidence"),
         }
         for index, card in enumerate(self.cards.values()):
             grid.addWidget(card, index // 3, index % 3)
@@ -48,6 +50,9 @@ class DashboardPage(QWidget):
         refresh_button = QPushButton("Refresh Dashboard")
         refresh_button.clicked.connect(self.refresh_all)
         layout.addWidget(refresh_button)
+        reliability_button = QPushButton("Open Reliability Cockpit — Timeline, Missed Trades & Execution Quality")
+        reliability_button.clicked.connect(self.reliability_requested)
+        layout.addWidget(reliability_button)
         layout.addStretch()
         self.funds_timer = QTimer(self)
         self.funds_timer.setInterval(60_000)
@@ -97,6 +102,18 @@ class DashboardPage(QWidget):
             f"{mode} | Market {session['state']}\n"
             f"Samples {progress['trades']}/{limit} | Open {progress['open_trades']}\n"
             f"Net paper P&L ₹{progress['realized_pnl']:,.2f}"
+        )
+        from services.reliability_intelligence import data_quality_gate, missed_opportunities, shadow_eligibility
+        gate = data_quality_gate(
+            connected=LiveSession.connected(), market_state=session["state"], hub_health=feed,
+            broker_health=self.db.get_broker_health(limit=200),
+        )
+        shadow = shadow_eligibility(self.db)
+        missed = missed_opportunities(self.db, today)
+        self.cards["reliability"].set_value(
+            f"Data gate {gate['status']} | {shadow['state']}\n"
+            f"Missed/replay shortlist {len(missed)} | Sample {shadow['samples']}\n"
+            f"95% lower confidence {shadow['wilson_lower_bound']:.1f}%"
         )
 
     def refresh_all(self):

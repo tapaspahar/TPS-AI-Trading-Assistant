@@ -104,6 +104,10 @@ DEFAULT_SETTINGS = {
     "execution_max_order_value": 25000.0,
     "execution_max_daily_loss": 1000.0,
     "execution_duplicate_window_seconds": 120,
+    # REAL submission must see a recent successful shared market-data read.
+    # Existing unit adapters that do not opt in remain independently testable.
+    "execution_require_live_data_gate": True,
+    "real_require_shadow_eligibility": True,
     # Dedicated options-only algorithm controller. It is PAPER by default and
     # session activation is deliberately never persisted.
     "options_algo_enabled": False,
@@ -232,6 +236,8 @@ class SettingsStore:
             "execution_max_order_value": float(settings.get("execution_max_order_value", current["execution_max_order_value"])),
             "execution_max_daily_loss": float(settings.get("execution_max_daily_loss", current["execution_max_daily_loss"])),
             "execution_duplicate_window_seconds": int(settings.get("execution_duplicate_window_seconds", current["execution_duplicate_window_seconds"])),
+            "execution_require_live_data_gate": bool(settings.get("execution_require_live_data_gate", current["execution_require_live_data_gate"])),
+            "real_require_shadow_eligibility": bool(settings.get("real_require_shadow_eligibility", current["real_require_shadow_eligibility"])),
             "market_pre_open_time": str(settings.get("market_pre_open_time", current["market_pre_open_time"])).strip(),
             "market_open_time": str(settings.get("market_open_time", current["market_open_time"])).strip(),
             "market_close_time": str(settings.get("market_close_time", current["market_close_time"])).strip(),

@@ -51,6 +51,14 @@ class Database:
         )
         self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_execution_audit_day ON execution_audit(trading_date)")
         self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_execution_audit_fingerprint ON execution_audit(fingerprint, created_at)")
+        execution_columns = {row["name"] for row in self.cursor.execute("PRAGMA table_info(execution_audit)")}
+        for column, definition in {
+            "average_fill_price": "REAL", "filled_quantity": "INTEGER",
+            "estimated_charges": "REAL NOT NULL DEFAULT 0", "slippage_amount": "REAL",
+            "last_reconciled_at": "TEXT",
+        }.items():
+            if column not in execution_columns:
+                self.cursor.execute(f"ALTER TABLE execution_audit ADD COLUMN {column} {definition}")
         self.cursor.execute(
             """CREATE TABLE IF NOT EXISTS execution_pairs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT, created_at TEXT NOT NULL,
@@ -656,6 +664,23 @@ class Database:
         self.cursor.execute(
             "UPDATE execution_audit SET status=?, broker_order_id=?, message=? WHERE id=?",
             (status, broker_order_id, message, int(audit_id)),
+        )
+        self.connection.commit()
+
+    def update_execution_fill(self, audit_id: int, *, status: str, average_fill_price=None,
+                              filled_quantity=None, estimated_charges=0.0, message=""):
+        row = self.get_execution_audit(audit_id)
+        requested = float(row["limit_price"] or 0) if row else 0.0
+        filled = float(average_fill_price or 0)
+        quantity = int(filled_quantity or (row["quantity"] if row else 0) or 0)
+        side = str(row["side"] or "BUY").upper() if row else "BUY"
+        adverse_points = (filled - requested) if side == "BUY" else (requested - filled)
+        slippage = adverse_points * quantity if filled > 0 and requested > 0 else None
+        self.cursor.execute(
+            """UPDATE execution_audit SET status=?, average_fill_price=?, filled_quantity=?,
+                      estimated_charges=?, slippage_amount=?, last_reconciled_at=?, message=? WHERE id=?""",
+            (str(status), average_fill_price, quantity, float(estimated_charges or 0), slippage,
+             datetime.now().astimezone().isoformat(timespec="seconds"), str(message or ""), int(audit_id)),
         )
         self.connection.commit()
 

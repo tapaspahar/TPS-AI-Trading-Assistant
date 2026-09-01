@@ -8,9 +8,14 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.2"
-LAST_UPDATED_AT = "01-09-2026 11:23:58 IST"
-FOOTER_UPDATE_TEXT = "Software Build v1.5.2 - 01-09-2026 11:23 IST"
+LAST_UPDATED_AT = "01-09-2026 15:05:39 IST"
+FOOTER_UPDATE_TEXT = "Software Build v1.5.2 - 01-09-2026 15:05 IST"
 RELEASE_NOTES = (
+    "Added a Reliability Cockpit with a saved trade-decision timeline, missed-opportunity replay shortlist, regime-wise strategy performance matrix, execution-quality evidence and statistically gated shadow-mode eligibility.",
+    "Added a common REAL execution data-quality gate: market session, broker connection, shared snapshot freshness and provider health must be valid, and REAL review remains paper-only until 30 outcomes, positive expectancy, profit factor and confidence gates pass.",
+    "Broker reconciliation now persists average fill, filled quantity and adverse limit-to-fill slippage; missing fill evidence stays DATA GAP instead of being estimated.",
+    "Added Ctrl+K Quick Open for direct keyboard access to TPS pages and a Dashboard shortcut to the complete reliability audit.",
+    "Added an original expiry 3 PM shadow-research score combining premium acceleration, volume participation, OI change, spot direction and source completeness; it remains paper/shadow evidence and does not copy or assume undisclosed video rules.",
     "Replaced the long scrolling sidebar with five compact workspace groups; every existing TPS page is now one-click accessible through visible Market, Trading, Reports or Controls tabs while legacy Help routes and automatic navigation remain compatible.",
     "Added Angel One official publisher login with a local security-state callback, secure broker-issued session storage and read-only funds verification; direct MPIN/TOTP login remains a fallback.",
     "Added a canonical Market Data Hub, unique paper-thesis sampling, executable bid/ask paper fills, net-of-friction outcomes, dashboard health controls and conservative strategy ranking for the Release 1.5.2 reliability upgrade.",

@@ -1,4 +1,5 @@
 from PySide6.QtCore import QSize, QTimer
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import QHBoxLayout, QScrollArea, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget
 
 from ui.widgets.header import Header
@@ -38,9 +39,11 @@ from ui.pages.execution_control_page import ExecutionControlPage
 from ui.pages.options_algo_page import OptionsAlgoPage
 from ui.pages.cutie_command_page import CutieCommandPage
 from ui.pages.index_market_analysis_page import IndexMarketAnalysisPage
+from ui.pages.reliability_center_page import ReliabilityCenterPage
 from ui.widgets.glass_effects import add_glass_shadow
 from ui.widgets.accessible_scroll import configure_scroll_area
 from ui.widgets.consolidated_workspace import ConsolidatedWorkspace
+from ui.widgets.quick_open import QuickOpenDialog
 from services.post_market_tps_analysis import ensure_completed_post_market_reports
 from services.self_development_decision import ensure_completed_self_development_reviews
 from services.notification_service import NotificationService
@@ -125,6 +128,7 @@ class DashboardScreen(QWidget):
         self.optionsAlgoPage = OptionsAlgoPage()
         self.cutieCommandPage = CutieCommandPage()
         self.indexMarketAnalysisPage = IndexMarketAnalysisPage()
+        self.reliabilityCenterPage = ReliabilityCenterPage()
         self.optionsHub = ConsolidatedWorkspace((
             (self.optionsPage, "Trade Plan & Auto Paper"),
             (self.putCallRatioPage, "OI / PCR Intelligence"),
@@ -176,6 +180,7 @@ class DashboardScreen(QWidget):
             (self.backtestPage, "Backtesting"),
             (self.replayPage, "Candle Replay"),
             (self.selfDevelopmentPage, "AI Development"),
+            (self.reliabilityCenterPage, "Reliability Cockpit"),
         ))
         self.controlsCenter = ConsolidatedWorkspace((
             (self.recoveryCenterPage, "Overtrading Protection"),
@@ -196,6 +201,7 @@ class DashboardScreen(QWidget):
         for page in pages:
             self.stack.addWidget(page)
         self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
+        self.dashboardPage.reliability_requested.connect(lambda: self.show_page(40))
         self.journalPage.trade_saved.connect(self.reportsPage.refresh)
         self.journalPage.trade_saved.connect(self.optionsPage.update_plan_readiness)
         self.optionsPage.trade_plan_ready.connect(lambda _plan: self.show_page(4))
@@ -238,7 +244,7 @@ class DashboardScreen(QWidget):
         for center, routes in (
             (self.marketCenter, (1, 39, 13, 24, 19, 28, 26)),
             (self.tradingCenter, (2, 21, 34, 27, 29, 35, 37)),
-            (self.reportsCenter, (4, 14, 30, 8, 22, 10, 12, 31)),
+            (self.reportsCenter, (4, 14, 30, 8, 22, 10, 12, 31, 40)),
             (self.controlsCenter, (32, 36, 38, 9, 15, 16)),
         ):
             center.tabs.currentChanged.connect(
@@ -266,6 +272,26 @@ class DashboardScreen(QWidget):
         QTimer.singleShot(0, self.update_trend_memory_monitor)
         QTimer.singleShot(0, self.notificationCenterPage.refresh)
         QTimer.singleShot(0, self.settingsPage.auto_connect_saved_credentials)
+        self.quickOpen = QuickOpenDialog((
+            ("Dashboard", 0, "cockpit home funds pnl"),
+            ("Market Snapshot", 1, "live market support resistance"),
+            ("Index Candle Analysis", 39, "nifty banknifty sensex oi coi"),
+            ("OI / PCR Intelligence", 25, "oi flow wall strike option chain"),
+            ("Option Strategies", 21, "defined risk hedge"),
+            ("Strategy Trades", 34, "ranking performance matrix"),
+            ("Expiry After 3 PM", 35, "expiry spike parity"),
+            ("Options Algo", 37, "automatic options"),
+            ("Auto Attempts", 14, "audit rejected candidate"),
+            ("Trade Journal", 4, "trades outcome"),
+            ("AI Development", 31, "suggestions lifecycle"),
+            ("Reliability Cockpit", 40, "timeline missed execution shadow data quality"),
+            ("Broker Execution", 36, "orders funds"),
+            ("Settings", 9, "configuration broker mode"),
+            ("Help", 16, "manual"),
+        ), self)
+        self.quickOpen.route_selected.connect(self.show_page)
+        self.quickOpenShortcut = QShortcut(QKeySequence("Ctrl+K"), self)
+        self.quickOpenShortcut.activated.connect(self.quickOpen.open_focused)
 
     def apply_cutie_command(self, command):
         """Route a validated command to the existing guarded controller."""
@@ -467,6 +493,7 @@ class DashboardScreen(QWidget):
             10: (4, self.reportsCenter, 5, None, 0),
             12: (4, self.reportsCenter, 6, None, 0),
             31: (4, self.reportsCenter, 7, None, 0),
+            40: (4, self.reportsCenter, 8, None, 0),
             32: (9, self.controlsCenter, 0, None, 0),
             36: (9, self.controlsCenter, 1, None, 0),
             38: (9, self.controlsCenter, 2, None, 0),
@@ -512,6 +539,8 @@ class DashboardScreen(QWidget):
             self.notificationCenterPage.refresh()
         elif requested_index == 31:
             self.selfDevelopmentPage.refresh(auto_generate=True)
+        elif requested_index == 40:
+            self.reliabilityCenterPage.refresh()
         elif requested_index == 33 and LiveSession.connected():
             self.volatilityIntelligencePage.analyze()
         elif requested_index == 34:
