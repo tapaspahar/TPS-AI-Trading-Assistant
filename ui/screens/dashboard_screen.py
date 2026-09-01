@@ -40,6 +40,7 @@ from ui.pages.options_algo_page import OptionsAlgoPage
 from ui.pages.cutie_command_page import CutieCommandPage
 from ui.pages.index_market_analysis_page import IndexMarketAnalysisPage
 from ui.pages.reliability_center_page import ReliabilityCenterPage
+from ui.pages.order_intelligence_page import OrderIntelligencePage
 from ui.widgets.glass_effects import add_glass_shadow
 from ui.widgets.accessible_scroll import configure_scroll_area
 from ui.widgets.consolidated_workspace import ConsolidatedWorkspace
@@ -129,6 +130,7 @@ class DashboardScreen(QWidget):
         self.cutieCommandPage = CutieCommandPage()
         self.indexMarketAnalysisPage = IndexMarketAnalysisPage()
         self.reliabilityCenterPage = ReliabilityCenterPage()
+        self.orderIntelligencePage = OrderIntelligencePage()
         self.optionsHub = ConsolidatedWorkspace((
             (self.optionsPage, "Trade Plan & Auto Paper"),
             (self.putCallRatioPage, "OI / PCR Intelligence"),
@@ -185,6 +187,7 @@ class DashboardScreen(QWidget):
         self.controlsCenter = ConsolidatedWorkspace((
             (self.recoveryCenterPage, "Overtrading Protection"),
             (self.executionControlPage, "Broker Execution"),
+            (self.orderIntelligencePage, "Angel One Order Intelligence"),
             (self.cutieCommandPage, "Cutie AI Commands"),
             (self.settingsPage, "Settings"),
             (self.aboutPage, "About"),

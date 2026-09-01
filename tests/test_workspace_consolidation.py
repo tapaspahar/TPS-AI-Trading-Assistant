@@ -122,7 +122,7 @@ class WorkspaceConsolidationTests(unittest.TestCase):
                 "Post Market", "Backtesting", "Candle Replay", "AI Development", "Reliability Cockpit",
             ),
             self.screen.controlsCenter: (
-                "Overtrading Protection", "Broker Execution", "Cutie AI Commands",
+                "Overtrading Protection", "Broker Execution", "Angel One Order Intelligence", "Cutie AI Commands",
                 "Settings", "About", "Help",
             ),
         }

@@ -51,6 +51,26 @@ class Database:
         )
         self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_execution_audit_day ON execution_audit(trading_date)")
         self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_execution_audit_fingerprint ON execution_audit(fingerprint, created_at)")
+        self.cursor.execute(
+            """CREATE TABLE IF NOT EXISTS order_intelligence_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                captured_at TEXT NOT NULL,
+                trading_date TEXT NOT NULL,
+                broker_order_id TEXT NOT NULL,
+                trading_symbol TEXT NOT NULL,
+                order_status TEXT NOT NULL,
+                analysis_state TEXT NOT NULL,
+                market_price REAL,
+                unrealized_points REAL,
+                mfe_points REAL,
+                mae_points REAL,
+                details_json TEXT NOT NULL,
+                UNIQUE(broker_order_id, captured_at)
+            )"""
+        )
+        self.cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_order_intelligence_day ON order_intelligence_snapshots(trading_date, captured_at DESC)"
+        )
         execution_columns = {row["name"] for row in self.cursor.execute("PRAGMA table_info(execution_audit)")}
         for column, definition in {
             "average_fill_price": "REAL", "filled_quantity": "INTEGER",
@@ -692,6 +712,33 @@ class Database:
             """SELECT * FROM execution_audit
                WHERE status IN ('SUBMITTING','SUBMISSION_UNKNOWN','ACCEPTED_NOT_FILLED','OPEN','PARTIAL','PENDING')
                ORDER BY id"""
+        ).fetchall()
+
+    def save_order_intelligence_snapshot(self, snapshot: dict) -> int:
+        self.cursor.execute(
+            """INSERT OR REPLACE INTO order_intelligence_snapshots
+               (captured_at,trading_date,broker_order_id,trading_symbol,order_status,analysis_state,
+                market_price,unrealized_points,mfe_points,mae_points,details_json)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                snapshot["captured_at"], snapshot["trading_date"], snapshot["broker_order_id"],
+                snapshot["trading_symbol"], snapshot["order_status"], snapshot["analysis_state"],
+                snapshot.get("market_price"), snapshot.get("unrealized_points"), snapshot.get("mfe_points"),
+                snapshot.get("mae_points"), json.dumps(snapshot, ensure_ascii=False, default=str),
+            ),
+        )
+        self.connection.commit()
+        return int(self.cursor.lastrowid)
+
+    def get_order_intelligence_snapshots(self, trading_date: str | None = None, limit: int = 1000):
+        if trading_date:
+            return self.cursor.execute(
+                "SELECT * FROM order_intelligence_snapshots WHERE trading_date=? ORDER BY captured_at DESC LIMIT ?",
+                (trading_date, max(1, min(int(limit), 5000))),
+            ).fetchall()
+        return self.cursor.execute(
+            "SELECT * FROM order_intelligence_snapshots ORDER BY captured_at DESC LIMIT ?",
+            (max(1, min(int(limit), 5000)),),
         ).fetchall()
 
     def count_execution_orders(self, trading_date):

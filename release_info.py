@@ -11,6 +11,7 @@ SOFTWARE_UPDATE_VERSION = "v1.5.3"
 LAST_UPDATED_AT = "01-09-2026 16:00:00 IST"
 FOOTER_UPDATE_TEXT = "Software Build v1.5.3 - 01-09-2026 16:00 IST"
 RELEASE_NOTES = (
+    "Added Angel One Order Intelligence: read-only live order-book monitoring, current move/MFE/MAE evidence, explainable hold/protect-profit/exit-risk review states and persistent post-trade snapshots without automatic broker action.",
     "Added Release 1.5.3 reliability controls: fresh-data hard gating, one-blocker candle replay, score-band outcome calibration, correlated strategy portfolio exposure, and consistent attempt-versus-slot reporting.",
     "Separated broker transport success from usable market freshness and added stale-response ratio plus p50/p95 latency evidence to the Reliability Cockpit.",
     "Added a Reliability Cockpit with a saved trade-decision timeline, missed-opportunity replay shortlist, regime-wise strategy performance matrix, execution-quality evidence and statistically gated shadow-mode eligibility.",
