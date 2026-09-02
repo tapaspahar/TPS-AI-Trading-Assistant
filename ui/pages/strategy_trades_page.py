@@ -95,10 +95,12 @@ class StrategyTradesPage(QWidget):
         )
         live_note.setWordWrap(True); layout.addWidget(live_note)
 
-        performance_title = QLabel("Strategy ranking — actual closed paper win rate (top rank first)")
+        performance_title = QLabel(
+            "Strategy ranking — validation tier, conservative win confidence, profit factor and expectancy"
+        )
         performance_title.setObjectName("sectionTitle"); layout.addWidget(performance_title)
-        self.performance = QTableWidget(0, 15)
-        self.performance.setHorizontalHeaderLabels(("Rank", "Cutie name / structure", "Validation", "Closed trades", "Independent days", "Wins", "Win rate", "95% lower bound", "Expectancy", "Profit factor", "Max drawdown", "Avg capital", "Total P&L", "Avg capture ROC", "Observed regimes"))
+        self.performance = QTableWidget(0, 17)
+        self.performance.setHorizontalHeaderLabels(("Rank", "Cutie name / structure", "Validation", "Closed trades", "Independent days", "Wins", "Win rate", "95% lower bound", "Avg win", "Avg loss", "Expectancy", "Profit factor", "Max drawdown", "Avg capital", "Total P&L", "Avg capture ROC", "Observed regimes"))
         self.performance.setEditTriggers(QTableWidget.NoEditTriggers); self.performance.setMinimumHeight(220)
         layout.addWidget(self.performance)
 
@@ -292,6 +294,7 @@ class StrategyTradesPage(QWidget):
             values = (row + 1, f"{item['friendly_name']} / {item['strategy_name']}", item["validation_tier"], samples,
                       int(item.get("independent_sessions") or 0), wins,
                       f"{float(item['win_rate'] or 0):.1f}%", f"{float(item['wilson_lower_bound'] or 0):.1f}%",
+                      f"₹{float(item['average_win'] or 0):,.2f}", f"₹{float(item['average_loss'] or 0):,.2f}",
                       f"₹{float(item['average_pnl'] or 0):,.2f}", f"{float(item['profit_factor'] or 0):.2f}",
                       f"₹{float(item['max_drawdown'] or 0):,.2f}", f"₹{float(item['average_capital_required'] or 0):,.2f}",
                       f"₹{float(item['total_pnl'] or 0):,.2f}", f"{float(item['average_model_roc'] or 0):.1f}%", item["market_regimes"] or "UNKNOWN")

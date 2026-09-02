@@ -57,11 +57,16 @@ def analyze_index_candle(symbol, candles, oi_flow=None, cas_active=False):
     )
     wick = "upper-wick rejection" if (high - max(opening, close)) / span >= .4 else "lower-wick rejection" if (min(opening, close) - low) / span >= .4 else "clean body"
     caveat = " CAS me cash indicative price jump/stale ho sakta hai; futures/options settlement evidence ko priority di gayi hai." if cas_active else ""
+    coi_text = (
+        "Call/Put COI DATA GAP"
+        if flow_direction == "DATA GAP"
+        else f"Call COI {float(flow.get('call_coi') or 0):+,.0f}, Put COI {float(flow.get('put_coi') or 0):+,.0f}"
+    )
     explanation = (
         f"{symbol} future candle {direction.lower()} raha: {opening:,.2f} se {close:,.2f} ({close-opening:+,.2f} pts), "
         f"range {span:,.2f} pts, {wick}, {aggression.lower()}, {participation}. "
         f"Near-ATM OI flow {flow_direction.lower()} (quality {quality}/100); "
-        f"Call COI {float(flow.get('call_coi') or 0):+,.0f}, Put COI {float(flow.get('put_coi') or 0):+,.0f}."
+        f"{coi_text}."
         f"{caveat} Ye evidence explanation hai, exact news/participant intent ka proof nahi."
     )
     return {

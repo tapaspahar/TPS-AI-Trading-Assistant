@@ -3,7 +3,7 @@ from datetime import datetime
 from unittest.mock import patch
 
 from services.auto_paper_trader import (_completed_candle_age_seconds, _completed_candles, exploratory_paper_eligibility,
-                                        run_auto_paper_cycle, signal_timing_stage)
+                                        late_session_entry_blocker, run_auto_paper_cycle, signal_timing_stage)
 
 
 class AutoPaperTraderTests(unittest.TestCase):
@@ -82,6 +82,17 @@ class AutoPaperTraderTests(unittest.TestCase):
         result = exploratory_paper_eligibility(strategy, {"paper_validation_testing_mode": True})
         self.assertTrue(result["allowed"])
         self.assertEqual(result["validation_track"], "IMPULSE REVERSAL PAPER")
+
+    def test_late_session_requires_fresh_current_directional_volume(self):
+        strategy = {"candidate": "CE", "trade_ready": True}
+        environment = {"time_state": "LATE SESSION", "volume_threshold": 1.5}
+        reason = late_session_entry_blocker(
+            strategy, {"candle_direction": "BULLISH", "volume_ratio": .66}, environment,
+        )
+        self.assertIn("earlier impulse cannot authorise", reason)
+        self.assertIsNone(late_session_entry_blocker(
+            strategy, {"candle_direction": "BULLISH", "volume_ratio": 1.8}, environment,
+        ))
 
     @patch("services.auto_paper_trader.evaluate_tps_entry_v2")
     @patch("services.auto_paper_trader.analyze_option_chain")

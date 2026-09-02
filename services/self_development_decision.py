@@ -55,12 +55,10 @@ def build_self_development_review(database: Database, trade_date: str, now: date
     failed = {str(k): int(v) for k, v in (metrics.get("failed_conditions") or {}).items()}
     blockers = {str(k): int(v) for k, v in (metrics.get("hard_blockers") or {}).items()}
     retry_reasons = {str(k): int(v) for k, v in (metrics.get("retry_reasons") or {}).items()}
-    slot_health = database.get_evaluation_health(trade_date, "ALL")
-    if slot_health["expected_slots"]:
-        coverage = float(slot_health["coverage_percent"])
-        # Expected scheduler slots are a coverage denominator, not attempts.
-        # Keeping these separate prevents AI Development and Post Market from
-        # reporting different attempt counts for the same immutable evidence.
+    successful_evaluation_coverage = (
+        round(evaluated * 100 / int(metrics.get("expected_slots") or 0), 1)
+        if int(metrics.get("expected_slots") or 0) else 0.0
+    )
     best = list(metrics.get("best_attempts") or [])
     repeats = _historical_repeat_context(database, metrics)
     trades = database.get_trades_for_date(trade_date)
@@ -100,7 +98,8 @@ def build_self_development_review(database: Database, trade_date: str, now: date
         add(
             "coverage_gap", priority, "Monitoring coverage",
             "Trading-session coverage development decisions ke liye insufficient hai.",
-            f"Expected 5-minute coverage ke mukable {coverage:.1f}%; missing ranges: {', '.join(metrics.get('missing_ranges') or []) or 'not itemized'}.",
+            f"Attempt coverage {coverage:.1f}%; successful evaluation coverage {successful_evaluation_coverage:.1f}%; "
+            f"missing ranges: {', '.join(metrics.get('missing_ranges') or []) or 'not itemized'}.",
             "Persistent scheduler heartbeat, missed-slot backfill aur data-gap reason codes add/strengthen karein.",
             "Kam se kam 3 consecutive sessions me 95%+ coverage prove hone par resolved mark karein.",
         )

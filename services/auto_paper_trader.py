@@ -135,6 +135,22 @@ def signal_timing_stage(strategy: dict, settings: dict) -> str:
     return "NONE"
 
 
+def late_session_entry_blocker(strategy: dict, capture: dict, environment: dict) -> str | None:
+    """Require a fresh current-candle impulse for late-session premium buying."""
+    if str(environment.get("time_state") or "").upper() != "LATE SESSION":
+        return None
+    candidate = str(strategy.get("candidate") or "").upper()
+    expected = "BULLISH" if candidate == "CE" else "BEARISH" if candidate == "PE" else ""
+    ratio = float(capture.get("volume_ratio") or 0)
+    threshold = float(environment.get("volume_threshold") or 1.5)
+    if expected and str(capture.get("candle_direction") or "").upper() == expected and ratio >= threshold:
+        return None
+    return (
+        f"Late-session {candidate or 'directional'} entry lacks fresh current-candle volume "
+        f"({ratio:.2f}x; required {threshold:.2f}x); earlier impulse cannot authorise a new premium-buying trade"
+    )
+
+
 def _fallback_timing(stage: str, checked_at: datetime, candle_time: str | None) -> dict:
     timestamp = checked_at.isoformat(timespec="seconds")
     return {
@@ -309,6 +325,10 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
         if progress["trades"] >= adaptive_limit: operational_blockers.append(f"Adaptive daily paper-trade limit reached ({progress['trades']}/{adaptive_limit})")
         if progress["daily_remaining"] <= 0: operational_blockers.append("Daily loss limit exhausted")
         operational_blockers.extend(recovery.get("blockers") or [])
+        if strategy.get("trade_ready") or exploratory.get("allowed"):
+            late_blocker = late_session_entry_blocker(strategy, capture, environment)
+            if late_blocker:
+                operational_blockers.append(late_blocker)
         chart["recovery_guard"] = recovery
         if operational_blockers:
             chart["warnings"].extend(operational_blockers)

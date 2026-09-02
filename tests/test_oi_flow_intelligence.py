@@ -34,3 +34,10 @@ class OIFlowIntelligenceTests(unittest.TestCase):
         result = analyze_oi_flow(rows, 10000)
         self.assertLess(result["quality"], 80)
         self.assertTrue(result["warnings"])
+
+    def test_all_zero_coi_is_data_gap_not_balanced_flow(self):
+        rows = [{**row, "oi_change": 0} for row in self.rows()]
+        result = analyze_oi_flow(rows, 10000)
+        self.assertEqual(result["direction"], "DATA GAP")
+        self.assertLess(result["quality"], 60)
+        self.assertTrue(any("zero COI" in warning for warning in result["warnings"]))

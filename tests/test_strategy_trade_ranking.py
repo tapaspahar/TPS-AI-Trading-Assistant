@@ -58,6 +58,8 @@ class StrategyTradeRankingTests(unittest.TestCase):
         self.assertEqual(int(ranking[0]["samples"]), 2)
         self.assertIn("TRENDING", ranking[0]["market_regimes"])
         self.assertIn("RANGE", ranking[0]["market_regimes"])
+        self.assertEqual(float(ranking[0]["average_win"]), 7.5)
+        self.assertEqual(float(ranking[0]["average_loss"]), 0.0)
 
     def test_all_eligible_candidates_reach_paper_validation_pipeline(self):
         aligned = {"strategy": "Bull Call Debit Spread", "eligible": True, "market_alignment": True}

@@ -40,10 +40,19 @@ def analyze_oi_flow(rows, spot, wing_count=5):
     call_wall = max(calls, key=lambda r: float(r.get("oi") or 0), default=None)
     put_health = "WEAKENING" if put_coi < 0 or flow_score < -35 else "DEFENDED" if put_coi > 0 and flow_score > 0 else "UNCONFIRMED"
     call_health = "WEAKENING" if call_coi < 0 or flow_score > 35 else "DEFENDED" if call_coi > 0 and flow_score < 0 else "UNCONFIRMED"
-    coi_coverage = sum("oi_change" in r for r in focused) / max(len(focused), 1)
+    coi_values = [r.get("oi_change") for r in focused if r.get("oi_change") is not None]
+    coi_coverage = len(coi_values) / max(len(focused), 1)
+    # Several broker payloads expose the COI key but fill every strike with
+    # zero when change-in-OI is unavailable. Presence is not evidence. Treat
+    # an all-zero surface as DATA GAP so it cannot earn 100% OI quality.
+    coi_has_signal = any(abs(float(value or 0)) > 0 for value in coi_values)
     premium_coverage = sum(r.get("premium_change_percent") is not None for r in focused) / max(len(focused), 1)
     quality = round(coi_coverage * 60 + premium_coverage * 25 + (15 if len(strikes) >= 7 else 0))
     warnings = []
+    if not coi_has_signal:
+        quality = min(quality, 35)
+        direction = "DATA GAP"
+        warnings.append("Broker ne sab observed strikes par zero COI diya; OI-flow direction unavailable hai")
     if premium_coverage < .5: warnings.append("Premium-change coverage low; writing/long-build classification provisional hai")
     if quality < 60: warnings.append("OI flow DATA GAP; direction ko entry permission na maanein")
     return {"direction": direction, "flow_score": round(flow_score, 1), "quality": quality,

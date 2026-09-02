@@ -24,6 +24,8 @@ def calibrate_outcomes(pnls, minimum_samples: int = 30, target_win_rate: float =
     losses = samples - wins
     gross_profit = sum(value for value in values if value > 0)
     gross_loss = abs(sum(value for value in values if value < 0))
+    average_win = gross_profit / wins if wins else 0.0
+    average_loss = gross_loss / losses if losses else 0.0
     win_rate = 100.0 * wins / samples if samples else 0.0
     expectancy = sum(values) / samples if samples else 0.0
     profit_factor = gross_profit / gross_loss if gross_loss else (float("inf") if gross_profit else 0.0)
@@ -53,6 +55,7 @@ def calibrate_outcomes(pnls, minimum_samples: int = 30, target_win_rate: float =
     return {
         "samples": samples, "wins": wins, "losses": losses,
         "win_rate": round(win_rate, 2), "expectancy": round(expectancy, 2),
+        "average_win": round(average_win, 2), "average_loss": round(average_loss, 2),
         "total_pnl": round(sum(values), 2), "profit_factor": round(profit_factor, 2),
         "wilson_lower_bound": round(lower_bound, 2), "validation_tier": tier,
         "max_drawdown": round(max_drawdown, 2),

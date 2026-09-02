@@ -43,6 +43,8 @@ class SelfDevelopmentDecisionTests(unittest.TestCase):
         self.assertIn("coverage_gap", keys)
         self.assertIn("zero_capture_calibration", keys)
         self.assertIn("entry_timing", keys)
+        coverage = next(item for item in review["suggestions"] if item["key"] == "coverage_gap")
+        self.assertIn("Attempt coverage 72.0%", coverage["evidence"])
         self.assertLess(review["health_score"], 100)
         self.assertIn("Automatic source-code modification disabled", review["summary_text"])
         self.assertIsNotNone(self.db.get_self_development_review("13-08-2026"))

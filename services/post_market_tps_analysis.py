@@ -153,6 +153,7 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
                 "total": int(row["confirmations_total"] or 0),
                 "blockers": [_normalise_blocker(str(value)) for value in blockers],
                 "decision": str(row["decision"] or "NO TRADE"),
+                "outcome": str(row["outcome"] or ""),
             }
         )
         passed_names = [str(value.get("name") or "condition") for value in selected if value.get("passed")]
@@ -242,11 +243,17 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
     lines.extend(["", "4. Aaj ke best near-setups"])
     if best_attempts:
         for item in best_attempts[:5]:
-            blocker_text = ", ".join(item["blockers"]) if item["blockers"] else "score/checklist ya plan gate"
-            lines.append(
-                f"- {item['time']} {item['candidate']}: score {item['score']}/100, "
-                f"confirmations {item['passed']}/{item['total']}; capture nahi hua kyunki {blocker_text}."
-            )
+            if item["outcome"] in {"CAPTURED", "TRADE CAPTURED"}:
+                lines.append(
+                    f"- {item['time']} {item['candidate']}: score {item['score']}/100, "
+                    f"confirmations {item['passed']}/{item['total']}; PAPER TRADE CAPTURED."
+                )
+            else:
+                blocker_text = ", ".join(item["blockers"]) if item["blockers"] else "score/checklist ya plan gate"
+                lines.append(
+                    f"- {item['time']} {item['candidate']}: score {item['score']}/100, "
+                    f"confirmations {item['passed']}/{item['total']}; capture nahi hua kyunki {blocker_text}."
+                )
     else:
         lines.append("Near-setup compare karne ke liye evaluated candle data available nahi tha.")
 
