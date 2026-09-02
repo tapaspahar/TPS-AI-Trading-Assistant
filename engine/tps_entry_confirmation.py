@@ -149,6 +149,8 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
     volume_threshold = float(environment.get("volume_threshold", 1.5))
     fake_breakout_state = evidence_state(capture.get("fake_breakout_risk"))
     fake_breakout_clear = fake_breakout_state is EvidenceState.FALSE
+    candle_range = max(float(capture.get("high") or close) - float(capture.get("low") or close), 1e-9)
+    candle_body_ratio = abs(close - opening) / candle_range
     strong_quality = volume_ratio >= volume_threshold and fake_breakout_clear
     ce_recent_impulse = _recent_impulse_volume(candles, volume_ema, volume_threshold, "CE")
     pe_recent_impulse = _recent_impulse_volume(candles, volume_ema, volume_threshold, "PE")
@@ -376,6 +378,30 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
         score_matched = score >= minimum_score
         blockers = unique_messages(blockers)
         quality_warnings = unique_messages(quality_warnings)
+        # In explicit PAPER testing, record a decisive reversal as a separate
+        # validation thesis instead of staying attached to the slower EMA
+        # stack. Real execution and every risk/data gate remain unchanged.
+        crosses_vwap = bool(
+            vwap is not None and (
+                opening <= vwap < close if side == "CE" else opening >= vwap > close
+            )
+        )
+        fast_side_confirmed = bool(
+            close > ema_5 and close > trend_line if side == "CE"
+            else close < ema_5 and close < trend_line
+        )
+        expected_direction = "BULLISH" if side == "CE" else "BEARISH"
+        allowed_slow_misses = {"Market structure", "EMA 5/20/50 alignment"}
+        risk_blockers = [item for item in blockers if not item.startswith(f"{side} directional consensus is incomplete:")]
+        impulse_reversal = bool(
+            settings.get("paper_validation_testing_mode")
+            and fake_breakout_clear and candle_direction == expected_direction
+            and candle_body_ratio >= .70 and volume_ratio >= max(2.0, volume_threshold)
+            and crosses_vwap and fast_side_confirmed
+            and set(missing_direction).issubset(allowed_slow_misses)
+            and not risk_blockers and not data_gaps
+            and regular_move_available is not False
+        )
         ready = checklist_matched and score_matched and not blockers and not data_gaps
         side_results[side] = {
             "candidate": side, "confirmations": common[side], "selected_confirmations": selected,
@@ -383,6 +409,13 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
             "passed": passed, "total": len(selected), "required": required, "score": score,
             "checklist_matched": checklist_matched, "score_matched": score_matched,
             "hard_blockers": blockers, "quality_warnings": quality_warnings, "trade_ready": ready,
+            "risk_blockers": risk_blockers,
+            "impulse_reversal_validation": {
+                "passed": impulse_reversal, "paper_only": True,
+                "body_ratio": round(candle_body_ratio, 2), "volume_ratio": round(volume_ratio, 2),
+                "crossed_vwap": crosses_vwap, "fast_side_confirmed": fast_side_confirmed,
+                "slow_context_misses": missing_direction,
+            },
             "directional_consensus": {
                 "passed": not missing_direction,
                 "required": sorted(direction_anchor_names),
@@ -422,7 +455,8 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
         selected = max(valid, key=lambda item: item["score"]); direction = "CONFLICT / HEDGE WATCH"
         selected = {**selected, "trade_ready": False, "hard_blockers": selected["hard_blockers"] + ["Both CE and PE passed; conflict requires hedge/manual review"]}
     else:
-        selected = max((ce, pe), key=lambda item: (item["score"], item["passed"]))
+        reversal = [side for side in (ce, pe) if (side.get("impulse_reversal_validation") or {}).get("passed")]
+        selected = reversal[0] if len(reversal) == 1 else max((ce, pe), key=lambda item: (item["score"], item["passed"]))
         direction = "BULLISH WATCH" if selected["candidate"] == "CE" else "BEARISH WATCH" if selected["candidate"] == "PE" else "MIXED"
 
     return {

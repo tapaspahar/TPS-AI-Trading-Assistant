@@ -19,6 +19,33 @@ class TpsEntryConfirmationTests(unittest.TestCase):
         self.chain = {"pcr_oi": 1.0, "pcr_volume": 1.0, "call_resistance": 109, "put_support": 103}
         self.settings = {"trade_plan_min_score": 80, "tps_required_matches": 5}
 
+    @patch("engine.tps_entry_confirmation.analyze_candles", return_value={
+        "state": "Bearish structure", "support": 23940.0, "resistance": 24050.0,
+        "support_zone": {"source": "cluster", "touches": 3, "reliable": True},
+        "resistance_zone": {"source": "cluster", "touches": 3, "reliable": True},
+    })
+    def test_high_volume_vwap_reversal_selects_new_side_for_paper_validation(self, _structure):
+        capture = {
+            "open": "23948.90", "high": "23983.90", "low": "23948.90", "close": "23980.90",
+            "ema_5": "23962.78", "ema_20": "23970.61", "ema_50": "24012.78",
+            "vwap": "23974.46", "supertrend": "23911.46", "atr_14": "15.45", "rsi_14": "54.20",
+            "volume": "2495", "volume_ema": "601.89", "volume_ratio": "4.15",
+            "candle_direction": "BULLISH", "fake_breakout_risk": False,
+        }
+        settings = {
+            "paper_validation_testing_mode": True, "trade_plan_min_score": 70,
+            "tps_match_mode": "adaptive", "tps_required_matches": 1,
+            "tps_enabled_conditions": ["EMA 5/20/50 alignment", "SuperTrend confirmation",
+                                       "Pullback and reversal", "Directional volume", "OI/PCR context"],
+        }
+        chain = {"pcr_oi": .83, "pcr_volume": 1.28, "call_resistance": 24100, "put_support": 23800}
+        environment = {"regime": "TRENDING", "vix_zone": "CALM / RANGE", "risk_multiplier": .75,
+                       "volume_threshold": 1.5, "regular_move_available": True,
+                       "regular_move_target_points": 17.69, "max_entry_extension_atr": 1.0}
+        result = evaluate_tps_entry_v2(self.candles, capture, chain, settings, environment)
+        self.assertEqual(result["candidate"], "CE")
+        self.assertTrue(result["side_evaluations"]["CE"]["impulse_reversal_validation"]["passed"])
+
     @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
     @patch("engine.tps_entry_confirmation.ema", return_value=95)
     def test_both_ce_and_pe_are_always_scored(self, _ema, _supertrend):

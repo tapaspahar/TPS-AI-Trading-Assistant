@@ -44,18 +44,27 @@ def exploratory_paper_eligibility(strategy: dict, settings: dict) -> dict:
     )
     directional = bool((side.get("directional_consensus") or {}).get("passed"))
     hard_blockers = unique_messages(side.get("hard_blockers") or strategy.get("hard_blockers"))
+    risk_blockers = unique_messages(side.get("risk_blockers") if "risk_blockers" in side else hard_blockers)
     data_gaps = unique_messages(side.get("data_gaps") or strategy.get("data_gaps"))
-    allowed = bool(
+    standard_allowed = bool(
         settings.get("paper_validation_testing_mode") and candidate in {"CE", "PE"}
         and not strategy.get("trade_ready") and required > 0 and misses <= allowance
         and score >= score_floor and directional and volume_pass
         and not hard_blockers and not data_gaps
     )
+    impulse_reversal = bool((side.get("impulse_reversal_validation") or {}).get("passed"))
+    reversal_allowed = bool(
+        settings.get("paper_validation_testing_mode") and candidate in {"CE", "PE"}
+        and impulse_reversal and volume_pass and not risk_blockers and not data_gaps
+    )
+    allowed = standard_allowed or reversal_allowed
     return {
         "allowed": allowed, "candidate": candidate, "soft_misses": misses,
         "allowance": allowance, "score": score, "score_floor": score_floor,
         "directional_consensus": directional, "volume_confirmed": volume_pass,
-        "hard_blockers": hard_blockers, "data_gaps": data_gaps,
+        "hard_blockers": risk_blockers if reversal_allowed else hard_blockers, "data_gaps": data_gaps,
+        "validation_track": "IMPULSE REVERSAL PAPER" if reversal_allowed else "EXPLORATORY PAPER",
+        "impulse_reversal": impulse_reversal,
     }
 
 
@@ -102,6 +111,13 @@ def _completed_candles(candles, checked_at):
     except (KeyError, TypeError, ValueError):
         return candles
     return candles[:-1] if latest_start >= bucket.replace(tzinfo=None) else candles
+
+
+def _completed_candle_age_seconds(candle_time, checked_at, interval_seconds=300):
+    """Age since candle close; broker timestamps identify candle start."""
+    opened_at = datetime.fromisoformat(str(candle_time)).replace(tzinfo=None)
+    closed_at_seconds = opened_at.timestamp() + max(0, int(interval_seconds))
+    return max(0, int(checked_at.replace(tzinfo=None).timestamp() - closed_at_seconds))
 
 
 def signal_timing_stage(strategy: dict, settings: dict) -> str:
@@ -160,9 +176,9 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
         capture["candle_time"] = candles[-1].get("time")
         capture["provider"] = provider
         try:
-            capture["provider_data_age_seconds"] = max(0, int((
-                checked_at.replace(tzinfo=None) - datetime.fromisoformat(str(capture["candle_time"])).replace(tzinfo=None)
-            ).total_seconds()))
+            capture["provider_data_age_seconds"] = _completed_candle_age_seconds(
+                capture["candle_time"], checked_at,
+            )
         except (TypeError, ValueError):
             capture["provider_data_age_seconds"] = None
         maximum_age = max(60, int(settings.get("market_data_max_age_seconds", 420) or 420))
@@ -325,7 +341,11 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
             return _record(database, symbol, result)
         if exploratory["allowed"]:
             chart["exploratory_validation"] = exploratory
-            chart["decision"] = f"EXPLORATORY PAPER {candidate} — {exploratory['soft_misses']} soft checklist miss(es)"
+            chart["decision"] = (
+                f"{exploratory['validation_track']} {candidate} — strong completed-candle reversal captured for validation"
+                if exploratory.get("impulse_reversal") else
+                f"EXPLORATORY PAPER {candidate} — {exploratory['soft_misses']} soft checklist miss(es)"
+            )
             chart["trade_ready"] = False
             chart["warnings"].append(
                 f"PAPER exploratory capture: {exploratory['soft_misses']}/{exploratory['allowance']} soft misses; "
@@ -336,13 +356,20 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
             plan_chart["direction"] = "BULLISH" if candidate == "CE" else "BEARISH"
             plan_chart["score"] = exploratory["score"]
             plan_chart["volume_confirmed"] = True
-        plan_minimum_score = exploratory["score_floor"] if exploratory["allowed"] else int(settings.get("trade_plan_min_score", 95))
+        plan_minimum_score = (
+            0 if exploratory.get("impulse_reversal") else exploratory["score_floor"]
+        ) if exploratory["allowed"] else int(settings.get("trade_plan_min_score", 95))
         plan = create_review_plan(
             symbol, spot, contracts, chain["quote_rows"], plan_chart, chain, settings,
             requested_lots=max(1, min(100, int(requested_lots))),
             minimum_score=plan_minimum_score,
         )
         plan["confidence"] = chart["final_confidence"]
+        if exploratory.get("impulse_reversal") and plan.get("reasons"):
+            plan["reasons"][0] = (
+                f"Paper-only impulse reversal validation: {candidate}, completed candle volume/body/VWAP/SuperTrend aligned; "
+                f"normal checklist score {strategy['score']}/100 remains visible"
+            )
         plan["event_context"] = event_risk
         plan["rule_version"] = "TPS Entry Confirmation System v3 - independent CE/PE + selected checklist"
         plan["decision_audit"] = {
@@ -351,7 +378,7 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
             "required_matches": strategy.get("required"), "required_score": strategy.get("minimum_score"),
             "hard_blockers": strategy.get("hard_blockers", []),
             "event_context": event_risk, "market_environment": environment,
-            "validation_track": "EXPLORATORY PAPER" if exploratory["allowed"] else "STRICT PAPER",
+            "validation_track": exploratory.get("validation_track") if exploratory["allowed"] else "STRICT PAPER",
             "exploratory_validation": exploratory if exploratory["allowed"] else None,
         }
         plan["strategy"] = {

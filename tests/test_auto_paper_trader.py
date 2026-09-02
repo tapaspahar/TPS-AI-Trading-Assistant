@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime
 from unittest.mock import patch
 
-from services.auto_paper_trader import (_completed_candles, exploratory_paper_eligibility,
+from services.auto_paper_trader import (_completed_candle_age_seconds, _completed_candles, exploratory_paper_eligibility,
                                         run_auto_paper_cycle, signal_timing_stage)
 
 
@@ -61,6 +61,27 @@ class AutoPaperTraderTests(unittest.TestCase):
         candles = [{"time": "2026-08-04T13:10:00+05:30"}, {"time": "2026-08-04T13:15:00+05:30"}]
         completed = _completed_candles(candles, datetime(2026, 8, 4, 13, 15, 8))
         self.assertEqual([item["time"] for item in completed], ["2026-08-04T13:10:00+05:30"])
+
+    def test_freshness_age_starts_when_completed_candle_closes(self):
+        checked = datetime(2026, 9, 2, 12, 7, 31)
+        self.assertEqual(_completed_candle_age_seconds("2026-09-02T12:00:00+05:30", checked), 151)
+
+    def test_testing_mode_can_capture_strong_impulse_reversal_thesis(self):
+        strategy = {
+            "candidate": "CE", "trade_ready": False, "required": 4, "passed": 2,
+            "score": 44, "minimum_score": 70,
+            "side_evaluations": {"CE": {
+                "required": 4, "passed": 2, "score": 44,
+                "selected_confirmations": [{"name": "Directional volume", "passed": True, "applicable": True}],
+                "directional_consensus": {"passed": False},
+                "hard_blockers": ["CE directional consensus is incomplete: Market structure, EMA 5/20/50 alignment"],
+                "risk_blockers": [], "data_gaps": [],
+                "impulse_reversal_validation": {"passed": True},
+            }},
+        }
+        result = exploratory_paper_eligibility(strategy, {"paper_validation_testing_mode": True})
+        self.assertTrue(result["allowed"])
+        self.assertEqual(result["validation_track"], "IMPULSE REVERSAL PAPER")
 
     @patch("services.auto_paper_trader.evaluate_tps_entry_v2")
     @patch("services.auto_paper_trader.analyze_option_chain")
