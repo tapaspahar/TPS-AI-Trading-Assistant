@@ -8,8 +8,8 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.3"
-LAST_UPDATED_AT = "02-09-2026 10:37:00 IST"
-FOOTER_UPDATE_TEXT = "Software Build v1.5.3 - 02-09-2026 10:37 IST"
+LAST_UPDATED_AT = "02-09-2026 16:04:41 IST"
+FOOTER_UPDATE_TEXT = "Software Build v1.5.3 - 02-09-2026 16:04 IST"
 RELEASE_NOTES = (
     "Added Smart Options Memory: every saved completed 5-minute index-future candle is paired with candlestick anatomy, futures-volume participation and nearby option OI/COI flow, then compared with prior-day analogs and their actual next-candle outcomes.",
     "Added Angel One Order Intelligence: read-only live order-book monitoring, current move/MFE/MAE evidence, explainable hold/protect-profit/exit-risk review states and persistent post-trade snapshots without automatic broker action.",

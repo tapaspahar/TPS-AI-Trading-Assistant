@@ -7,7 +7,7 @@
 AppId={{4E04311B-86B2-4925-A17C-27967D357CB0}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppVerName={#MyAppName} Release 1.5.3 (01-09-2026)
+AppVerName={#MyAppName} Release 1.5.3 (02-09-2026)
 AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\TPS AI Trading Assistant
 DefaultGroupName={#MyAppName}
