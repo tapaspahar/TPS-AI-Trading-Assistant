@@ -1,4 +1,4 @@
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QPushButton, QScrollArea, QSizePolicy,
     QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
@@ -93,7 +93,7 @@ class JournalPage(QWidget):
         self.table.setRowCount(len(data))
         for row, trade in enumerate(data):
             marker = QTableWidgetItem("Select")
-            marker.setTextAlignment(0x0084)
+            marker.setTextAlignment(Qt.AlignCenter)
             self.table.setItem(row, 0, marker)
             for column, value in enumerate(trade, start=1):
                 self.table.setItem(row, column, QTableWidgetItem(str(value)))
