@@ -1,10 +1,12 @@
 import os
 import tempfile
 import unittest
+from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QTimer
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
 from ui.screens.dashboard_screen import DashboardScreen
@@ -132,6 +134,28 @@ class WorkspaceConsolidationTests(unittest.TestCase):
                     tuple(center.tabs.tabText(i) for i in range(center.tabs.count())),
                     labels,
                 )
+
+    def test_expensive_refresh_is_deferred_and_rapid_routes_are_coalesced(self):
+        with (
+            patch.object(self.screen.reportsPage, "refresh") as reports_refresh,
+            patch.object(self.screen.reliabilityCenterPage, "refresh") as reliability_refresh,
+        ):
+            self.screen.show_page(8)
+            self.screen.show_page(40)
+
+            # Navigation itself must complete before report tables are rebuilt.
+            self.assertEqual(self.screen.stack.currentIndex(), 4)
+            self.assertEqual(self.screen.reportsCenter.tabs.currentIndex(), 8)
+            reports_refresh.assert_not_called()
+            reliability_refresh.assert_not_called()
+
+            QTest.qWait(240)
+            reports_refresh.assert_not_called()
+            reliability_refresh.assert_called_once_with()
+
+    def test_hidden_view_only_pages_do_not_run_refresh_timers(self):
+        self.assertFalse(self.screen.optionsMemoryPage.timer.isActive())
+        self.assertFalse(self.screen.orderIntelligencePage.timer.isActive())
 
 
 if __name__ == "__main__":

@@ -38,7 +38,16 @@ class OrderIntelligencePage(QWidget):
         self.detail = QLabel("Select an order row."); self.detail.setWordWrap(True); self.detail.setMinimumHeight(150); layout.addWidget(self.detail)
         scroll.setWidget(body); outer.addWidget(scroll)
         self.scan_ready.connect(self._show_results); self.scan_failed.connect(self._show_error)
-        self.timer = QTimer(self); self.timer.setInterval(30_000); self.timer.timeout.connect(self.refresh); self.timer.start()
+        self.timer = QTimer(self); self.timer.setInterval(30_000); self.timer.timeout.connect(self.refresh)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self.timer.isActive():
+            self.timer.start()
+
+    def hideEvent(self, event):
+        self.timer.stop()
+        super().hideEvent(event)
 
     def refresh(self):
         if not LiveSession.connected() or LiveSession.broker_id != "angel_one":

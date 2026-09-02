@@ -1,4 +1,4 @@
-from PySide6.QtCore import QSize, QTimer
+from PySide6.QtCore import QSize, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import QHBoxLayout, QScrollArea, QSizePolicy, QStackedWidget, QVBoxLayout, QWidget
 
@@ -51,6 +51,8 @@ from services.self_development_decision import ensure_completed_self_development
 from services.notification_service import NotificationService
 from services.live_session import LiveSession
 from services.trend_memory_service import ensure_completed_trend_memories, get_live_trend_analogs
+from services.analysis_scheduler import AnalysisScheduler
+from core.database_manager import Database
 
 
 class ResponsiveStackedWidget(QStackedWidget):
@@ -66,6 +68,9 @@ class ResponsiveStackedWidget(QStackedWidget):
 
 
 class DashboardScreen(QWidget):
+    post_market_maintenance_ready = Signal(object, object)
+    trend_memory_maintenance_ready = Signal(object, object)
+
     def __init__(self):
         super().__init__()
         self.setObjectName("dashboardScreen")
@@ -77,6 +82,9 @@ class DashboardScreen(QWidget):
         self.notifier = NotificationService.instance(self)
         self._market_states = {}
         self._trend_memory_alerts = set()
+        self._page_refresh_serial = 0
+        self.post_market_maintenance_ready.connect(self._apply_post_market_maintenance)
+        self.trend_memory_maintenance_ready.connect(self._apply_trend_memory_maintenance)
         add_glass_shadow(self.header)
         main_layout.addWidget(self.header)
         body_layout = QHBoxLayout()
@@ -245,8 +253,9 @@ class DashboardScreen(QWidget):
                               (self.sidebar.reportsCenterButton, 4),
                               (self.sidebar.controlsCenterButton, 9)):
             button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
-        # A master-tab click follows the same route as the former sidebar
-        # button, including that page's normal refresh/preparation work.
+        # Keep navigation instant.  The expensive page preparation is
+        # debounced below so rapidly moving across tabs does not rebuild every
+        # intermediate table on the GUI thread.
         for center, routes in (
             (self.marketCenter, (1, 39, 13, 24, 19, 28, 41, 26)),
             (self.tradingCenter, (2, 21, 34, 27, 29, 35, 37)),
@@ -254,7 +263,7 @@ class DashboardScreen(QWidget):
             (self.controlsCenter, (32, 36, 42, 38, 9, 15, 16)),
         ):
             center.tabs.currentChanged.connect(
-                lambda tab_index, route_list=routes: self.show_page(route_list[tab_index])
+                lambda tab_index, route_list=routes: self.defer_page_refresh(route_list[tab_index])
                 if 0 <= tab_index < len(route_list) else None
             )
         body_layout.addWidget(self.stack)
@@ -324,13 +333,21 @@ class DashboardScreen(QWidget):
             self.show_page(37)
 
     def update_completed_post_market_reports(self):
-        """Finalize daily TPS audit after close and backfill missed app days."""
+        """Schedule report maintenance without blocking the GUI event loop."""
+        AnalysisScheduler.submit_unique("dashboard-post-market", self._build_post_market_maintenance)
+
+    def _build_post_market_maintenance(self):
+        database = Database()
         try:
-            updated = ensure_completed_post_market_reports(self.postMarketTpsAnalysisPage.db)
+            updated = ensure_completed_post_market_reports(database)
+            development_updates = ensure_completed_self_development_reviews(database)
         except Exception:
-            # A temporary database lock must not interrupt the trading UI;
-            # the one-minute scheduler will retry automatically.
             return
+        finally:
+            database.close()
+        self.post_market_maintenance_ready.emit(updated, development_updates)
+
+    def _apply_post_market_maintenance(self, updated, development_updates):
         if updated:
             self.postMarketTpsAnalysisPage.refresh(auto_generate=False)
         if updated:
@@ -339,10 +356,6 @@ class DashboardScreen(QWidget):
                 "post_market_analysis", "TPS post-market report ready",
                 f"{count} completed market-day report(s) were generated.",
             )
-        try:
-            development_updates = ensure_completed_self_development_reviews(self.selfDevelopmentPage.db)
-        except Exception:
-            return
         if development_updates:
             self.selfDevelopmentPage.refresh(auto_generate=False)
         if development_updates:
@@ -351,12 +364,21 @@ class DashboardScreen(QWidget):
                 f"{len(development_updates)} evidence-led software rectification review(s) were generated. Human review is required.",
             )
     def update_trend_memory_monitor(self):
-        """Finalize completed days and alert once when a strong analog appears."""
+        """Schedule trend-memory comparisons away from the GUI thread."""
+        AnalysisScheduler.submit_unique("dashboard-trend-memory", self._build_trend_memory_maintenance)
+
+    def _build_trend_memory_maintenance(self):
+        database = Database()
         try:
-            updated = ensure_completed_trend_memories(self.trendMemoryPage.db)
-            live = get_live_trend_analogs(self.trendMemoryPage.db)
+            updated = ensure_completed_trend_memories(database)
+            live = get_live_trend_analogs(database)
         except Exception:
             return
+        finally:
+            database.close()
+        self.trend_memory_maintenance_ready.emit(updated, live)
+
+    def _apply_trend_memory_maintenance(self, updated, live):
         if updated:
             self.trendMemoryPage.refresh()
         for item in live:
@@ -520,7 +542,30 @@ class DashboardScreen(QWidget):
             if inner is not None:
                 inner.select_tab(inner_tab)
         self.sidebar.set_active(index)
-        if index == 0:
+        self.stack.setCurrentIndex(index)
+        self.defer_page_refresh(requested_index)
+
+    def defer_page_refresh(self, requested_index: int):
+        """Refresh only the page on which the user actually settles.
+
+        QTabWidget emits ``currentChanged`` synchronously.  Several TPS pages
+        load large histories and rebuild tables, so doing that work inside the
+        signal made even a quick tab pass look like an application hang.
+        """
+        self._page_refresh_serial += 1
+        serial = self._page_refresh_serial
+        QTimer.singleShot(
+            180,
+            lambda: self._run_deferred_page_refresh(serial, requested_index),
+        )
+
+    def _run_deferred_page_refresh(self, serial: int, requested_index: int):
+        if serial != self._page_refresh_serial:
+            return
+        self._refresh_requested_page(requested_index)
+
+    def _refresh_requested_page(self, requested_index: int):
+        if requested_index == 0:
             self.dashboardPage.refresh()
         elif requested_index == 8:
             self.reportsPage.refresh()
@@ -566,7 +611,6 @@ class DashboardScreen(QWidget):
             self.executionControlPage.refresh_mode()
         elif requested_index == 37:
             self.optionsAlgoPage.refresh()
-        self.stack.setCurrentIndex(index)
 
     def prepare_execution_candidate(self, payload):
         self.executionControlPage.load_candidate(payload)

@@ -13,7 +13,7 @@ class OptionsMemoryPage(QWidget):
         title = QLabel("Smart Options Memory — 5-Minute Chart, Volume & OI/COI Learning"); title.setObjectName("pageTitle"); layout.addWidget(title)
         note = QLabel("Har completed 5-minute index-future candle aur nearby option OI/COI evidence permanent memory se read hota hai. Current condition previous market days se compare hoti hai; similarity aur follow-rate guaranteed direction nahi hain.")
         note.setWordWrap(True); layout.addWidget(note)
-        controls = QHBoxLayout(); self.symbol = QComboBox(); self.symbol.addItems(("NIFTY", "BANKNIFTY", "SENSEX")); self.symbol.currentTextChanged.connect(self.refresh)
+        controls = QHBoxLayout(); self.symbol = QComboBox(); self.symbol.addItems(("NIFTY", "BANKNIFTY", "SENSEX")); self.symbol.currentTextChanged.connect(self._refresh_if_visible)
         refresh = QPushButton("Refresh Current vs Historical Memory"); refresh.clicked.connect(self.refresh)
         controls.addWidget(QLabel("Index")); controls.addWidget(self.symbol); controls.addWidget(refresh, 1); layout.addLayout(controls)
         self.summary = QLabel(); self.summary.setWordWrap(True); self.summary.setObjectName("sectionTitle"); layout.addWidget(self.summary)
@@ -21,7 +21,20 @@ class OptionsMemoryPage(QWidget):
         self.current.setHorizontalScrollBarPolicy(self.current.horizontalScrollBarPolicy()); layout.addWidget(self.current, 2)
         layout.addWidget(QLabel("Closest historical 5-minute situations and what happened in the next candle"))
         self.analogs = QTableWidget(0, 7); self.analogs.setHorizontalHeaderLabels(("Date", "Time", "Similarity", "Pattern", "OI flow", "Next move", "Next direction")); layout.addWidget(self.analogs, 1)
-        self.timer = QTimer(self); self.timer.setInterval(30_000); self.timer.timeout.connect(self.refresh); self.timer.start(); self.refresh()
+        self.timer = QTimer(self); self.timer.setInterval(30_000); self.timer.timeout.connect(self.refresh)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self.timer.isActive():
+            self.timer.start()
+
+    def hideEvent(self, event):
+        self.timer.stop()
+        super().hideEvent(event)
+
+    def _refresh_if_visible(self, *_args):
+        if self.isVisible():
+            self.refresh()
 
     @staticmethod
     def _fill(table, rows):
