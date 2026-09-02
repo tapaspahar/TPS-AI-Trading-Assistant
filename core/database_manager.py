@@ -254,6 +254,10 @@ class Database:
                 UNIQUE(symbol, candle_time)
             )"""
         )
+        index_memory_columns = {row["name"] for row in self.cursor.execute("PRAGMA table_info(index_candle_analyses)")}
+        for column in ("atm_strike", "atm_ce_premium", "atm_pe_premium", "oi_pcr", "volume_pcr"):
+            if column not in index_memory_columns:
+                self.cursor.execute(f"ALTER TABLE index_candle_analyses ADD COLUMN {column} REAL")
         self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_index_candle_day ON index_candle_analyses(trade_date, candle_time)")
         self.cursor.execute(
             """CREATE TABLE IF NOT EXISTS index_daily_analyses (
@@ -2005,6 +2009,7 @@ class Database:
             "open", "high", "low", "close", "move_points", "range_points", "range_ratio", "volume", "volume_ratio",
             "oi_direction", "oi_quality", "call_oi", "put_oi", "call_coi", "put_coi", "put_wall", "put_wall_health",
             "call_wall", "call_wall_health", "source_completeness", "explanation", "details_json",
+            "atm_strike", "atm_ce_premium", "atm_pe_premium", "oi_pcr", "volume_pcr",
         )
         values = tuple(analysis.get(c) for c in columns)
         result = self.cursor.execute(
@@ -2016,6 +2021,12 @@ class Database:
     def get_index_candle_analyses(self, trade_date: str) -> list[sqlite3.Row]:
         return self.cursor.execute(
             "SELECT * FROM index_candle_analyses WHERE trade_date = ? ORDER BY candle_time DESC, symbol ASC", (trade_date,),
+        ).fetchall()
+
+    def get_index_candle_history(self, symbol: str, limit: int = 10000) -> list[sqlite3.Row]:
+        return self.cursor.execute(
+            "SELECT * FROM index_candle_analyses WHERE symbol=? ORDER BY candle_time DESC LIMIT ?",
+            (str(symbol).upper(), max(1, min(int(limit), 50000))),
         ).fetchall()
 
     def save_index_daily_analysis(self, report: dict) -> None:

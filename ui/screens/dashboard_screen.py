@@ -41,6 +41,7 @@ from ui.pages.cutie_command_page import CutieCommandPage
 from ui.pages.index_market_analysis_page import IndexMarketAnalysisPage
 from ui.pages.reliability_center_page import ReliabilityCenterPage
 from ui.pages.order_intelligence_page import OrderIntelligencePage
+from ui.pages.options_memory_page import OptionsMemoryPage
 from ui.widgets.glass_effects import add_glass_shadow
 from ui.widgets.accessible_scroll import configure_scroll_area
 from ui.widgets.consolidated_workspace import ConsolidatedWorkspace
@@ -131,6 +132,7 @@ class DashboardScreen(QWidget):
         self.indexMarketAnalysisPage = IndexMarketAnalysisPage()
         self.reliabilityCenterPage = ReliabilityCenterPage()
         self.orderIntelligencePage = OrderIntelligencePage()
+        self.optionsMemoryPage = OptionsMemoryPage()
         self.optionsHub = ConsolidatedWorkspace((
             (self.optionsPage, "Trade Plan & Auto Paper"),
             (self.putCallRatioPage, "OI / PCR Intelligence"),
@@ -162,6 +164,7 @@ class DashboardScreen(QWidget):
             (self.powerfulHub, "Signal Intelligence"),
             (self.casAnalysisPage, "CAS Analysis"),
             (self.trendMemoryPage, "Trend Memory"),
+            (self.optionsMemoryPage, "Smart Options Memory"),
             (self.gapHub, "Gap Probability"),
         ))
         self.tradingCenter = ConsolidatedWorkspace((
@@ -245,10 +248,10 @@ class DashboardScreen(QWidget):
         # A master-tab click follows the same route as the former sidebar
         # button, including that page's normal refresh/preparation work.
         for center, routes in (
-            (self.marketCenter, (1, 39, 13, 24, 19, 28, 26)),
+            (self.marketCenter, (1, 39, 13, 24, 19, 28, 41, 26)),
             (self.tradingCenter, (2, 21, 34, 27, 29, 35, 37)),
             (self.reportsCenter, (4, 14, 30, 8, 22, 10, 12, 31, 40)),
-            (self.controlsCenter, (32, 36, 38, 9, 15, 16)),
+            (self.controlsCenter, (32, 36, 42, 38, 9, 15, 16)),
         ):
             center.tabs.currentChanged.connect(
                 lambda tab_index, route_list=routes: self.show_page(route_list[tab_index])
@@ -288,6 +291,8 @@ class DashboardScreen(QWidget):
             ("Trade Journal", 4, "trades outcome"),
             ("AI Development", 31, "suggestions lifecycle"),
             ("Reliability Cockpit", 40, "timeline missed execution shadow data quality"),
+            ("Smart Options Memory", 41, "five minute candle volume oi coi historical analog"),
+            ("Angel One Order Intelligence", 42, "broker order book live mfe mae review"),
             ("Broker Execution", 36, "orders funds"),
             ("Settings", 9, "configuration broker mode"),
             ("Help", 16, "manual"),
@@ -473,8 +478,9 @@ class DashboardScreen(QWidget):
             23: (1, self.marketCenter, 3, self.powerfulHub, 2),
             19: (1, self.marketCenter, 4, None, 0),
             28: (1, self.marketCenter, 5, None, 0),
-            26: (1, self.marketCenter, 6, self.gapHub, 0),
-            17: (1, self.marketCenter, 6, self.gapHub, 0),
+            41: (1, self.marketCenter, 6, None, 0),
+            26: (1, self.marketCenter, 7, self.gapHub, 0),
+            17: (1, self.marketCenter, 7, self.gapHub, 0),
             2: (2, self.tradingCenter, 0, self.optionsHub, 0),
             3: (2, self.tradingCenter, 0, self.optionsHub, 0),
             5: (2, self.tradingCenter, 0, self.optionsHub, 0),
@@ -499,11 +505,12 @@ class DashboardScreen(QWidget):
             40: (4, self.reportsCenter, 8, None, 0),
             32: (9, self.controlsCenter, 0, None, 0),
             36: (9, self.controlsCenter, 1, None, 0),
-            38: (9, self.controlsCenter, 2, None, 0),
-            9: (9, self.controlsCenter, 3, None, 0),
-            7: (9, self.controlsCenter, 3, None, 0),
-            15: (9, self.controlsCenter, 4, None, 0),
-            16: (9, self.controlsCenter, 5, None, 0),
+            42: (9, self.controlsCenter, 2, None, 0),
+            38: (9, self.controlsCenter, 3, None, 0),
+            9: (9, self.controlsCenter, 4, None, 0),
+            7: (9, self.controlsCenter, 4, None, 0),
+            15: (9, self.controlsCenter, 5, None, 0),
+            16: (9, self.controlsCenter, 6, None, 0),
         }
         if requested_index == 0:
             index = 0
@@ -544,6 +551,10 @@ class DashboardScreen(QWidget):
             self.selfDevelopmentPage.refresh(auto_generate=True)
         elif requested_index == 40:
             self.reliabilityCenterPage.refresh()
+        elif requested_index == 41:
+            self.optionsMemoryPage.refresh()
+        elif requested_index == 42:
+            self.orderIntelligencePage.refresh()
         elif requested_index == 33 and LiveSession.connected():
             self.volatilityIntelligencePage.analyze()
         elif requested_index == 34:

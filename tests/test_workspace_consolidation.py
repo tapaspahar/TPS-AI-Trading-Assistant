@@ -55,7 +55,7 @@ class WorkspaceConsolidationTests(unittest.TestCase):
             (5, 2, self.screen.tradingCenter, 0, self.screen.optionsHub, 0),
             (25, 2, self.screen.tradingCenter, 0, self.screen.optionsHub, 1),
             (11, 4, self.screen.reportsCenter, 4, self.screen.postMarketHub, 1),
-            (17, 1, self.screen.marketCenter, 6, self.screen.gapHub, 0),
+            (17, 1, self.screen.marketCenter, 7, self.screen.gapHub, 0),
             (18, 1, self.screen.marketCenter, 3, self.screen.powerfulHub, 1),
             (23, 1, self.screen.marketCenter, 3, self.screen.powerfulHub, 2),
             (20, 2, self.screen.tradingCenter, 3, self.screen.autoOpportunityHub, 1),
@@ -104,14 +104,14 @@ class WorkspaceConsolidationTests(unittest.TestCase):
         self.screen.show_page(0)
         self.screen.header.settingsButton.click()
         self.assertEqual(self.screen.stack.currentIndex(), 9)
-        self.assertEqual(self.screen.controlsCenter.tabs.currentIndex(), 3)
+        self.assertEqual(self.screen.controlsCenter.tabs.currentIndex(), 4)
         self.assertTrue(self.screen.sidebar.controlsCenterButton.isChecked())
 
     def test_master_workspace_tabs_keep_every_page_easy_to_reach(self):
         expected = {
             self.screen.marketCenter: (
                 "Market Snapshot", "Index Candle Analysis", "Equity Research",
-                "Signal Intelligence", "CAS Analysis", "Trend Memory", "Gap Probability",
+                "Signal Intelligence", "CAS Analysis", "Trend Memory", "Smart Options Memory", "Gap Probability",
             ),
             self.screen.tradingCenter: (
                 "Options Workspace", "Option Strategies", "Strategy Trades",

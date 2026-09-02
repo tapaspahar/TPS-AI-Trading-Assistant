@@ -67,9 +67,14 @@ class IndexMarketAnalysisService:
         flow["call_oi"], flow["put_oi"] = chain["call_oi"], chain["put_oi"]
         cas_active = symbol == "SENSEX" and now.weekday() < 5 and (now.hour, now.minute) >= (15, 15) and (now.hour, now.minute) <= (15, 40)
         result = analyze_index_candle(symbol, candles, flow, cas_active=cas_active)
+        atm_strike = chain.get("atm_strike")
+        atm_call = next((row for row in chain["quote_rows"] if row.get("strike") == atm_strike and row.get("option_type") == "CE"), {})
+        atm_put = next((row for row in chain["quote_rows"] if row.get("strike") == atm_strike and row.get("option_type") == "PE"), {})
         result.update({
             "symbol": symbol, "trade_date": candle_time.strftime("%d-%m-%Y"),
             "candle_time": candle_time.isoformat(timespec="minutes"), "analyzed_at": now.isoformat(timespec="seconds"),
+            "atm_strike": atm_strike, "atm_ce_premium": atm_call.get("ltp"), "atm_pe_premium": atm_put.get("ltp"),
+            "oi_pcr": chain.get("pcr_oi"), "volume_pcr": chain.get("pcr_volume"),
         })
         result["details_json"] = json.dumps({"expiry": str(expiry), "spot": spot, "cas_active": cas_active, "flow_warnings": flow.get("warnings", [])})
         self.db.save_index_candle_analysis(result)
