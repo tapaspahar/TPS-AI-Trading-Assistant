@@ -1,5 +1,5 @@
 from core.database_manager import Database
-from services.options_memory_service import build_options_memory_view, candle_pattern, snapshot_similarity
+from services.options_memory_service import build_live_verdict, build_options_memory_view, candle_pattern, snapshot_similarity
 
 
 def row(**changes):
@@ -29,3 +29,21 @@ def test_memory_uses_only_prior_day_next_candle_outcomes(tmp_path):
     assert len(view["rows"]) == 1
     assert view["analogs"][0]["next_direction"] == "UP"
     assert view["state"] == "LEARNING / LOW CONFIDENCE"
+    assert view["live_verdict"]["verdict"] == "BULLISH"
+    assert str(view["live_verdict"]["last_candle"]).endswith("09:15+05:30")
+
+
+def test_live_verdict_uses_recent_completed_candle_evidence():
+    rows = [
+        row(candle_time=f"2026-09-02T09:{15 + index * 5:02d}+05:30")
+        for index in range(5)
+    ]
+    result = build_live_verdict(rows)
+    assert result["verdict"] == "BULLISH"
+    assert result["confidence"] > 50
+    assert result["last_candle"] == rows[-1]["candle_time"]
+
+    flat = build_live_verdict([
+        row(direction="NEUTRAL", aggression="TWO-WAY / INDECISION", oi_direction="BALANCED FLOW")
+    ])
+    assert flat["verdict"] == "FLAT"

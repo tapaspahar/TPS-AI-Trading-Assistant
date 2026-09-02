@@ -13,6 +13,8 @@ class OptionsMemoryPage(QWidget):
         title = QLabel("Smart Options Memory — 5-Minute Chart, Volume & OI/COI Learning"); title.setObjectName("pageTitle"); layout.addWidget(title)
         note = QLabel("Har completed 5-minute index-future candle aur nearby option OI/COI evidence permanent memory se read hota hai. Current condition previous market days se compare hoti hai; similarity aur follow-rate guaranteed direction nahi hain.")
         note.setWordWrap(True); layout.addWidget(note)
+        self.verdict = QLabel("CURRENT VERDICT: FLAT | Last completed candle: waiting")
+        self.verdict.setWordWrap(True); self.verdict.setObjectName("sectionTitle"); layout.addWidget(self.verdict)
         controls = QHBoxLayout(); self.symbol = QComboBox(); self.symbol.addItems(("NIFTY", "BANKNIFTY", "SENSEX")); self.symbol.currentTextChanged.connect(self._refresh_if_visible)
         refresh = QPushButton("Refresh Current vs Historical Memory"); refresh.clicked.connect(self.refresh)
         controls.addWidget(QLabel("Index")); controls.addWidget(self.symbol); controls.addWidget(refresh, 1); layout.addLayout(controls)
@@ -45,6 +47,18 @@ class OptionsMemoryPage(QWidget):
 
     def refresh(self, *_args):
         view = build_options_memory_view(self.db, self.symbol.currentText())
+        verdict = view["live_verdict"]
+        candle_time = str(verdict.get("last_candle") or "")
+        candle_label = candle_time[11:16] if len(candle_time) >= 16 else "waiting"
+        color = {"BULLISH": "#41e6a6", "BEARISH": "#ff6b81", "FLAT": "#ffe66d"}.get(verdict["verdict"], "#ffe66d")
+        self.verdict.setStyleSheet(
+            f"QLabel {{ color: {color}; background: rgba(20, 38, 70, 180); border: 2px solid {color}; "
+            "border-radius: 12px; padding: 12px; font-size: 17px; font-weight: 700; }}"
+        )
+        self.verdict.setText(
+            f"CURRENT MARKET VERDICT: {verdict['verdict']}  |  Last completed candle: {candle_label}  |  "
+            f"Evidence confidence: {verdict['confidence']:.1f}%\n{verdict['evidence']}"
+        )
         self.summary.setText(
             f"{view['state']} | Historical direction: {view['predicted_direction']} | "
             f"Follow-rate {view['historical_follow_rate']:.1f}% from {view['meaningful_samples']} comparable samples. {view['note']}"

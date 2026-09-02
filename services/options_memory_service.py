@@ -37,6 +37,50 @@ def snapshot_similarity(current, historical) -> float:
     return round(score * quality, 1)
 
 
+def build_live_verdict(rows: list[dict], window: int = 5) -> dict:
+    """Combine recent completed candles into an explainable live-session verdict."""
+    if not rows:
+        return {
+            "verdict": "FLAT", "confidence": 0.0, "last_candle": None,
+            "evidence": "Aaj ki completed 5-minute candle abhi available nahi hai.",
+        }
+
+    recent = rows[-max(1, int(window)):]
+    score = 0.0
+    maximum = 0.0
+    bullish = bearish = neutral = 0
+    for recency, row in enumerate(recent, start=1):
+        quality = max(0.0, min(1.0, float(row.get("source_completeness") or 0) / 100))
+        volume = max(0.5, min(2.0, float(row.get("volume_ratio") or 1.0)))
+        weight = recency * quality * volume
+        direction = str(row.get("direction") or "").upper()
+        aggression = str(row.get("aggression") or "").upper()
+        oi_flow = str(row.get("oi_direction") or "").upper()
+        candle_score = 0.0
+        candle_score += 1.0 if "BULL" in direction else -1.0 if "BEAR" in direction else 0.0
+        candle_score += 0.55 if "BUYER" in aggression else -0.55 if "SELLER" in aggression else 0.0
+        candle_score += 0.70 if "BULL" in oi_flow else -0.70 if "BEAR" in oi_flow else 0.0
+        score += candle_score * weight
+        maximum += 2.25 * weight
+        if candle_score > 0.25: bullish += 1
+        elif candle_score < -0.25: bearish += 1
+        else: neutral += 1
+
+    normalized = score / maximum if maximum else 0.0
+    verdict = "BULLISH" if normalized >= 0.18 else "BEARISH" if normalized <= -0.18 else "FLAT"
+    confidence = round(min(100.0, abs(normalized) * 100), 1)
+    latest = recent[-1]
+    return {
+        "verdict": verdict,
+        "confidence": confidence,
+        "last_candle": latest.get("candle_time"),
+        "evidence": (
+            f"Recent {len(recent)} completed candles: {bullish} bullish, "
+            f"{bearish} bearish, {neutral} neutral; recency, volume, OI flow aur data coverage weighted."
+        ),
+    }
+
+
 def build_options_memory_view(database, symbol: str, trade_date: str | None = None, analog_limit: int = 20) -> dict:
     trade_date = trade_date or datetime.now().strftime("%d-%m-%Y")
     history = [dict(row) for row in database.get_index_candle_history(symbol)]
@@ -68,9 +112,11 @@ def build_options_memory_view(database, symbol: str, trade_date: str | None = No
     direction = "UP" if up_weight > down_weight else "DOWN" if down_weight > up_weight else "UNRESOLVED"
     state = "USABLE ANALOG" if len(meaningful) >= 10 and probability >= 60 else "LEARNING / LOW CONFIDENCE"
     rows_view = [{**row, "pattern": candle_pattern(row)} for row in reversed(current_rows)]
+    live_verdict = build_live_verdict(current_rows)
     return {
         "symbol": symbol.upper(), "trade_date": trade_date, "rows": rows_view, "latest": latest,
         "analogs": analogs, "meaningful_samples": len(meaningful), "predicted_direction": direction,
         "historical_follow_rate": probability, "state": state,
+        "live_verdict": live_verdict,
         "note": "Historical follow-rate similar saved snapshots ka outcome hai; live prediction ya guaranteed trade signal nahi.",
     }
