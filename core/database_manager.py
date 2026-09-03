@@ -76,6 +76,11 @@ class Database:
             "average_fill_price": "REAL", "filled_quantity": "INTEGER",
             "estimated_charges": "REAL NOT NULL DEFAULT 0", "slippage_amount": "REAL",
             "last_reconciled_at": "TEXT",
+            "product_type": "TEXT", "target_price": "REAL", "stop_price": "REAL",
+            "time_exit": "TEXT", "exit_order_id": "TEXT", "exit_average_fill_price": "REAL",
+            "managed_state": "TEXT", "overnight_state": "TEXT", "overnight_target_date": "TEXT",
+            "overnight_forecast_id": "INTEGER", "overnight_carry_price": "REAL",
+            "expiry_date": "TEXT",
         }.items():
             if column not in execution_columns:
                 self.cursor.execute(f"ALTER TABLE execution_audit ADD COLUMN {column} {definition}")
@@ -678,11 +683,15 @@ class Database:
         now = datetime.now().astimezone()
         result = self.cursor.execute(
             """INSERT INTO execution_audit
-            (created_at,trading_date,fingerprint,broker,exchange,symbol_token,trading_symbol,side,quantity,limit_price,status,message)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (created_at,trading_date,fingerprint,broker,exchange,symbol_token,trading_symbol,side,quantity,limit_price,
+             status,message,product_type,target_price,stop_price,time_exit,managed_state,expiry_date)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             (now.isoformat(timespec="seconds"), now.date().isoformat(), fingerprint, "angel_one",
              order["exchange"], str(order["symbol_token"]), order["trading_symbol"], order["side"],
-             int(order["quantity"]), float(order["limit_price"]), status, message),
+             int(order["quantity"]), float(order["limit_price"]), status, message,
+             str(order.get("product_type") or "INTRADAY").upper(), float(order.get("target_price") or 0),
+             float(order.get("stop_price") or 0), str(order.get("time_exit") or ""), "ENTRY_PENDING",
+             str(order.get("expiry_date") or "")),
         )
         self.connection.commit()
         return int(result.lastrowid)
@@ -720,6 +729,25 @@ class Database:
                WHERE status IN ('SUBMITTING','SUBMISSION_UNKNOWN','ACCEPTED_NOT_FILLED','OPEN','PARTIAL','PENDING')
                ORDER BY id"""
         ).fetchall()
+
+    def get_managed_execution_audits(self):
+        return self.cursor.execute(
+            """SELECT * FROM execution_audit WHERE status IN
+               ('COMPLETE','COMPLETED','FILLED','TRADED','REAL_OPEN','EXIT_SUBMITTED')
+               AND target_price > 0 AND stop_price > 0 ORDER BY id"""
+        ).fetchall()
+
+    def update_execution_management(self, audit_id: int, **values):
+        allowed = {"status", "message", "managed_state", "exit_order_id", "exit_average_fill_price",
+                   "realized_pnl", "target_price", "stop_price", "overnight_state",
+                   "overnight_target_date", "overnight_forecast_id", "overnight_carry_price"}
+        updates = {key: value for key, value in values.items() if key in allowed}
+        if not updates:
+            return
+        updates["last_reconciled_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
+        assignments = ", ".join(f"{key}=?" for key in updates)
+        self.cursor.execute(f"UPDATE execution_audit SET {assignments} WHERE id=?", (*updates.values(), int(audit_id)))
+        self.connection.commit()
 
     def save_order_intelligence_snapshot(self, snapshot: dict) -> int:
         self.cursor.execute(

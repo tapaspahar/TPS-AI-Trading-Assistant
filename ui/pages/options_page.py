@@ -13,6 +13,7 @@ from engine.trade_plan_engine import create_review_plan
 from engine.greeks_engine import calculate_greeks
 from services.auto_paper_trader import run_auto_paper_cycle
 from services.analysis_scheduler import AnalysisScheduler
+from services.execution_service import ExecutionService
 from core.overtrading_guard import OvertradingGuard
 from services.live_session import LiveSession
 from services.option_contract_service import UNDERLYING_QUOTES, OptionContractService, buying_risk, contracts_near_spot
@@ -703,7 +704,12 @@ class OptionsPage(QWidget):
     def _monitor_paper_trades(self):
         database = Database()
         try:
-            closed = database.monitor_paper_trades(LiveSession.client, SettingsStore().load())
+            store = SettingsStore()
+            closed = database.monitor_paper_trades(LiveSession.client, store.load())
+            # REAL positions are always reconciled from the broker even when
+            # the currently selected UI mode is PAPER. Changing a display mode
+            # must never orphan an already-filled real position.
+            closed.extend(ExecutionService(database, store, LiveSession).monitor_real_positions())
             monitoring = database.get_paper_trade_monitoring()
             if closed:
                 self.paper_trade_closed.emit(closed)

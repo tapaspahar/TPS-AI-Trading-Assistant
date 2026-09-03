@@ -313,6 +313,15 @@ class AngelOneClient:
             raise RuntimeError(str((response or {}).get("message", "Order book unavailable.")))
         return response.get("data") or []
 
+    def get_positions(self) -> list[dict]:
+        """Return broker position truth used before any managed REAL exit."""
+        if not self.session:
+            raise RuntimeError("Connect Angel One before checking positions.")
+        response = self.session.position()
+        if not response or not response.get("status"):
+            raise RuntimeError(str((response or {}).get("message", "Position book unavailable.")))
+        return response.get("data") or []
+
     def cancel_order(self, order_id: str, variety: str = "NORMAL") -> dict:
         if not self.session:
             raise RuntimeError("Connect Angel One before cancelling an order.")

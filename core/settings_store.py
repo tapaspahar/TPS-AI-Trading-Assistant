@@ -114,6 +114,7 @@ DEFAULT_SETTINGS = {
     # Existing unit adapters that do not opt in remain independently testable.
     "execution_require_live_data_gate": True,
     "real_require_shadow_eligibility": True,
+    "real_managed_exit_enabled": True,
     # Dedicated options-only algorithm controller. It is PAPER by default and
     # session activation is deliberately never persisted.
     "options_algo_enabled": False,
@@ -244,6 +245,7 @@ class SettingsStore:
             "execution_duplicate_window_seconds": int(settings.get("execution_duplicate_window_seconds", current["execution_duplicate_window_seconds"])),
             "execution_require_live_data_gate": bool(settings.get("execution_require_live_data_gate", current["execution_require_live_data_gate"])),
             "real_require_shadow_eligibility": bool(settings.get("real_require_shadow_eligibility", current["real_require_shadow_eligibility"])),
+            "real_managed_exit_enabled": bool(settings.get("real_managed_exit_enabled", current["real_managed_exit_enabled"])),
             "market_pre_open_time": str(settings.get("market_pre_open_time", current["market_pre_open_time"])).strip(),
             "market_open_time": str(settings.get("market_open_time", current["market_open_time"])).strip(),
             "market_close_time": str(settings.get("market_close_time", current["market_close_time"])).strip(),

@@ -66,6 +66,23 @@ class FakeClient:
         return [{"orderid": "OID-1", "status": "complete"}]
 
 
+class ManagedClient(FakeClient):
+    def __init__(self):
+        self.orders = [{"orderid": "OID-1", "status": "complete", "averageprice": 100, "filledshares": 25}]
+        self.positions = [{"symboltoken": "123", "tradingsymbol": "NIFTY26SEP25000CE", "netqty": 25}]
+        self.exit_requests = []
+
+    def get_order_book(self):
+        return list(self.orders)
+
+    def get_positions(self):
+        return list(self.positions)
+
+    def place_market_order(self, order):
+        self.exit_requests.append(order)
+        return {"order_id": "EXIT-1"}
+
+
 class UncertainClient:
     def place_limit_order(self, _order):
         raise RuntimeError("network timeout")
@@ -183,7 +200,8 @@ def test_uncertain_submission_stays_duplicate_blocked(monkeypatch):
 def test_execution_audit_schema_is_upgrade_safe(tmp_path):
     database = Database(tmp_path / "test.db")
     columns = {row["name"] for row in database.cursor.execute("PRAGMA table_info(execution_audit)")}
-    assert {"fingerprint", "broker_order_id", "realized_pnl", "status"} <= columns
+    assert {"fingerprint", "broker_order_id", "realized_pnl", "status", "target_price", "stop_price",
+            "product_type", "expiry_date", "exit_order_id", "managed_state", "overnight_state"} <= columns
     database.connection.close()
 
 
@@ -196,6 +214,75 @@ def test_paper_plan_is_saved_without_broker_connection():
     assert database.rows[0]["status"] == "PAPER_PLAN"
     assert database.rows[0]["target_price"] == 120.0
     assert database.rows[0]["stop_price"] == 90.0
+
+
+def test_real_filled_carry_reconciles_position_then_trails_and_exits(monkeypatch, tmp_path):
+    database = Database(tmp_path / "real-managed.db")
+    settings = FakeSettings()
+    settings.values.update({"real_managed_exit_enabled": True, "paper_overnight_gap_hold_enabled": True,
+                            "market_pre_open_time": "09:00", "market_open_time": "09:15",
+                            "market_close_time": "15:30", "news_risk_pause": False})
+    client = ManagedClient()
+    live = type("ManagedLive", (), {"broker_id": "angel_one", "client": client,
+                                     "connected": classmethod(lambda cls: True)})
+    request = order(trading_symbol="NIFTY26SEP25000CE", product_type="CARRYFORWARD", target_price=140, stop_price=80,
+                    time_exit="15:20", expiry_date="2026-09-24")
+    audit_id = database.create_execution_audit(request.__dict__, "managed-fp", "COMPLETE")
+    database.update_execution_audit(audit_id, "COMPLETE", "OID-1", "entry filled")
+    database.update_execution_fill(audit_id, status="COMPLETE", average_fill_price=100, filled_quantity=25)
+    database.save_gap_probability_forecast({
+        "forecast_date": "2026-09-03", "target_date": "2026-09-04",
+        "generated_at": "2026-09-03T15:40:00+05:30", "symbol": "NIFTY",
+        "stage": "3:40 CLOSE CONFIRMATION", "predicted_class": "GAP UP",
+        "gap_up_probability": 58, "flat_probability": 25, "gap_down_probability": 17,
+        "confidence": 68, "data_quality": 90, "prior_close": 25000, "inputs": {}, "evidence": [],
+    })
+    service = ExecutionService(database, settings, live)
+    monkeypatch.setattr("services.execution_service.MarketDataHub.quote", lambda *args, **kwargs: {"bid": 110})
+    assert service.monitor_real_positions(datetime(2026, 9, 3, 15, 22)) == []
+    self_row = database.get_execution_audit(audit_id)
+    assert self_row["overnight_state"] == "HELD"
+
+    monkeypatch.setattr("services.execution_service.MarketDataHub.quote", lambda *args, **kwargs: {"bid": 150})
+    assert service.monitor_real_positions(datetime(2026, 9, 4, 9, 16)) == []
+    trailed = database.get_execution_audit(audit_id)
+    assert trailed["overnight_state"] == "REVALIDATED"
+    assert trailed["target_price"] > 150
+    assert trailed["stop_price"] == 140
+
+    monkeypatch.setattr("services.execution_service.MarketDataHub.quote", lambda *args, **kwargs: {"bid": 139})
+    events = service.monitor_real_positions(datetime(2026, 9, 4, 9, 17))
+    assert events[0]["outcome"] == "REAL STOP HIT EXIT SUBMITTED"
+    assert database.get_execution_audit(audit_id)["status"] == "EXIT_SUBMITTED"
+    assert client.exit_requests[0]["side"] == "SELL"
+    client.orders.append({"orderid": "EXIT-1", "status": "complete", "averageprice": 138, "filledshares": 25})
+    client.positions[0]["netqty"] = 0
+    confirmed = service.monitor_real_positions(datetime(2026, 9, 4, 9, 18))
+    assert confirmed[0]["outcome"] == "REAL EXIT FILL CONFIRMED"
+    final = database.get_execution_audit(audit_id)
+    assert final["status"] == "REAL_CLOSED"
+    assert final["realized_pnl"] == 950
+    database.close()
+
+
+def test_real_manager_never_exits_on_broker_position_mismatch(monkeypatch, tmp_path):
+    database = Database(tmp_path / "real-mismatch.db")
+    settings = FakeSettings()
+    settings.values["real_managed_exit_enabled"] = True
+    client = ManagedClient()
+    client.positions[0]["netqty"] = 10
+    live = type("ManagedLive", (), {"broker_id": "angel_one", "client": client,
+                                     "connected": classmethod(lambda cls: True)})
+    request = order(target_price=105, stop_price=95, expiry_date="2026-09-24")
+    audit_id = database.create_execution_audit(request.__dict__, "mismatch-fp", "COMPLETE")
+    database.update_execution_audit(audit_id, "COMPLETE", "OID-1", "entry filled")
+    database.update_execution_fill(audit_id, status="COMPLETE", average_fill_price=100, filled_quantity=25)
+    monkeypatch.setattr("services.execution_service.MarketDataHub.quote", lambda *args, **kwargs: {"bid": 90})
+    assert ExecutionService(database, settings, live).monitor_real_positions(datetime(2026, 9, 3, 12, 0)) == []
+    row = database.get_execution_audit(audit_id)
+    assert row["managed_state"] == "POSITION_MISMATCH"
+    assert client.exit_requests == []
+    database.close()
 
 
 @pytest.mark.parametrize(

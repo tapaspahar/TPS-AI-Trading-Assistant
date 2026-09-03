@@ -24,6 +24,7 @@ class OrderRequest:
     time_exit: str = ""
     exits_managed_externally: bool = False
     managed_risk_amount: float = 0.0
+    expiry_date: str = ""
 
 
 class ExecutionService:
@@ -239,3 +240,177 @@ class ExecutionService:
         return {"checked": len(pending), "updated": updated, "unresolved": unresolved,
                 "reconciliation_complete": not unresolved and len(updated) == len(pending),
                 "automatic_real_unlocked": False}
+
+    @staticmethod
+    def _number(row, *keys):
+        for key in keys:
+            if row.get(key) not in (None, ""):
+                try:
+                    return float(row[key])
+                except (TypeError, ValueError):
+                    pass
+        return None
+
+    def monitor_real_positions(self, now=None) -> list[dict]:
+        """Manage already-filled REAL entries from broker truth; never infer a position."""
+        settings = self.settings_store.load()
+        if not settings.get("real_managed_exit_enabled", True):
+            return []
+        if not self.live_session.connected() or self.live_session.broker_id != "angel_one":
+            return []
+        now = now or datetime.now(IST)
+        now = now.astimezone(IST) if now.tzinfo else now.replace(tzinfo=IST)
+        audits = list(self.database.get_managed_execution_audits())
+        if not audits:
+            return []
+        try:
+            order_book = list(self.live_session.client.get_order_book())
+            positions = list(self.live_session.client.get_positions())
+        except Exception as error:
+            for audit in audits:
+                self.database.update_execution_management(
+                    int(audit["id"]), managed_state="BROKER_DATA_GAP",
+                    message=f"Managed REAL lifecycle paused; broker order/position reconciliation unavailable: {error}",
+                )
+            return []
+        order_by_id = {str(row.get("orderid") or row.get("orderId") or ""): row for row in order_book}
+        completed = {"COMPLETE", "COMPLETED", "FILLED", "TRADED"}
+        failed = {"REJECTED", "CANCELLED", "CANCELED"}
+        events = []
+        for audit in audits:
+            audit_id = int(audit["id"])
+            if str(audit["status"]).upper() == "EXIT_SUBMITTED":
+                exit_row = order_by_id.get(str(audit["exit_order_id"] or ""))
+                exit_status = str((exit_row or {}).get("status") or (exit_row or {}).get("orderstatus") or "UNKNOWN").upper()
+                if exit_status in completed:
+                    exit_fill = self._number(exit_row or {}, "averageprice", "averagePrice", "avgPrice")
+                    exit_position = next((row for row in positions if
+                                         str(row.get("symboltoken") or row.get("symbolToken") or "") == str(audit["symbol_token"])
+                                         or str(row.get("tradingsymbol") or row.get("tradingSymbol") or "").upper()
+                                         == str(audit["trading_symbol"]).upper()), None)
+                    exit_net = self._number(exit_position or {}, "netqty", "netQty", "netQuantity", "net_quantity")
+                    if exit_fill and audit["average_fill_price"] and exit_net == 0:
+                        sign = 1 if str(audit["side"]).upper() == "BUY" else -1
+                        pnl = (exit_fill - float(audit["average_fill_price"])) * int(audit["filled_quantity"] or audit["quantity"]) * sign
+                        self.database.update_execution_management(
+                            audit_id, status="REAL_CLOSED", managed_state="EXIT_FILL_CONFIRMED",
+                            exit_average_fill_price=exit_fill, realized_pnl=round(pnl, 2),
+                            message=f"Broker exit fill confirmed at {exit_fill:.2f}; realized gross P&L ₹{pnl:,.2f}.",
+                        )
+                        events.append({"audit_id": audit_id, "symbol": audit["trading_symbol"],
+                                       "outcome": "REAL EXIT FILL CONFIRMED", "ltp": exit_fill})
+                    else:
+                        self.database.update_execution_management(
+                            audit_id, managed_state="EXIT_RECONCILIATION_PENDING",
+                            message=f"Exit order reports {exit_status}, but fill price/net-zero broker position is not confirmed (net {exit_net}).",
+                        )
+                elif exit_status in failed:
+                    self.database.update_execution_management(
+                        audit_id, status="EXIT_ATTENTION_REQUIRED", managed_state="EXIT_REJECTED",
+                        message=f"Broker exit order {audit['exit_order_id']} is {exit_status}; position remains unverified. Manual broker action required.",
+                    )
+                continue
+            position = next((row for row in positions if
+                             str(row.get("symboltoken") or row.get("symbolToken") or "") == str(audit["symbol_token"])
+                             or str(row.get("tradingsymbol") or row.get("tradingSymbol") or "").upper()
+                             == str(audit["trading_symbol"]).upper()), None)
+            net_qty = self._number(position or {}, "netqty", "netQty", "netQuantity", "net_quantity")
+            expected = int(audit["filled_quantity"] or audit["quantity"])
+            expected_signed = expected if str(audit["side"]).upper() == "BUY" else -expected
+            if position is None or net_qty is None or int(net_qty) != expected_signed:
+                self.database.update_execution_management(
+                    audit_id, managed_state="POSITION_MISMATCH",
+                    message=f"Expected broker net quantity {expected_signed}; position book showed {net_qty}. No exit order sent.",
+                )
+                continue
+            try:
+                quote = MarketDataHub.quote(self.live_session.client, audit["exchange"], audit["symbol_token"],
+                                            ttl_seconds=1.0, force=True)
+                price = float(quote.get("bid") or quote.get("bestBidPrice") or quote.get("ltp") or 0)
+            except Exception as error:
+                self.database.update_execution_management(audit_id, managed_state="QUOTE_DATA_GAP", message=str(error))
+                continue
+            if price <= 0:
+                self.database.update_execution_management(audit_id, managed_state="QUOTE_DATA_GAP", message="Executable exit quote unavailable.")
+                continue
+            side = str(audit["side"]).upper()
+            target, stop = float(audit["target_price"]), float(audit["stop_price"])
+            session = market_session(now, settings)
+            if audit["overnight_state"] == "HELD":
+                if session["state"] != "OPEN":
+                    continue
+                carry = float(audit["overnight_carry_price"] or audit["average_fill_price"] or audit["limit_price"])
+                favourable = price > carry if side == "BUY" else price < carry
+                if favourable:
+                    risk = abs(float(audit["average_fill_price"] or audit["limit_price"]) - stop)
+                    gain = abs(price - carry)
+                    if side == "BUY":
+                        target = max(target, price + min(risk, gain * .35))
+                        stop = max(stop, float(audit["average_fill_price"] or audit["limit_price"]), price - min(.5 * risk, gain * .4))
+                    else:
+                        target = min(target, price - min(risk, gain * .35))
+                        stop = min(stop, float(audit["average_fill_price"] or audit["limit_price"]), price + min(.5 * risk, gain * .4))
+                    self.database.update_execution_management(
+                        audit_id, overnight_state="REVALIDATED", managed_state="REAL_OPEN_MANAGED",
+                        target_price=round(target, 2), stop_price=round(stop, 2),
+                        message=f"Fresh broker position and opening quote confirmed; target {target:.2f}, trailing stop {stop:.2f}.",
+                    )
+                else:
+                    target = price  # Force a reconciled managed exit below.
+            favourable_target = price >= target if side == "BUY" else price <= target
+            stop_hit = price <= stop if side == "BUY" else price >= stop
+            time_due = bool(audit["time_exit"]) and now.strftime("%H:%M") >= str(audit["time_exit"])
+            reason = "TARGET HIT" if favourable_target else "STOP HIT" if stop_hit else "TIME EXIT" if time_due else ""
+            if time_due and not (favourable_target or stop_hit) and not audit["overnight_state"]:
+                option_type = "CE" if str(audit["trading_symbol"]).upper().endswith("CE") else "PE" if str(audit["trading_symbol"]).upper().endswith("PE") else ""
+                wanted = "GAP UP" if option_type == "CE" and side == "BUY" else "GAP DOWN" if option_type == "PE" and side == "BUY" else ""
+                forecast = self.database.cursor.execute(
+                    """SELECT * FROM gap_probability_forecasts WHERE forecast_date=? AND target_date>? AND symbol=?
+                       AND stage IN ('3:20 ACTIONABLE','3:40 CLOSE CONFIRMATION')
+                       ORDER BY CASE stage WHEN '3:40 CLOSE CONFIRMATION' THEN 0 ELSE 1 END, generated_at DESC LIMIT 1""",
+                    (now.date().isoformat(), now.date().isoformat(),
+                     "BANKNIFTY" if "BANKNIFTY" in str(audit["trading_symbol"]).upper() else
+                     "SENSEX" if "SENSEX" in str(audit["trading_symbol"]).upper() else "NIFTY"),
+                ).fetchone()
+                probability = float(forecast["gap_up_probability"] if wanted == "GAP UP" else forecast["gap_down_probability"]) if forecast and wanted else 0
+                other = max(float(forecast["flat_probability"]), float(forecast["gap_down_probability"] if wanted == "GAP UP" else forecast["gap_up_probability"])) if forecast and wanted else 100
+                try:
+                    expiry_valid = datetime.fromisoformat(str(audit["expiry_date"] or "")[:10]).date() >= datetime.fromisoformat(str(forecast["target_date"])).date() if forecast else False
+                except ValueError:
+                    expiry_valid = False
+                qualifies = (str(audit["product_type"]).upper() == "CARRYFORWARD" and expiry_valid and forecast
+                             and str(forecast["predicted_class"]).upper() == wanted and probability >= 45
+                             and probability - other >= 5 and int(forecast["confidence"]) >= 55
+                             and int(forecast["data_quality"]) >= 70 and not settings.get("news_risk_pause", False))
+                if qualifies:
+                    self.database.update_execution_management(
+                        audit_id, overnight_state="HELD", overnight_target_date=forecast["target_date"],
+                        overnight_forecast_id=int(forecast["id"]), overnight_carry_price=price,
+                        managed_state="OVERNIGHT_BROKER_POSITION_CONFIRMED",
+                        message=f"REAL carry retained after broker-position reconciliation; {wanted} {probability:.1f}%.",
+                    )
+                    continue
+            if not reason:
+                self.database.update_execution_management(audit_id, status="REAL_OPEN", managed_state="REAL_OPEN_MANAGED")
+                continue
+            try:
+                result = self.live_session.client.place_market_order({
+                    "exchange": audit["exchange"], "symbol_token": audit["symbol_token"],
+                    "trading_symbol": audit["trading_symbol"], "side": "SELL" if side == "BUY" else "BUY",
+                    "quantity": expected, "product_type": audit["product_type"],
+                })
+                exit_id = str(result.get("order_id") or "")
+                if not exit_id:
+                    raise RuntimeError("Broker exit response did not include an order ID")
+                self.database.update_execution_management(
+                    audit_id, status="EXIT_SUBMITTED", managed_state="EXIT_FILL_PENDING", exit_order_id=exit_id,
+                    message=f"{reason}; broker exit {exit_id} submitted. Fill not assumed.",
+                )
+                events.append({"audit_id": audit_id, "symbol": audit["trading_symbol"],
+                               "outcome": f"REAL {reason} EXIT SUBMITTED", "ltp": price})
+            except Exception as error:
+                self.database.update_execution_management(
+                    audit_id, status="EXIT_ATTENTION_REQUIRED", managed_state="EXIT_SUBMISSION_UNKNOWN",
+                    message=f"{reason}; exit submission failed/unknown: {error}. Verify broker immediately.",
+                )
+        return events

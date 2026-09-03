@@ -41,12 +41,15 @@ class ExecutionControlPage(QWidget):
         self.enabled.setChecked(bool(values.get("real_execution_enabled", False)))
         self.pilot_enabled = QCheckBox("Enable Limited REAL Pilot Mode (session still requires activation)")
         self.pilot_enabled.setChecked(bool(values.get("limited_real_pilot_enabled", False)))
+        self.managed_exits = QCheckBox("Monitor filled REAL positions and submit target/stop/time exits")
+        self.managed_exits.setChecked(bool(values.get("real_managed_exit_enabled", True)))
         self.max_orders = QSpinBox(); self.max_orders.setRange(1, 20); self.max_orders.setValue(int(values.get("execution_max_orders_per_day", 3)))
         self.max_quantity = QSpinBox(); self.max_quantity.setRange(1, 10000); self.max_quantity.setValue(int(values.get("execution_max_quantity", 65)))
         self.max_value = QDoubleSpinBox(); self.max_value.setRange(1, 10_000_000); self.max_value.setDecimals(2); self.max_value.setValue(float(values.get("execution_max_order_value", 25000)))
         self.max_loss = QDoubleSpinBox(); self.max_loss.setRange(1, 10_000_000); self.max_loss.setDecimals(2); self.max_loss.setValue(float(values.get("execution_max_daily_loss", 1000)))
         save_limits = QPushButton("Save Execution Safety Limits"); save_limits.clicked.connect(self.save_limits)
-        limits.addRow(self.enabled); limits.addRow(self.pilot_enabled); limits.addRow("Maximum submitted orders/day", self.max_orders)
+        limits.addRow(self.enabled); limits.addRow(self.pilot_enabled); limits.addRow(self.managed_exits)
+        limits.addRow("Maximum submitted orders/day", self.max_orders)
         limits.addRow("Maximum quantity/order", self.max_quantity); limits.addRow("Maximum order value (₹)", self.max_value)
         limits.addRow("Recorded realized-loss lock (₹)", self.max_loss); limits.addRow(save_limits)
         loss_note = QLabel(
@@ -81,6 +84,7 @@ class ExecutionControlPage(QWidget):
         self._candidate_legs = []
         self.exchange = QComboBox(); self.exchange.addItems(("NFO", "BFO", "NSE", "BSE"))
         self.token = QLineEdit(); self.symbol = QLineEdit()
+        self.expiry = QLineEdit(); self.expiry.setPlaceholderText("YYYY-MM-DD; required for overnight options")
         self.side = QComboBox(); self.side.addItems(("BUY", "SELL"))
         self.quantity = QSpinBox(); self.quantity.setRange(1, 10000)
         self.price = QDoubleSpinBox(); self.price.setRange(0.05, 10_000_000); self.price.setDecimals(2)
@@ -100,6 +104,7 @@ class ExecutionControlPage(QWidget):
         form.addRow("Transferred candidate", self.candidate_source)
         form.addRow("Strategy leg", self.leg_selector)
         for label, widget in (("Exchange", self.exchange), ("Symbol token", self.token), ("Trading symbol", self.symbol),
+                              ("Expiry", self.expiry),
                               ("Side", self.side), ("Quantity", self.quantity), ("Limit price", self.price),
                               ("Product", self.product), ("Target type", self.target_basis), ("Target value", self.target_value),
                               ("Stop type", self.stop_basis), ("Stop value", self.stop_value), ("Time exit", self.time_exit)):
@@ -118,6 +123,7 @@ class ExecutionControlPage(QWidget):
         values.update({
             "real_execution_enabled": self.enabled.isChecked(),
             "limited_real_pilot_enabled": self.pilot_enabled.isChecked(),
+            "real_managed_exit_enabled": self.managed_exits.isChecked(),
             "execution_max_orders_per_day": self.max_orders.value(),
             "execution_max_quantity": self.max_quantity.value(),
             "execution_max_order_value": self.max_value.value(),
@@ -180,7 +186,8 @@ class ExecutionControlPage(QWidget):
         stop = ExecutionService.exit_price(self.price.value(), self.side.currentText(), self.stop_basis.currentData(), self.stop_value.value(), "STOP")
         return OrderRequest(self.exchange.currentText(), self.token.text().strip(), self.symbol.text().strip().upper(),
                             self.side.currentText(), self.quantity.value(), self.price.value(), self.product.currentText(),
-                            target, stop, self.time_exit.text().strip() if self.time_exit_enabled.isChecked() else "")
+                            target, stop, self.time_exit.text().strip() if self.time_exit_enabled.isChecked() else "",
+                            expiry_date=self.expiry.text().strip())
 
     def _refresh_mode_label(self):
         mode = str(self.store.load().get("execution_mode", "PAPER")).upper()
@@ -252,6 +259,7 @@ class ExecutionControlPage(QWidget):
             "quantity": max(1, int(float(leg.get("quantity") or 1))),
             "price": float(leg.get("price") or leg.get("entry") or 0),
             "target": float(leg.get("target") or 0), "stop": float(leg.get("stop") or 0),
+            "expiry": str(leg.get("expiry") or leg.get("expiry_date") or ""),
         }
 
     def _load_selected_leg(self, index):
@@ -267,6 +275,7 @@ class ExecutionControlPage(QWidget):
             self.target_basis.setCurrentIndex(self.target_basis.findData("PRICE")); self.target_value.setValue(leg["target"])
         if leg["stop"] > 0:
             self.stop_basis.setCurrentIndex(self.stop_basis.findData("PRICE")); self.stop_value.setValue(leg["stop"])
+        self.expiry.setText(str(leg.get("expiry") or ""))
         self.calculate_plan()
 
     def calculate_plan(self):
@@ -306,7 +315,9 @@ class ExecutionControlPage(QWidget):
         review = (f"REAL LIMIT ORDER\n{order.side} {order.quantity} {order.trading_symbol} @ ₹{order.limit_price:.2f}\n"
                   f"Planned target ₹{order.target_price:.2f} | planned stop ₹{order.stop_price:.2f}"
                   + (f" | time exit {order.time_exit}" if order.time_exit else "")
-                  + f"\nMaximum entry value: ₹{order.quantity * order.limit_price:,.2f}\n\nOnly the entry LIMIT order will be submitted. Submit to Angel One?")
+                  + f"\nMaximum entry value: ₹{order.quantity * order.limit_price:,.2f}\n\n"
+                    "Entry fill ke baad enabled managed lifecycle broker position reconcile karke target/stop/time exit submit karega. "
+                    "App/broker connection band hone par app-managed exit kaam nahi kar sakta. Submit to Angel One?")
         if QMessageBox.question(self, "Final real-order review", review, QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
             return
         try:
