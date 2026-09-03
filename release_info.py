@@ -8,9 +8,10 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.4"
-LAST_UPDATED_AT = "03-09-2026 10:40:17 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.5.4 - 03-09-2026 10:40 IST"
+LAST_UPDATED_AT = "03-09-2026 11:04:48 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.5.4 - 03-09-2026 11:04 IST"
 RELEASE_NOTES = (
+    "Expanded Auto Attempts into a page-level scrolling audit view: the attempt ledger now keeps ten rows visible with independent horizontal and vertical scrolling, while complete selected-attempt evidence remains available below it.",
     "Strengthened support/resistance evidence: chart levels remain repeated completed-candle swing zones, while option-chain walls are now concentrated multi-strike OI zones with peak share and STRONG/USABLE/DISTRIBUTED quality instead of a moving single maximum strike.",
     "Zero-OI or poor-coverage option chains can no longer manufacture support/resistance; unreliable OI proximity is a soft observation/data gap and cannot become a hard entry wall without usable chain quality.",
     "Added automatic three-index Auto Paper monitoring: every eligible completed 5-minute cycle evaluates NIFTY, BANKNIFTY and SENSEX sequentially in the background without depending on the manually selected Options Workspace index.",

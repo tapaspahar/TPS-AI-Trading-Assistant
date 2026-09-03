@@ -2,9 +2,10 @@
 import json
 from datetime import datetime
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QPlainTextEdit,
-    QPushButton, QTabBar, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QPushButton, QScrollArea, QTabBar, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from core.database_manager import Database
@@ -14,11 +15,26 @@ from ui.widgets.excel_export_dialog import open_excel_export
 
 
 class AutoAttemptReportPage(QWidget):
+    VISIBLE_ATTEMPT_ROWS = 10
+    ATTEMPT_ROW_HEIGHT = 30
+
     def __init__(self):
         super().__init__()
         self.db = Database()
         self.rows = []
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        self.scroll = QScrollArea()
+        self.scroll.setObjectName("autoAttemptReportScrollArea")
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QScrollArea.NoFrame)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        body = QWidget()
+        body.setObjectName("autoAttemptReportBody")
+        layout = QVBoxLayout(body)
+        outer.addWidget(self.scroll)
+        self.scroll.setWidget(body)
         title = QLabel("Auto Trade Attempt Report — Three-Index Accuracy Lab • Release 1.5.4")
         title.setObjectName("pageTitle")
         layout.addWidget(title)
@@ -53,15 +69,29 @@ class AutoAttemptReportPage(QWidget):
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setDefaultSectionSize(self.ATTEMPT_ROW_HEIGHT)
         self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.setWordWrap(False)
+        self.table.setVerticalScrollMode(QAbstractItemView.ScrollPerPixel)
+        self.table.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
+        self.table.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        table_height = (
+            self.table.horizontalHeader().sizeHint().height()
+            + self.VISIBLE_ATTEMPT_ROWS * self.ATTEMPT_ROW_HEIGHT
+            + self.table.horizontalScrollBar().sizeHint().height()
+            + (2 * self.table.frameWidth())
+            + 4
+        )
+        self.table.setFixedHeight(table_height)
         self.table.itemSelectionChanged.connect(self.show_selected_attempt)
-        layout.addWidget(self.table, 1)
+        layout.addWidget(self.table)
 
         layout.addWidget(QLabel("Selected attempt — complete values and reasons"))
         self.details = QPlainTextEdit()
         self.details.setReadOnly(True)
-        self.details.setMinimumHeight(240)
-        layout.addWidget(self.details, 1)
+        self.details.setMinimumHeight(280)
+        layout.addWidget(self.details)
         self.today_only = True
         self.refresh()
 
