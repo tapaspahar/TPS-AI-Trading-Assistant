@@ -11,6 +11,8 @@ SOFTWARE_UPDATE_VERSION = "v1.5.4"
 LAST_UPDATED_AT = "03-09-2026 10:40:17 IST"
 FOOTER_UPDATE_TEXT = "Software Update v1.5.4 - 03-09-2026 10:40 IST"
 RELEASE_NOTES = (
+    "Strengthened support/resistance evidence: chart levels remain repeated completed-candle swing zones, while option-chain walls are now concentrated multi-strike OI zones with peak share and STRONG/USABLE/DISTRIBUTED quality instead of a moving single maximum strike.",
+    "Zero-OI or poor-coverage option chains can no longer manufacture support/resistance; unreliable OI proximity is a soft observation/data gap and cannot become a hard entry wall without usable chain quality.",
     "Added automatic three-index Auto Paper monitoring: every eligible completed 5-minute cycle evaluates NIFTY, BANKNIFTY and SENSEX sequentially in the background without depending on the manually selected Options Workspace index.",
     "Separated Auto Attempt reporting into ALL, NIFTY, BANKNIFTY and SENSEX tabs with per-index attempts, captured/open/closed samples, measured closed-trade win rate, Wilson confidence lower bound, expectancy and validation state.",
     "A 70% accuracy goal is now treated as a measured validation target rather than a promise: fewer than 30 closed samples remain LOW SAMPLE/LEARNING, and score bands never masquerade as probability.",

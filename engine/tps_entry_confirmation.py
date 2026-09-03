@@ -85,7 +85,7 @@ def _level_evidence(structure, side):
     return {"source": source, "touches": touches, "reliable": reliable}
 
 
-def _nearby_unbroken_level(close, chart_level, oi_level, required_room, side, chart_quality):
+def _nearby_unbroken_level(close, chart_level, oi_level, required_room, side, chart_quality, oi_quality=True):
     """Separate repeated/OI walls from one-candle fallback micro-levels."""
     candidates = []
     if chart_level is not None:
@@ -93,7 +93,7 @@ def _nearby_unbroken_level(close, chart_level, oi_level, required_room, side, ch
         candidates.append(("chart", chart_level, distance, bool(chart_quality.get("reliable"))))
     if oi_level is not None:
         distance = oi_level - close if side == "CE" else close - oi_level
-        candidates.append(("OI", oi_level, distance, True))
+        candidates.append(("OI", oi_level, distance, bool(oi_quality)))
     ahead = [item for item in candidates if item[2] >= 0]
     nearest = min(ahead, key=lambda item: item[2]) if ahead else None
     hard = nearest if nearest and nearest[2] < required_room and nearest[3] else None
@@ -127,6 +127,11 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
     resistance_quality = _level_evidence(structure, "resistance")
     oi_support = float(chain["put_support"]) if chain.get("put_support") not in (None, "") else None
     oi_resistance = float(chain["call_resistance"]) if chain.get("call_resistance") not in (None, "") else None
+    put_zone = chain.get("put_support_zone") or {}
+    call_zone = chain.get("call_resistance_zone") or {}
+    chain_quality = float(chain.get("data_quality") or 0)
+    oi_support_reliable = bool(oi_support is not None and chain_quality >= 60 and put_zone.get("strength") != "DISTRIBUTED")
+    oi_resistance_reliable = bool(oi_resistance is not None and chain_quality >= 60 and call_zone.get("strength") != "DISTRIBUTED")
     pcr_oi, pcr_volume = chain.get("pcr_oi"), chain.get("pcr_volume")
     pcr_oi = float(pcr_oi) if pcr_oi is not None else None
     pcr_volume = float(pcr_volume) if pcr_volume is not None else None
@@ -308,7 +313,7 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
             extension_points = max(0.0, close - timing_reference)
             extension_atr = extension_points / atr
             nearest_evidence, hard_level, soft_level = _nearby_unbroken_level(
-                close, chart_resistance, oi_resistance, required_room, side, resistance_quality,
+                close, chart_resistance, oi_resistance, required_room, side, resistance_quality, oi_resistance_reliable,
             )
             nearest = nearest_evidence[1] if nearest_evidence else None
             room = nearest_evidence[2] if nearest_evidence else None
@@ -344,7 +349,7 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
             extension_points = max(0.0, timing_reference - close)
             extension_atr = extension_points / atr
             nearest_evidence, hard_level, soft_level = _nearby_unbroken_level(
-                close, chart_support, oi_support, required_room, side, support_quality,
+                close, chart_support, oi_support, required_room, side, support_quality, oi_support_reliable,
             )
             nearest = nearest_evidence[1] if nearest_evidence else None
             room = nearest_evidence[2] if nearest_evidence else None
@@ -481,5 +486,9 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
                   "support_gap": support_gap, "resistance_gap": resistance_gap,
                   "tolerance": zone_tolerance, "support_confluence": support_confluence,
                   "resistance_confluence": resistance_confluence,
-                  "support_quality": support_quality, "resistance_quality": resistance_quality},
+                  "support_quality": support_quality, "resistance_quality": resistance_quality,
+                  "oi_support_zone": put_zone, "oi_resistance_zone": call_zone,
+                  "oi_support_reliable": oi_support_reliable,
+                  "oi_resistance_reliable": oi_resistance_reliable,
+                  "option_chain_quality": chain_quality},
     }

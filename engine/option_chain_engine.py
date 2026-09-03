@@ -6,6 +6,24 @@ from statistics import median
 from engine.greeks_engine import calculate_greeks
 
 
+def _oi_wall(rows):
+    """Return a concentrated OI zone; zero OI is missing evidence, not a wall."""
+    usable = [row for row in rows if float(row.get("oi") or 0) > 0]
+    if not usable:
+        return None
+    peak = max(usable, key=lambda row: float(row["oi"]))
+    peak_oi = float(peak["oi"])
+    total_oi = sum(float(row["oi"]) for row in usable)
+    band = [float(row["strike"]) for row in usable if float(row["oi"]) >= peak_oi * .70]
+    share = peak_oi / total_oi * 100 if total_oi else 0.0
+    return {
+        "strike": float(peak["strike"]), "low": min(band), "high": max(band),
+        "peak_oi": peak_oi, "share_percent": round(share, 1),
+        "strength": "STRONG" if share >= 25 else "USABLE" if share >= 15 else "DISTRIBUTED",
+        "strikes_in_zone": len(band),
+    }
+
+
 def _focused_max_pain(rows):
     """Return the minimum aggregate intrinsic payout inside the quoted window."""
     strikes = sorted({float(row["strike"]) for row in rows})
@@ -63,8 +81,8 @@ def analyze_option_chain(contracts, quotes, spot=None):
     call_volume, put_volume = sum(row["volume"] for row in calls), sum(row["volume"] for row in puts)
     pcr_oi = put_oi / call_oi if call_oi else None
     pcr_volume = put_volume / call_volume if call_volume else None
-    call_wall = max(calls, key=lambda row: row["oi"], default=None)
-    put_wall = max(puts, key=lambda row: row["oi"], default=None)
+    call_wall = _oi_wall(calls)
+    put_wall = _oi_wall(puts)
     quoted = sum(1 for row in rows if row["ltp"] > 0)
     oi_covered = sum(1 for row in rows if row["oi"] > 0)
     spreads = [row["spread_percent"] for row in rows if row["spread_percent"] is not None]
@@ -108,6 +126,8 @@ def analyze_option_chain(contracts, quotes, spot=None):
         "put_volume": put_volume,
         "put_support": put_wall["strike"] if put_wall else None,
         "call_resistance": call_wall["strike"] if call_wall else None,
+        "put_support_zone": put_wall,
+        "call_resistance_zone": call_wall,
         "quoted_contracts": quoted,
         "total_contracts": len(rows),
         "atm_strike": atm_strike,

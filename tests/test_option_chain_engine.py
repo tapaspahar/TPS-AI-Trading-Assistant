@@ -23,6 +23,22 @@ class OptionChainEngineTests(unittest.TestCase):
         self.assertEqual(result["pcr_oi"], 400 / 300)
         self.assertEqual((result["call_oi"], result["put_oi"]), (300, 400))
         self.assertEqual((result["call_volume"], result["put_volume"]), (20, 40))
+        self.assertEqual(result["call_resistance_zone"]["strength"], "STRONG")
+        self.assertEqual(result["put_support_zone"]["strike"], 25000)
+
+    def test_zero_oi_does_not_create_false_support_or_resistance(self):
+        contracts = [
+            {"token": "ce", "strike": 25000, "option_type": "CE"},
+            {"token": "pe", "strike": 25000, "option_type": "PE"},
+        ]
+        result = analyze_option_chain(contracts, [
+            {"symbolToken": "ce", "opnInterest": 0, "ltp": 10},
+            {"symbolToken": "pe", "opnInterest": 0, "ltp": 11},
+        ])
+        self.assertIsNone(result["call_resistance"])
+        self.assertIsNone(result["put_support"])
+        self.assertIsNone(result["call_resistance_zone"])
+        self.assertIsNone(result["put_support_zone"])
 
     def test_aggregates_exchange_reported_change_in_oi(self):
         contracts = [

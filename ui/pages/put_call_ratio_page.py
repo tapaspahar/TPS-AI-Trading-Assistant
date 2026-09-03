@@ -203,7 +203,16 @@ class PutCallRatioPage(QWidget):
         oi_pcr = f"{chain['pcr_oi']:.2f}" if chain.get("pcr_oi") is not None else "-"
         volume_pcr = f"{chain['pcr_volume']:.2f}" if chain.get("pcr_volume") is not None else "-"
         self.cards["pcr"].set_value(f"OI {oi_pcr}\nVolume {volume_pcr}")
-        self.cards["walls"].set_value(f"Support {chain.get('put_support') or '-'}\nResistance {chain.get('call_resistance') or '-'}")
+        put_zone, call_zone = chain.get("put_support_zone") or {}, chain.get("call_resistance_zone") or {}
+        support_text = (
+            f"{put_zone['low']:,.0f}–{put_zone['high']:,.0f} {put_zone['strength']} ({put_zone['share_percent']:.1f}% peak share)"
+            if put_zone else "DATA GAP"
+        )
+        resistance_text = (
+            f"{call_zone['low']:,.0f}–{call_zone['high']:,.0f} {call_zone['strength']} ({call_zone['share_percent']:.1f}% peak share)"
+            if call_zone else "DATA GAP"
+        )
+        self.cards["walls"].set_value(f"Support {support_text}\nResistance {resistance_text}")
         self.cards["sentiment"].set_value(f"{sentiment['sentiment']}\nContext confidence {sentiment['confidence']}%")
         expected = chain.get("expected_move")
         self.cards["expected"].set_value(
