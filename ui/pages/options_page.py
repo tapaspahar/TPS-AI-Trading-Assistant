@@ -726,7 +726,8 @@ class OptionsPage(QWidget):
             alert = f" | {row['alert']} STOP WARNING" if row.get("alert") else ""
             lines.append(
                 f"{row['symbol']} LTP {row.get('ltp') or 0:.2f} | SL {row['stoploss']:.2f} | "
-                f"Target {row['target']:.2f} | MAE {row['mae']:.2f} | MFE {row['mfe']:.2f}{alert}"
+                f"Target {row['target']:.2f} | MAE {row['mae']:.2f} | MFE {row['mfe']:.2f} | "
+                f"State {row.get('overnight_state', 'INTRADAY')}{alert}"
             )
         self.details.setText("PAPER TRADE PREMIUM MONITOR (10-second quote check)\n" + "\n".join(lines))
 

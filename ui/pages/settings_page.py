@@ -219,11 +219,14 @@ class SettingsPage(QWidget):
         self.fail_closed.setChecked(values["event_feed_fail_closed"])
         self.trailing_enabled = QCheckBox("Enable premium trailing stop")
         self.trailing_enabled.setChecked(values["trailing_stop_enabled"])
+        self.overnight_gap_hold = QCheckBox("Allow evidence-qualified overnight hold (PAPER only)")
+        self.overnight_gap_hold.setChecked(values["paper_overnight_gap_hold_enabled"])
         self.trailing_trigger = QLineEdit(str(values["trailing_stop_trigger_r"]))
         self.trailing_lock = QLineEdit(str(values["trailing_stop_lock_r"]))
         self.time_exit = QLineEdit(str(values["time_exit_minutes_before_close"]))
         safety_form.addRow(self.calendar_enabled); safety_form.addRow("Calendar API key", self.calendar_key)
         safety_form.addRow(self.fail_closed); safety_form.addRow(self.trailing_enabled)
+        safety_form.addRow(self.overnight_gap_hold)
         safety_form.addRow("Trail trigger (R)", self.trailing_trigger); safety_form.addRow("Trail lock (R)", self.trailing_lock)
         safety_form.addRow("Time exit before close (minutes)", self.time_exit)
         safety_note = QLabel("Calendar source: Trading Economics API. If no key is configured, TPS clearly reports feed unavailable and uses the emergency News Risk switch; it never invents an event.")
@@ -314,6 +317,7 @@ class SettingsPage(QWidget):
                 "economic_calendar_api_key": self.calendar_key.text(), "event_feed_fail_closed": self.fail_closed.isChecked(),
                 "trailing_stop_enabled": self.trailing_enabled.isChecked(), "trailing_stop_trigger_r": self.trailing_trigger.text(),
                 "trailing_stop_lock_r": self.trailing_lock.text(), "time_exit_minutes_before_close": self.time_exit.text(),
+                "paper_overnight_gap_hold_enabled": self.overnight_gap_hold.isChecked(),
                 "theme": self.theme.currentData(),
                 "ui_style": self.ui_style.currentData(),
                 "broker_provider": self.broker_provider.currentData(),

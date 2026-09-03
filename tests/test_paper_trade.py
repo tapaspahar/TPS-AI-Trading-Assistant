@@ -74,6 +74,54 @@ class PaperTradeTests(unittest.TestCase):
             self.assertEqual(closed[0]["outcome"], "TIME EXIT")
             db.close()
 
+    def test_matching_high_quality_gap_forecast_defers_time_exit_and_trails_next_open(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db = Database(Path(directory) / "paper.db")
+            trade_id = db.save_paper_trade(self.plan())
+            db.save_gap_probability_forecast({
+                "forecast_date": "2026-08-10", "target_date": "2026-08-11",
+                "generated_at": "2026-08-10T15:40:00+05:30", "symbol": "NIFTY",
+                "stage": "3:40 CLOSE CONFIRMATION", "predicted_class": "GAP UP",
+                "gap_up_probability": 58, "flat_probability": 25, "gap_down_probability": 17,
+                "confidence": 68, "data_quality": 90, "prior_close": 25000,
+                "inputs": {}, "evidence": ["test evidence"],
+            })
+            settings = {"paper_overnight_gap_hold_enabled": True, "time_exit_minutes_before_close": 10,
+                        "market_pre_open_time": "09:00", "market_open_time": "09:15", "market_close_time": "15:30"}
+            self.assertEqual(db.monitor_paper_trades(QuoteClient(108), settings, datetime(2026, 8, 10, 15, 22)), [])
+            held = db.get_paper_trade_monitoring()[0]
+            self.assertEqual(held["overnight_state"], "HELD")
+            self.assertEqual(db.monitor_paper_trades(QuoteClient(150), settings, datetime(2026, 8, 11, 9, 5)), [])
+            self.assertEqual(db.get_paper_trade_monitoring()[0]["overnight_state"], "HELD")
+            self.assertEqual(db.monitor_paper_trades(QuoteClient(150), settings, datetime(2026, 8, 11, 9, 16)), [])
+            revalidated = db.get_paper_trade_monitoring()[0]
+            self.assertEqual(revalidated["overnight_state"], "REVALIDATED")
+            self.assertGreater(revalidated["target"], 150)
+            self.assertEqual(revalidated["stoploss"], 140)
+            closed = db.monitor_paper_trades(QuoteClient(139), settings, datetime(2026, 8, 11, 9, 17))
+            self.assertEqual(closed[0]["outcome"], "TRAILING STOP HIT")
+            self.assertEqual(db.get_trade(trade_id)["status"], "CLOSED")
+            db.close()
+
+    def test_weak_or_opposite_gap_forecast_does_not_bypass_time_exit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db = Database(Path(directory) / "paper.db")
+            db.save_paper_trade(self.plan())
+            db.save_gap_probability_forecast({
+                "forecast_date": "2026-08-10", "target_date": "2026-08-11",
+                "generated_at": "2026-08-10T15:40:00+05:30", "symbol": "NIFTY",
+                "stage": "3:40 CLOSE CONFIRMATION", "predicted_class": "GAP DOWN",
+                "gap_up_probability": 20, "flat_probability": 25, "gap_down_probability": 55,
+                "confidence": 68, "data_quality": 90, "prior_close": 25000,
+                "inputs": {}, "evidence": [],
+            })
+            closed = db.monitor_paper_trades(
+                QuoteClient(108), {"paper_overnight_gap_hold_enabled": True, "time_exit_minutes_before_close": 10},
+                datetime(2026, 8, 10, 15, 22),
+            )
+            self.assertEqual(closed[0]["outcome"], "TIME EXIT")
+            db.close()
+
     def test_half_r_move_arms_breakeven_before_full_trailing_trigger(self):
         with tempfile.TemporaryDirectory() as directory:
             db = Database(Path(directory) / "paper.db")

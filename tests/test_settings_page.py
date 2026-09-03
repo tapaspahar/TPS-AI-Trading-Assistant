@@ -28,6 +28,7 @@ class SettingsPageTests(unittest.TestCase):
         self.assertEqual(page.tps_match_mode.currentData(), "adaptive")
         self.assertIn("Adaptive", page.tps_match_mode.currentText())
         self.assertEqual(page.market_pre_open.time().toString("HH:mm"), "09:00")
+        self.assertTrue(page.overnight_gap_hold.isChecked())
 
         page.tps_match_mode.setCurrentIndex(page.tps_match_mode.findData("all"))
         page.market_close.setTime(page.market_close.time().fromString("16:00", "HH:mm"))
@@ -35,6 +36,7 @@ class SettingsPageTests(unittest.TestCase):
             page.save()
         self.assertEqual(store.save.call_args.args[0]["tps_match_mode"], "all")
         self.assertEqual(store.save.call_args.args[0]["market_close_time"], "16:00")
+        self.assertTrue(store.save.call_args.args[0]["paper_overnight_gap_hold_enabled"])
         page.close()
 
 

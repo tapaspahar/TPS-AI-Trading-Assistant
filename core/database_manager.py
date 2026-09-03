@@ -177,7 +177,10 @@ class Database:
         for name, definition in (("last_ltp", "REAL"), ("min_ltp", "REAL"), ("max_ltp", "REAL"), ("last_alert_level", "TEXT"),
                                  ("initial_stoploss", "REAL"), ("trailing_stoploss", "REAL"), ("plan_json", "TEXT"),
                                  ("entry_lateness_seconds", "INTEGER"), ("premium_spread_percent", "REAL"),
-                                 ("initial_atr", "REAL"), ("mae", "REAL"), ("mfe", "REAL")):
+                                 ("initial_atr", "REAL"), ("mae", "REAL"), ("mfe", "REAL"),
+                                 ("overnight_state", "TEXT"), ("overnight_target_date", "TEXT"),
+                                 ("overnight_forecast_id", "INTEGER"), ("overnight_carry_ltp", "REAL"),
+                                 ("overnight_revalidated_at", "TEXT")):
             if name not in paper_columns:
                 self.cursor.execute(f"ALTER TABLE paper_trade_links ADD COLUMN {name} {definition}")
         self.cursor.execute(
@@ -1585,7 +1588,7 @@ class Database:
 
     def monitor_paper_trades(self, client, settings=None, now=None) -> list[dict]:
         """Close simulated trades on a verified option quote only; no order API is used."""
-        from core.market_session import IST, parse_session_times
+        from core.market_session import IST, market_session, parse_session_times
         from datetime import timedelta
 
         settings = settings or {}
@@ -1593,10 +1596,57 @@ class Database:
         now = now.astimezone(IST) if now.tzinfo else now.replace(tzinfo=IST)
         rows = self.cursor.execute(
             """SELECT t.*, p.exchange, p.token, p.contract_symbol, p.last_ltp, p.min_ltp, p.max_ltp,
-                      p.last_alert_level, p.initial_stoploss, p.trailing_stoploss, p.plan_json FROM trades t
+                      p.last_alert_level, p.initial_stoploss, p.trailing_stoploss, p.plan_json,
+                      p.overnight_state, p.overnight_target_date, p.overnight_forecast_id,
+                      p.overnight_carry_ltp, p.overnight_revalidated_at FROM trades t
                JOIN paper_trade_links p ON p.trade_id = t.id WHERE t.status = 'OPEN'"""
         ).fetchall()
         closed = []
+
+        def hold_for_gap_forecast(row, carry_ltp: float) -> bool:
+            """Keep a PAPER option overnight only on strong, matching saved evidence."""
+            if (not settings.get("paper_overnight_gap_hold_enabled", True)
+                    or settings.get("news_risk_pause", False) or row["overnight_state"]):
+                return False
+            option_type = str(row["option_type"] or "").upper()
+            wanted = "GAP UP" if option_type == "CE" else "GAP DOWN" if option_type == "PE" else ""
+            if not wanted:
+                return False
+            forecast = self.cursor.execute(
+                """SELECT * FROM gap_probability_forecasts
+                   WHERE forecast_date=? AND target_date>? AND symbol=? AND stage IN ('3:20 ACTIONABLE', '3:40 CLOSE CONFIRMATION')
+                   ORDER BY CASE stage WHEN '3:40 CLOSE CONFIRMATION' THEN 0 ELSE 1 END, generated_at DESC LIMIT 1""",
+                (now.date().isoformat(), now.date().isoformat(), str(row["symbol"]).upper()),
+            ).fetchone()
+            if not forecast or str(forecast["predicted_class"]).upper() != wanted:
+                return False
+            probability = float(forecast["gap_up_probability"] if wanted == "GAP UP" else forecast["gap_down_probability"])
+            alternatives = [float(forecast["flat_probability"]),
+                            float(forecast["gap_down_probability"] if wanted == "GAP UP" else forecast["gap_up_probability"])]
+            if (int(forecast["confidence"]) < 55 or int(forecast["data_quality"]) < 70
+                    or probability < 45 or probability - max(alternatives) < 5):
+                return False
+            try:
+                expiry = datetime.fromisoformat(str(row["expiry"])[:10]).date()
+                target_day = datetime.fromisoformat(str(forecast["target_date"])).date()
+            except ValueError:
+                return False
+            if expiry < target_day or carry_ltp <= float(row["trailing_stoploss"] or row["stoploss"]):
+                return False
+            self.cursor.execute(
+                """UPDATE paper_trade_links SET overnight_state='HELD', overnight_target_date=?,
+                          overnight_forecast_id=?, overnight_carry_ltp=? WHERE trade_id=?""",
+                (forecast["target_date"], int(forecast["id"]), carry_ltp, int(row["id"])),
+            )
+            self.cursor.execute(
+                "INSERT OR IGNORE INTO trade_alerts (trade_id, created_at, alert_type, title, message) VALUES (?, ?, ?, ?, ?)",
+                (int(row["id"]), datetime.now().isoformat(timespec="seconds"), "OVERNIGHT_GAP_HOLD",
+                 "Paper time exit deferred for gap study",
+                 f"{row['contract_symbol']} held in PAPER only for {forecast['target_date']}: {wanted} "
+                 f"{probability:.1f}%, confidence {forecast['confidence']}%, data quality {forecast['data_quality']}%. "
+                 "Next regular-market open must confirm through a fresh executable option quote."),
+            )
+            return True
 
         def close_on_last_verified_at_time_exit(row, reason: str) -> bool:
             """Use a previously verified premium only for the mandatory paper time exit."""
@@ -1604,7 +1654,7 @@ class Database:
             exit_window = settings.get("time_exit_minutes_before_close")
             time_exit = exit_window is not None and now >= close_at - timedelta(minutes=int(exit_window))
             last_ltp = float(row["last_ltp"] or 0)
-            if not time_exit or last_ltp <= 0 or not self.close_trade(int(row["id"]), last_ltp, "TIME EXIT"):
+            if not time_exit or last_ltp <= 0 or hold_for_gap_forecast(row, last_ltp) or not self.close_trade(int(row["id"]), last_ltp, "TIME EXIT"):
                 return False
             created_at = datetime.now().isoformat(timespec="seconds")
             self.cursor.execute(
@@ -1621,6 +1671,14 @@ class Database:
             return True
 
         for row in rows:
+            session = market_session(now, settings)
+            if row["overnight_state"] == "HELD":
+                try:
+                    target_day = datetime.fromisoformat(str(row["overnight_target_date"])).date()
+                except ValueError:
+                    target_day = now.date()
+                if now.date() < target_day or session["state"] in {"BEFORE_OPEN", "PRE_OPEN", "WEEKEND", "HOLIDAY", "CLOSED"}:
+                    continue
             try:
                 from services.market_data_hub import MarketDataHub
                 quote = MarketDataHub.quote(client, row["exchange"], row["token"], ttl_seconds=1.0, force=True)
@@ -1643,6 +1701,31 @@ class Database:
             risk = max(float(row["entry"]) - initial_stop, 0.000001)
             entry = float(row["entry"])
             target = float(row["target"])
+            if row["overnight_state"] == "HELD":
+                carry_ltp = float(row["overnight_carry_ltp"] or row["last_ltp"] or entry)
+                if ltp <= carry_ltp:
+                    if self.close_trade(int(row["id"]), ltp, "OVERNIGHT GAP EXIT"):
+                        closed.append({"trade_id": int(row["id"]), "symbol": row["contract_symbol"],
+                                       "ltp": ltp, "outcome": "OVERNIGHT GAP EXIT"})
+                    continue
+                overnight_gain = ltp - carry_ltp
+                # A favourable actual opening extends the PAPER objective only modestly;
+                # most of the observed gap is protected by a non-loosening trailing stop.
+                target = max(target, ltp + min(risk, overnight_gain * .35))
+                active_stop = max(active_stop, entry, ltp - min(.50 * risk, overnight_gain * .40))
+                self.cursor.execute("UPDATE trades SET target=? WHERE id=?", (round(target, 2), int(row["id"])))
+                self.cursor.execute(
+                    """UPDATE paper_trade_links SET overnight_state='REVALIDATED', overnight_revalidated_at=?,
+                              trailing_stoploss=? WHERE trade_id=?""",
+                    (now.isoformat(timespec="seconds"), round(active_stop, 2), int(row["id"])),
+                )
+                self.cursor.execute(
+                    "INSERT OR IGNORE INTO trade_alerts (trade_id, created_at, alert_type, title, message) VALUES (?, ?, ?, ?, ?)",
+                    (int(row["id"]), datetime.now().isoformat(timespec="seconds"), "OVERNIGHT_OPEN_REVALIDATED",
+                     "Overnight paper carry revalidated",
+                     f"Fresh opening premium {ltp:.2f} confirmed the carry; target adjusted to {target:.2f} and "
+                     f"trailing stop raised to {active_stop:.2f}. Stop was not loosened."),
+                )
             if settings.get("trailing_stop_enabled", True):
                 # Capital-protection ladder based only on already-observed
                 # option premiums (no target fabrication or look-ahead).
@@ -1681,7 +1764,8 @@ class Database:
             exit_window = settings.get("time_exit_minutes_before_close")
             time_exit = exit_window is not None and now >= close_at - timedelta(minutes=int(exit_window))
             stop_outcome = "TRAILING STOP HIT" if active_stop > initial_stop else "STOP LOSS HIT"
-            outcome = "TARGET HIT" if ltp >= float(row["target"]) else stop_outcome if ltp <= active_stop else "TIME EXIT" if time_exit else None
+            carry = time_exit and hold_for_gap_forecast(row, ltp)
+            outcome = "TARGET HIT" if ltp >= target else stop_outcome if ltp <= active_stop else "TIME EXIT" if time_exit and not carry else None
             if outcome and self.close_trade(int(row["id"]), ltp, outcome):
                 closed.append({"trade_id": int(row["id"]), "symbol": row["contract_symbol"], "ltp": ltp, "outcome": outcome})
             elif not outcome:
@@ -1693,7 +1777,7 @@ class Database:
         """Return live premium, MAE/MFE and active stop-proximity alerts."""
         rows = self.cursor.execute(
             """SELECT t.id, t.entry, t.stoploss, t.target, p.contract_symbol, p.last_ltp,
-                      p.min_ltp, p.max_ltp, p.last_alert_level, p.trailing_stoploss
+                      p.min_ltp, p.max_ltp, p.last_alert_level, p.trailing_stoploss, p.overnight_state
                FROM trades t JOIN paper_trade_links p ON p.trade_id = t.id
                WHERE t.status = 'OPEN' ORDER BY t.id DESC"""
         ).fetchall()
@@ -1703,6 +1787,7 @@ class Database:
             "mfe": round(float(row["max_ltp"]) - float(row["entry"]), 2) if row["max_ltp"] is not None else 0,
             "alert": row["last_alert_level"], "stoploss": float(row["trailing_stoploss"] or row["stoploss"]),
             "initial_stoploss": float(row["stoploss"]), "target": float(row["target"]),
+            "overnight_state": row["overnight_state"] or "INTRADAY",
         } for row in rows]
 
     def paper_trade_progress(self, trade_date: str | None = None) -> dict:
@@ -1775,8 +1860,8 @@ class Database:
         if exit_price <= 0:
             raise ValueError("Enter an actual exit price greater than zero.")
         outcome = str(outcome).upper()
-        if outcome not in {"TARGET HIT", "STOP LOSS HIT", "MANUAL EXIT", "TIME EXIT", "TRAILING STOP HIT"}:
-            raise ValueError("Choose Target Hit, Stop Loss Hit, Time Exit, Trailing Stop Hit, or Manual Exit.")
+        if outcome not in {"TARGET HIT", "STOP LOSS HIT", "MANUAL EXIT", "TIME EXIT", "TRAILING STOP HIT", "OVERNIGHT GAP EXIT"}:
+            raise ValueError("Choose Target Hit, Stop Loss Hit, Time Exit, Trailing Stop Hit, Overnight Gap Exit, or Manual Exit.")
         row = self.cursor.execute("SELECT entry, stoploss, target, quantity, status FROM trades WHERE id = ?", (int(trade_id),)).fetchone()
         if not row:
             return False

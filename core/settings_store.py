@@ -73,6 +73,9 @@ DEFAULT_SETTINGS = {
     "trailing_stop_trigger_r": 1.0,
     "trailing_stop_lock_r": 0.25,
     "time_exit_minutes_before_close": 10,
+    # PAPER-only overnight research. A saved matching gap forecast may defer
+    # time exit; target/stop are revalidated from a fresh next-session quote.
+    "paper_overnight_gap_hold_enabled": True,
     "theme": "dark",
     "ui_style": "glassmorphism",
     "broker_provider": "angel_one",
@@ -283,6 +286,7 @@ class SettingsStore:
             "trailing_stop_trigger_r": float(settings.get("trailing_stop_trigger_r", current["trailing_stop_trigger_r"])),
             "trailing_stop_lock_r": float(settings.get("trailing_stop_lock_r", current["trailing_stop_lock_r"])),
             "time_exit_minutes_before_close": int(settings.get("time_exit_minutes_before_close", current["time_exit_minutes_before_close"])),
+            "paper_overnight_gap_hold_enabled": bool(settings.get("paper_overnight_gap_hold_enabled", current["paper_overnight_gap_hold_enabled"])),
             "theme": str(settings.get("theme", current["theme"])).lower(),
             "ui_style": str(settings.get("ui_style", current["ui_style"])).lower(),
             "broker_provider": str(settings.get("broker_provider", current["broker_provider"])).lower(),
