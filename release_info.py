@@ -8,9 +8,11 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.4"
-LAST_UPDATED_AT = "03-09-2026 11:22:29 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.5.4 - 03-09-2026 11:22 IST"
+LAST_UPDATED_AT = "03-09-2026 11:38:45 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.5.4 - 03-09-2026 11:38 IST"
 RELEASE_NOTES = (
+    "Added Index Component Breadth: NIFTY, BANKNIFTY and SENSEX constituent quotes are captured in broker-rate-conscious batches every five minutes, with green/red/flat counts, 80% coverage protection and a 2-of-3 combined market verdict timestamped to the latest snapshot.",
+    "Component breadth is retained as independent chart/OI confirmation rather than an automatic trade permission; incomplete constituent coverage is explicitly DATA GAP so a partial heat-map cannot manufacture bullish or bearish confidence.",
     "Extended the gap-qualified lifecycle to safeguarded REAL positions: target, stop, time exit, product type and expiry now survive restart; every action reconciles the broker entry fill and exact net position before monitoring or submitting an opposite-side exit.",
     "REAL overnight carry requires CARRYFORWARD, a non-expired contract, matching protected gap evidence and broker-confirmed quantity; the next open can tighten target/trailing protection from a fresh executable quote, while position mismatch, data gaps and uncertain exits fail closed without automatic duplicate retries.",
     "Added PAPER-only gap-supported overnight carry: a normal time exit may be deferred only when a protected saved next-session forecast matches CE/PE direction, clears confidence/data-quality/lead thresholds and the option remains valid beyond the target session.",

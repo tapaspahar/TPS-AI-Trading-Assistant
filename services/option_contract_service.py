@@ -332,5 +332,18 @@ class OptionContractService:
             raise RuntimeError(f"No active {underlying} stock-option contracts were found.")
         return contracts
 
+    def get_cash_instruments(self, symbols):
+        """Resolve requested NSE cash components from the daily broker master."""
+        rows = self._load_master()
+        wanted = {str(symbol).upper().replace("-EQ", "") for symbol in symbols}
+        result = {}
+        for row in rows:
+            symbol = str(row.get("symbol") or "").upper()
+            name = str(row.get("name") or "").upper()
+            key = symbol[:-3] if symbol.endswith("-EQ") else name
+            if str(row.get("exch_seg") or "").upper() == "NSE" and symbol.endswith("-EQ") and key in wanted:
+                result[key] = {"symbol": symbol, "token": str(row.get("token") or ""), "exchange": "NSE"}
+        return result
+
     def get_stock_front_month_future(self, underlying):
         return parse_stock_front_month_future(self._load_master(), underlying)

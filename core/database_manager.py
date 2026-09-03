@@ -268,6 +268,16 @@ class Database:
                 self.cursor.execute(f"ALTER TABLE index_candle_analyses ADD COLUMN {column} REAL")
         self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_index_candle_day ON index_candle_analyses(trade_date, candle_time)")
         self.cursor.execute(
+            """CREATE TABLE IF NOT EXISTS index_component_breadth (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, captured_at TEXT NOT NULL, trade_date TEXT NOT NULL,
+                symbol TEXT NOT NULL, state TEXT NOT NULL, positive INTEGER NOT NULL, negative INTEGER NOT NULL,
+                flat INTEGER NOT NULL, observed INTEGER NOT NULL, expected INTEGER NOT NULL,
+                positive_pct REAL NOT NULL, negative_pct REAL NOT NULL, coverage INTEGER NOT NULL,
+                details_json TEXT NOT NULL, UNIQUE(symbol, captured_at)
+            )"""
+        )
+        self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_component_breadth_day ON index_component_breadth(trade_date, captured_at DESC)")
+        self.cursor.execute(
             """CREATE TABLE IF NOT EXISTS index_daily_analyses (
                 trade_date TEXT PRIMARY KEY, generated_at TEXT NOT NULL,
                 market_state TEXT NOT NULL, source_completeness INTEGER NOT NULL,
@@ -2115,6 +2125,30 @@ class Database:
         )
         self.connection.commit()
         return result.rowcount == 1
+
+    def save_index_component_breadth(self, result: dict) -> bool:
+        captured = str(result["captured_at"])
+        try:
+            trade_date = datetime.fromisoformat(captured).strftime("%d-%m-%Y")
+        except ValueError:
+            trade_date = datetime.now().strftime("%d-%m-%Y")
+        saved = self.cursor.execute(
+            """INSERT OR IGNORE INTO index_component_breadth
+               (captured_at,trade_date,symbol,state,positive,negative,flat,observed,expected,
+                positive_pct,negative_pct,coverage,details_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (captured, trade_date, result["symbol"], result["state"], int(result["positive"]),
+             int(result["negative"]), int(result["flat"]), int(result["observed"]), int(result["expected"]),
+             float(result["positive_pct"]), float(result["negative_pct"]), int(result["coverage"]),
+             json.dumps(result, ensure_ascii=False, default=str)),
+        ).rowcount > 0
+        self.connection.commit()
+        return saved
+
+    def get_index_component_breadth(self, trade_date: str, limit: int = 300):
+        return self.cursor.execute(
+            "SELECT * FROM index_component_breadth WHERE trade_date=? ORDER BY captured_at DESC, symbol LIMIT ?",
+            (trade_date, max(1, min(int(limit), 3000))),
+        ).fetchall()
 
     def save_index_candle_analysis(self, analysis: dict) -> bool:
         columns = (

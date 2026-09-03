@@ -114,6 +114,7 @@ class WorkspaceConsolidationTests(unittest.TestCase):
             self.screen.marketCenter: (
                 "Market Snapshot", "Index Candle Analysis", "Equity Research",
                 "Signal Intelligence", "CAS Analysis", "Trend Memory", "Smart Options Memory", "Gap Probability",
+                "Component Breadth",
             ),
             self.screen.tradingCenter: (
                 "Options Workspace", "Option Strategies", "Strategy Trades",
