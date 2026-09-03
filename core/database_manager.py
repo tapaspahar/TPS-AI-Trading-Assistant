@@ -636,6 +636,24 @@ class Database:
             "CREATE INDEX IF NOT EXISTS idx_broker_telemetry_time ON broker_request_telemetry(provider, completed_at DESC)"
         )
         self.cursor.execute(
+            """CREATE TABLE IF NOT EXISTS nse_eod_imports (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, imported_at TEXT NOT NULL,
+                source_file TEXT NOT NULL, segment TEXT NOT NULL, trade_date TEXT,
+                status TEXT NOT NULL, row_count INTEGER NOT NULL, matched_rows INTEGER NOT NULL DEFAULT 0,
+                sha256 TEXT NOT NULL UNIQUE, details_json TEXT NOT NULL
+            )"""
+        )
+        self.cursor.execute(
+            """CREATE TABLE IF NOT EXISTS nse_eod_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT, import_id INTEGER NOT NULL,
+                segment TEXT NOT NULL, trade_date TEXT, symbol TEXT, expiry TEXT,
+                strike REAL, option_type TEXT, open REAL, high REAL, low REAL, close REAL,
+                volume REAL, open_interest REAL, raw_json TEXT NOT NULL,
+                FOREIGN KEY(import_id) REFERENCES nse_eod_imports(id)
+            )"""
+        )
+        self.cursor.execute("CREATE INDEX IF NOT EXISTS idx_nse_eod_lookup ON nse_eod_records(trade_date,segment,symbol)")
+        self.cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS counterfactual_reviews (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1175,6 +1193,33 @@ class Database:
         )
         self.connection.commit()
         return int(self.cursor.lastrowid)
+
+    def save_nse_eod_import(self, summary: dict, records: list[dict]) -> int:
+        self.cursor.execute(
+            """INSERT INTO nse_eod_imports
+               (imported_at,source_file,segment,trade_date,status,row_count,matched_rows,sha256,details_json)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (summary["imported_at"], summary["source_file"], summary["segment"], summary.get("trade_date"),
+             summary["status"], len(records), int(summary.get("matched_rows", 0)), summary["sha256"],
+             json.dumps(summary, ensure_ascii=False, default=str)),
+        )
+        import_id = int(self.cursor.lastrowid)
+        self.cursor.executemany(
+            """INSERT INTO nse_eod_records
+               (import_id,segment,trade_date,symbol,expiry,strike,option_type,open,high,low,close,volume,open_interest,raw_json)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            [(import_id, summary["segment"], row.get("trade_date"), row.get("symbol"), row.get("expiry"),
+              row.get("strike"), row.get("option_type"), row.get("open"), row.get("high"), row.get("low"),
+              row.get("close"), row.get("volume"), row.get("open_interest"),
+              json.dumps(row.get("raw") or {}, ensure_ascii=False, default=str)) for row in records],
+        )
+        self.connection.commit()
+        return import_id
+
+    def get_nse_eod_imports(self, limit: int = 30):
+        return self.cursor.execute(
+            "SELECT * FROM nse_eod_imports ORDER BY imported_at DESC LIMIT ?", (max(1, min(int(limit), 500)),)
+        ).fetchall()
 
     def get_broker_health(self, provider: str | None = None, limit: int = 500) -> dict:
         where, values = "", []

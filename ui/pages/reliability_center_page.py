@@ -1,7 +1,8 @@
 from datetime import datetime
+from pathlib import Path
 
 from PySide6.QtWidgets import (
-    QGridLayout, QLabel, QPushButton, QScrollArea, QTableWidget, QTableWidgetItem,
+    QFileDialog, QGridLayout, QLabel, QMessageBox, QPushButton, QScrollArea, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
 )
 
@@ -10,6 +11,7 @@ from core.market_session import IST, market_session
 from core.settings_store import SettingsStore
 from services.live_session import LiveSession
 from services.market_data_hub import MarketDataHub
+from services.nse_eod_import_service import NseEodImportService
 from services.reliability_intelligence import (
     automatic_counterfactual_replay, broker_freshness, data_quality_gate, execution_quality,
     score_calibration, shadow_eligibility, strategy_matrix, strategy_portfolio_risk, trade_timeline,
@@ -42,6 +44,12 @@ class ReliabilityCenterPage(QWidget):
         for i, card in enumerate(self.cards.values()): grid.addWidget(card, i // 2, i % 2)
         layout.addLayout(grid)
         refresh = QPushButton("Refresh Complete Reliability Audit"); refresh.clicked.connect(self.refresh); layout.addWidget(refresh)
+        layout.addWidget(QLabel("Official NSE After-Market Reconciliation — uploaded report is BACKFILLED, never LIVE"))
+        nse_note = QLabel("NSE All Reports se CM-UDiFF Common Bhavcopy Final ya F&O-UDiFF Common Bhavcopy Final ZIP/CSV download karke yahan upload karein. Ye closing OHLC, volume aur OI audit karega; missing intraday candles ko invent nahi karega.")
+        nse_note.setWordWrap(True); layout.addWidget(nse_note)
+        upload = QPushButton("Upload Official NSE Bhavcopy ZIP / CSV"); upload.clicked.connect(self.import_nse_reports); layout.addWidget(upload)
+        self.nse_imports = self._table(("Imported at", "File", "Segment", "Trade date", "Status", "Rows"), 170)
+        layout.addWidget(self.nse_imports)
 
         layout.addWidget(QLabel("Trade Decision Timeline — WATCH → READY → ENTRY/CAPTURE"))
         self.timeline = self._table(("Time", "Candle", "Index", "Side", "Stage", "Score", "Outcome", "Primary reason", "Delay"), 260)
@@ -90,8 +98,8 @@ class ReliabilityCenterPage(QWidget):
         self.cards["execution"].set_value(f"Verified fills {quality['verified_fills']}/{quality['real_submissions']}\nFill coverage {quality['fill_coverage']:.1f}% | Slippage {quality['slippage_status']}")
         self.cards["missed"].set_value(f"{len(missed)} replay candidate(s) today\nSafety locks remain active")
         self.cards["freshness"].set_value(
-            f"{freshness['status']}\nFresh {freshness['fresh_success']}/{freshness['timestamped_success']} | "
-            f"p95 {freshness['p95_latency_ms'] or 0} ms"
+            f"{MarketDataHub.source_status()['state']} / {freshness['status']}\nFresh {freshness['fresh_success']}/{freshness['timestamped_success']} | "
+            f"p95 {freshness['p95_latency_ms'] or 0} ms | active {MarketDataHub.source_status()['inflight']}"
         )
         self.cards["portfolio"].set_value(
             f"{portfolio['concentration_status']}\n{portfolio['variants']} variants | "
@@ -102,3 +110,16 @@ class ReliabilityCenterPage(QWidget):
         self._fill(self.matrix, [(x['strategy'], x['family'], x['regime'], x['samples'], x['independent_days'], f"{x['win_rate']:.1f}%", f"{x['lower_bound']:.1f}%", f"₹{x['expectancy']:,.2f}", x['profit_factor'], f"₹{x['drawdown']:,.2f}", x['tier']) for x in strategy_matrix(self.db)])
         self._fill(self.calibration, [(x['band'], x['samples'], x['wins'], f"{x['win_rate']:.1f}%", f"{x['wilson_lower_bound']:.1f}%", f"₹{x['expectancy']:,.2f}", x['confidence']) for x in score_calibration(self.db)])
         self._fill(self.portfolio, [(x['family'], x['bias'], x['variants'], x['closed'], f"₹{x['combined_pnl']:,.2f}", f"₹{x['maximum_defined_loss']:,.2f}", f"₹{x['capital_required']:,.2f}", f"{x['metrics']['win_rate']:.1f}%", f"₹{x['metrics']['expectancy']:,.2f}") for x in portfolio['groups']])
+        self._fill(self.nse_imports, [(x["imported_at"], x["source_file"], x["segment"], x["trade_date"], x["status"], x["row_count"]) for x in self.db.get_nse_eod_imports()])
+
+    def import_nse_reports(self):
+        paths, _ = QFileDialog.getOpenFileNames(self, "Select official NSE reports", "", "NSE reports (*.zip *.csv);;All files (*)")
+        if not paths: return
+        imported, errors = [], []
+        for path in paths:
+            try: imported.append(NseEodImportService(self.db).import_file(path))
+            except Exception as error: errors.append(f"{Path(path).name}: {error}")
+        self.refresh()
+        message = f"{len(imported)} report(s) BACKFILLED evidence ke roop me import hui."
+        if errors: message += "\n\n" + "\n".join(errors)
+        QMessageBox.information(self, "NSE report import", message)

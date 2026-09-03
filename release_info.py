@@ -8,9 +8,11 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.4"
-LAST_UPDATED_AT = "03-09-2026 11:38:45 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.5.4 - 03-09-2026 11:38 IST"
+LAST_UPDATED_AT = "03-09-2026 11:43:50 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.5.4 - 03-09-2026 11:43 IST"
 RELEASE_NOTES = (
+    "Added an official NSE after-market import workflow in Reliability Cockpit: CM/FO UDiFF Bhavcopy ZIP or CSV files are hash-deduplicated, normalized and retained as BACKFILLED closing OHLC/volume/OI evidence without pretending to replace missing live intraday candles.",
+    "Added explicit Market Data Hub watermarks LIVE, DELAYED, STALE and MISSING with active-request visibility; test/mock provider telemetry is now rejected before it can contaminate the production reliability database.",
     "Added Index Component Breadth: NIFTY, BANKNIFTY and SENSEX constituent quotes are captured in broker-rate-conscious batches every five minutes, with green/red/flat counts, 80% coverage protection and a 2-of-3 combined market verdict timestamped to the latest snapshot.",
     "Component breadth is retained as independent chart/OI confirmation rather than an automatic trade permission; incomplete constituent coverage is explicitly DATA GAP so a partial heat-map cannot manufacture bullish or bearish confidence.",
     "Extended the gap-qualified lifecycle to safeguarded REAL positions: target, stop, time exit, product type and expiry now survive restart; every action reconciles the broker entry fill and exact net position before monitoring or submitting an opposite-side exit.",

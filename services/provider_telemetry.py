@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import os
 from time import monotonic
 
 from core.database_manager import Database
@@ -14,6 +15,10 @@ def start_request() -> tuple[float, str]:
 def record_request(provider: str, operation: str, started: tuple[float, str], *,
                    outcome: str, attempt_count: int = 1, cache_hit: bool = False,
                    data_timestamp=None, error_code=None, details: dict | None = None):
+    # Pytest exposes this marker while a test is running. Test doubles and
+    # mocks must never contaminate the operator's production reliability DB.
+    if os.environ.get("PYTEST_CURRENT_TEST") or "mock" in str(provider).lower():
+        return
     completed = datetime.now().astimezone()
     age = None
     if data_timestamp:

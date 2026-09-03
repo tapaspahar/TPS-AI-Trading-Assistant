@@ -109,10 +109,29 @@ class MarketDataHub:
         with cls._lock:
             result = dict(cls._metrics)
             result["cached_snapshots"] = len(cls._cache)
+            ages = [max(0.0, monotonic() - item["saved"]) for item in cls._cache.values()]
+            result["oldest_cache_age_seconds"] = round(max(ages), 1) if ages else None
+            result["inflight_requests"] = len(cls._inflight)
         requests = int(result["requests"])
         result["hit_rate"] = round(100.0 * int(result["hits"]) / requests, 1) if requests else 0.0
         result["state"] = "DEGRADED" if result["last_error"] else "READY" if result["last_success_at"] else "WAITING"
         return result
+
+    @classmethod
+    def source_status(cls, live_seconds=15, delayed_seconds=60):
+        """Operator-facing source watermark; it never upgrades stale evidence."""
+        health = cls.health()
+        stamp = health.get("last_success_at")
+        if not stamp:
+            state, age = "MISSING", None
+        else:
+            try:
+                age = max(0.0, (datetime.now() - datetime.fromisoformat(str(stamp)).replace(tzinfo=None)).total_seconds())
+            except (TypeError, ValueError):
+                age = None
+            state = "LIVE" if age is not None and age <= live_seconds else "DELAYED" if age is not None and age <= delayed_seconds else "STALE"
+        return {"state": state, "age_seconds": age, "inflight": health["inflight_requests"],
+                "cached_snapshots": health["cached_snapshots"], "last_error": health.get("last_error") or ""}
 
     @classmethod
     def execution_gate(cls, max_age_seconds=15):
