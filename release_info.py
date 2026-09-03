@@ -8,9 +8,10 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.4"
-LAST_UPDATED_AT = "03-09-2026 11:43:50 IST"
-FOOTER_UPDATE_TEXT = "Software Update v1.5.4 - 03-09-2026 11:43 IST"
+LAST_UPDATED_AT = "03-09-2026 15:44:43 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.5.4 - 03-09-2026 15:44 IST"
 RELEASE_NOTES = (
+    "Fixed the live database-lock crash: schema creation and legacy migrations now run once per database per process under a shared initialization lock, SQLite waits up to 30 seconds for short concurrent writes, and timer-created workers no longer repeat the complete migration path.",
     "Added an official NSE after-market import workflow in Reliability Cockpit: CM/FO UDiFF Bhavcopy ZIP or CSV files are hash-deduplicated, normalized and retained as BACKFILLED closing OHLC/volume/OI evidence without pretending to replace missing live intraday candles.",
     "Added explicit Market Data Hub watermarks LIVE, DELAYED, STALE and MISSING with active-request visibility; test/mock provider telemetry is now rejected before it can contaminate the production reliability database.",
     "Added Index Component Breadth: NIFTY, BANKNIFTY and SENSEX constituent quotes are captured in broker-rate-conscious batches every five minutes, with green/red/flat counts, 80% coverage protection and a 2-of-3 combined market verdict timestamped to the latest snapshot.",

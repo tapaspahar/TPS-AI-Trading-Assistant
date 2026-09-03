@@ -11,8 +11,13 @@ import shutil
 from collections import Counter
 from datetime import datetime, timedelta
 from pathlib import Path
+from threading import RLock
 from engine.tps_engine import TPSEngine
 from models.trade import Trade
+
+
+_SCHEMA_LOCK = RLock()
+_INITIALIZED_DATABASES: set[str] = set()
 
 
 class Database:
@@ -26,18 +31,58 @@ class Database:
         app_data = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "TPS AI Trading Assistant"
         default_path = app_data / "tps_ai.db"
         self.db_path = Path(db_path) if db_path else default_path
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        if db_path is None and not self.db_path.exists():
-            legacy_path = Path(__file__).resolve().parents[1] / "database" / "tps_ai.db"
-            if legacy_path.exists() and legacy_path != self.db_path:
-                shutil.copy2(legacy_path, self.db_path)
-        self.connection = sqlite3.connect(self.db_path)
-        self.connection.row_factory = sqlite3.Row
-        self.cursor = self.connection.cursor()
-        self.cursor.execute("PRAGMA journal_mode=WAL")
-        self.cursor.execute("PRAGMA synchronous=NORMAL")
-        self.cursor.execute("PRAGMA busy_timeout=5000")
-        self.create_tables()
+        database_key = str(self.db_path.resolve())
+        with _SCHEMA_LOCK:
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            if db_path is None and not self.db_path.exists():
+                legacy_path = Path(__file__).resolve().parents[1] / "database" / "tps_ai.db"
+                if legacy_path.exists() and legacy_path != self.db_path:
+                    shutil.copy2(legacy_path, self.db_path)
+        # SQLite's default five-second wait is too short when several market
+        # workers finish on the same five-minute boundary.
+        with _SCHEMA_LOCK:
+            self.connection = sqlite3.connect(self.db_path, timeout=30.0)
+            self.connection.row_factory = sqlite3.Row
+            self.cursor = self.connection.cursor()
+            self.cursor.execute("PRAGMA busy_timeout=30000")
+            self.cursor.execute("PRAGMA journal_mode=WAL")
+            self.cursor.execute("PRAGMA synchronous=NORMAL")
+            # DDL and legacy migrations run once per database per process. Before
+            # this guard, every timer-created connection repeated create_tables(),
+            # competing with live trade writes and producing 'database is locked'.
+            first_initialization = database_key not in _INITIALIZED_DATABASES
+            if first_initialization:
+                self.create_tables()
+                _INITIALIZED_DATABASES.add(database_key)
+            else:
+                self._repair_legacy_candidate_labels_if_needed()
+
+    def _repair_legacy_candidate_labels_if_needed(self) -> None:
+        """Cheap idempotent repair retained without replaying all migrations."""
+        rows = self.cursor.execute(
+            "SELECT id, details_json FROM auto_trade_attempts WHERE outcome='CANDIDATE' AND trade_id IS NULL"
+        ).fetchall()
+        changed = False
+        for row in rows:
+            try:
+                details = json.loads(row["details_json"] or "{}")
+                chart = (details.get("attempt") or {}).get("chart") or {}
+                strategy = chart.get("strategy") or {}
+                qualified = bool(chart.get("trade_ready") or strategy.get("trade_ready"))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                qualified = True
+            if not qualified:
+                self.cursor.execute("UPDATE auto_trade_attempts SET outcome='STRATEGY REJECT' WHERE id=?", (int(row["id"]),))
+                changed = True
+        if changed:
+            self.connection.commit()
+        missing_evidence = self.cursor.execute(
+            """SELECT 1 FROM auto_trade_attempts
+               WHERE evidence_states_json IS NULL OR evidence_states_json IN ('', '{}') LIMIT 1"""
+        ).fetchone()
+        if missing_evidence:
+            self._backfill_attempt_evidence_states()
+            self.connection.commit()
 
     def create_tables(self) -> None:
         self.cursor.execute(
