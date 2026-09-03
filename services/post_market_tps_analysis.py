@@ -300,7 +300,7 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
     )
     replay = automatic_counterfactual_replay(database, trade_date, 10)
     calibration = score_calibration(database)
-    lines.extend(["", "8. Release 1.5.3 reliability evidence"])
+    lines.extend(["", "8. Release 1.5.4 reliability evidence"])
     lines.append(
         f"Fresh timestamped broker responses {freshness['fresh_success']}/{freshness['timestamped_success']}; "
         f"stale responses {freshness['stale_success']}; p95 latency {freshness['p95_latency_ms'] or 0} ms."

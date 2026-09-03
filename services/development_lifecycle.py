@@ -8,7 +8,7 @@ from datetime import datetime
 from core.database_manager import Database
 from release_info import VERSION
 
-BUILD_ID = "v1.5.3-20260901T1600IST"
+BUILD_ID = "v1.5.4-20260903T1040IST"
 
 IMPLEMENTED_FEATURES = {
     "evaluation_pipeline", "coverage_gap", "broker_reliability", "zero_capture_calibration",

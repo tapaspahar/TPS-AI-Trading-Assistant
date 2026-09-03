@@ -19,6 +19,14 @@ from services.option_contract_service import UNDERLYING_QUOTES, OptionContractSe
 from services.notification_service import NotificationService
 
 
+AUTO_PAPER_INDEXES = ("NIFTY", "BANKNIFTY", "SENSEX")
+
+
+def pending_auto_paper_indexes(last_buckets: dict, bucket: str) -> tuple[str, ...]:
+    """Return every index not yet audited for the completed five-minute bucket."""
+    return tuple(symbol for symbol in AUTO_PAPER_INDEXES if last_buckets.get(symbol) != bucket)
+
+
 class SessionSpinBox(QSpinBox):
     """Prevent page scrolling from accidentally changing safety settings."""
 
@@ -61,7 +69,7 @@ class OptionsPage(QWidget):
         self.auto_refresh_pending = False
         self.paper_monitoring = False
         self.auto_paper_running = False
-        self.last_auto_paper_bucket = None
+        self.last_auto_paper_buckets = {}
         self.auto_paper_resume_requested = False
         self.service = OptionContractService()
         self.db = Database()
@@ -774,17 +782,19 @@ class OptionsPage(QWidget):
             return
         bucket_start = now.replace(minute=(now.minute // 5) * 5, second=0, microsecond=0)
         bucket = bucket_start.isoformat()
+        pending_symbols = list(pending_auto_paper_indexes(self.last_auto_paper_buckets, bucket))
+        if not pending_symbols:
+            return
         audit_db = Database()
         try:
-            audit_db.reconcile_evaluation_slots(
-                self.underlying.currentText(), now, enabled=enabled, connected=connected,
-            )
             candle_time = (bucket_start - timedelta(minutes=5)).isoformat(timespec="seconds")
-            audit_db.save_evaluation_slot(
-                self.underlying.currentText(), bucket, candle_time, "HEARTBEAT", "CYCLE_STARTED",
-                {"auto_mode_enabled": enabled, "broker_connected": connected},
-                heartbeat_at=now.isoformat(timespec="seconds"),
-            )
+            for symbol in pending_symbols:
+                audit_db.reconcile_evaluation_slots(symbol, now, enabled=enabled, connected=connected)
+                audit_db.save_evaluation_slot(
+                    symbol, bucket, candle_time, "HEARTBEAT", "CYCLE_STARTED",
+                    {"auto_mode_enabled": enabled, "broker_connected": connected, "universe": list(AUTO_PAPER_INDEXES)},
+                    heartbeat_at=now.isoformat(timespec="seconds"),
+                )
         finally:
             audit_db.close()
         if not connected:
@@ -793,42 +803,42 @@ class OptionsPage(QWidget):
                 "Cutie reconnection ke baad next completed candle par resume karegi."
             )
             return
-        if bucket == self.last_auto_paper_bucket:
-            return
         self.auto_paper_running = True
         settings = SettingsStore().load()
         mode = "adaptive market regime" if settings["tps_match_mode"] == "adaptive" else "all selected" if settings["tps_match_mode"] == "all" else f"{settings['tps_required_matches']} matches"
         self.auto_paper_status.emit(
-            f"Checking completed 5-minute candle independently for CE and PE: {mode}, "
+            f"Checking NIFTY, BANKNIFTY and SENSEX completed candles independently for CE and PE: {mode}, "
             f"score {settings['trade_plan_min_score']}+, then hard-risk blockers..."
         )
-        args = (self.underlying.currentText(), bucket, bucket_start)
-        if not AnalysisScheduler.submit_unique("options-workspace-auto-paper", lambda: self._run_auto_paper_cycle(*args)):
+        args = (tuple(pending_symbols), bucket, bucket_start)
+        if not AnalysisScheduler.submit_unique("options-workspace-auto-paper-universe", lambda: self._run_auto_paper_universe(*args)):
             self.auto_paper_running = False
 
-    def _run_auto_paper_cycle(self, symbol, bucket, bucket_start):
+    def _run_auto_paper_universe(self, symbols, bucket, bucket_start):
         try:
-            result = run_auto_paper_cycle(LiveSession.client, symbol, SettingsStore().load())
-            self.last_auto_paper_bucket = bucket
-            self.auto_attempt_saved.emit()
-            if result.get("plan"):
-                self.auto_paper_captured.emit(result)
-            else:
-                self.auto_paper_status.emit(result)
-        except (RuntimeError, ValueError) as error:
-            candle_time = (bucket_start - timedelta(minutes=5)).isoformat()
-            result = {
-                "status": f"Cutie keh rahi hai: candle {candle_time} ka retry pending hai: {error} Main isi candle ko automatically retry karungi.",
-                "retry_pending": True,
-                "attempt": {"checked_at": datetime.now().astimezone().isoformat(timespec="seconds"), "candle_time": candle_time, "future_symbol": None, "candidate": None, "capture": {}, "chart": {}, "chain": {}, "blockers": [str(error), "Automatic retry remains pending for this candle"]},
-            }
-            database = Database()
-            try:
-                database.save_auto_trade_attempt(symbol, result)
-            finally:
-                database.close()
-            self.auto_attempt_saved.emit()
-            self.auto_paper_status.emit(result)
+            for symbol in symbols:
+                try:
+                    result = run_auto_paper_cycle(LiveSession.client, symbol, SettingsStore().load())
+                    self.last_auto_paper_buckets[symbol] = bucket
+                    self.auto_attempt_saved.emit()
+                    if result.get("plan"):
+                        self.auto_paper_captured.emit(result)
+                    else:
+                        self.auto_paper_status.emit(result)
+                except (RuntimeError, ValueError) as error:
+                    candle_time = (bucket_start - timedelta(minutes=5)).isoformat()
+                    result = {
+                        "status": f"Cutie keh rahi hai: {symbol} candle {candle_time} ka retry pending hai: {error} Main isi candle ko automatically retry karungi.",
+                        "retry_pending": True,
+                        "attempt": {"checked_at": datetime.now().astimezone().isoformat(timespec="seconds"), "candle_time": candle_time, "future_symbol": None, "candidate": None, "capture": {}, "chart": {}, "chain": {}, "blockers": [str(error), "Automatic retry remains pending for this candle"]},
+                    }
+                    database = Database()
+                    try:
+                        database.save_auto_trade_attempt(symbol, result)
+                    finally:
+                        database.close()
+                    self.auto_attempt_saved.emit()
+                    self.auto_paper_status.emit(result)
         finally:
             self.auto_paper_running = False
 

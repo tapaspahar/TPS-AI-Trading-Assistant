@@ -1,16 +1,19 @@
 """Application release metadata kept in one place."""
 
 APP_NAME = "TPS AI Trading Assistant"
-VERSION = "1.5.3"
-DISPLAY_VERSION = "Release 1.5.3"
-RELEASE_DATE = "01-09-2026"
+VERSION = "1.5.4"
+DISPLAY_VERSION = "Release 1.5.4"
+RELEASE_DATE = "03-09-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
-SOFTWARE_UPDATE_VERSION = "v1.5.3"
-LAST_UPDATED_AT = "02-09-2026 16:04:41 IST"
-FOOTER_UPDATE_TEXT = "Software Build v1.5.3 - 02-09-2026 16:04 IST"
+SOFTWARE_UPDATE_VERSION = "v1.5.4"
+LAST_UPDATED_AT = "03-09-2026 10:40:17 IST"
+FOOTER_UPDATE_TEXT = "Software Update v1.5.4 - 03-09-2026 10:40 IST"
 RELEASE_NOTES = (
+    "Added automatic three-index Auto Paper monitoring: every eligible completed 5-minute cycle evaluates NIFTY, BANKNIFTY and SENSEX sequentially in the background without depending on the manually selected Options Workspace index.",
+    "Separated Auto Attempt reporting into ALL, NIFTY, BANKNIFTY and SENSEX tabs with per-index attempts, captured/open/closed samples, measured closed-trade win rate, Wilson confidence lower bound, expectancy and validation state.",
+    "A 70% accuracy goal is now treated as a measured validation target rather than a promise: fewer than 30 closed samples remain LOW SAMPLE/LEARNING, and score bands never masquerade as probability.",
     "Added Smart Options Memory: every saved completed 5-minute index-future candle is paired with candlestick anatomy, futures-volume participation and nearby option OI/COI flow, then compared with prior-day analogs and their actual next-candle outcomes.",
     "Added Angel One Order Intelligence: read-only live order-book monitoring, current move/MFE/MAE evidence, explainable hold/protect-profit/exit-risk review states and persistent post-trade snapshots without automatic broker action.",
     "Added Release 1.5.3 reliability controls: fresh-data hard gating, one-blocker candle replay, score-band outcome calibration, correlated strategy portfolio exposure, and consistent attempt-versus-slot reporting.",

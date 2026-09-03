@@ -4,9 +4,19 @@ from unittest.mock import patch
 
 from services.auto_paper_trader import (_completed_candle_age_seconds, _completed_candles, exploratory_paper_eligibility,
                                         late_session_entry_blocker, run_auto_paper_cycle, signal_timing_stage)
+from ui.pages.options_page import AUTO_PAPER_INDEXES, pending_auto_paper_indexes
 
 
 class AutoPaperTraderTests(unittest.TestCase):
+    def test_auto_paper_universe_monitors_all_three_indexes_once_per_bucket(self):
+        self.assertEqual(AUTO_PAPER_INDEXES, ("NIFTY", "BANKNIFTY", "SENSEX"))
+        bucket = "2026-09-03T10:00:00+05:30"
+        self.assertEqual(pending_auto_paper_indexes({}, bucket), AUTO_PAPER_INDEXES)
+        self.assertEqual(
+            pending_auto_paper_indexes({"NIFTY": bucket, "SENSEX": bucket}, bucket),
+            ("BANKNIFTY",),
+        )
+
     def test_exploratory_testing_allows_two_soft_misses_with_anchors_and_volume(self):
         strategy = {
             "candidate": "CE", "trade_ready": False, "required": 6, "passed": 4,

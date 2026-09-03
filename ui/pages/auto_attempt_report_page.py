@@ -4,11 +4,12 @@ from datetime import datetime
 
 from PySide6.QtWidgets import (
     QAbstractItemView, QFileDialog, QHBoxLayout, QLabel, QMessageBox, QPlainTextEdit,
-    QPushButton, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
+    QPushButton, QTabBar, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from core.database_manager import Database
 from services.auto_attempt_report import format_auto_paper_attempt
+from services.index_accuracy import INDEX_SYMBOLS, index_accuracy_profiles
 from ui.widgets.excel_export_dialog import open_excel_export
 
 
@@ -18,7 +19,7 @@ class AutoAttemptReportPage(QWidget):
         self.db = Database()
         self.rows = []
         layout = QVBoxLayout(self)
-        title = QLabel("Auto Trade Attempt Report — permanent 5-minute candle audit")
+        title = QLabel("Auto Trade Attempt Report — Three-Index Accuracy Lab • Release 1.5.4")
         title.setObjectName("pageTitle")
         layout.addWidget(title)
         layout.addWidget(QLabel("Every saved evaluation is shown here whether a paper trade was captured, rejected, or blocked by a safety limit."))
@@ -36,7 +37,14 @@ class AutoAttemptReportPage(QWidget):
         layout.addLayout(actions)
 
         self.summary = QLabel()
+        self.summary.setWordWrap(True)
         layout.addWidget(self.summary)
+        self.index_tabs = QTabBar()
+        self.index_tabs.addTab("ALL INDEXES")
+        for symbol in INDEX_SYMBOLS:
+            self.index_tabs.addTab(symbol)
+        self.index_tabs.currentChanged.connect(lambda _index: self.refresh())
+        layout.addWidget(self.index_tabs)
         self.table = QTableWidget(0, 11)
         self.table.setHorizontalHeaderLabels((
             "Candle time", "Checked at", "Symbol", "Outcome", "Primary blocker", "Evidence coverage",
@@ -61,7 +69,9 @@ class AutoAttemptReportPage(QWidget):
         if today_only is not None:
             self.today_only = bool(today_only)
         trade_date = datetime.now().strftime("%d-%m-%Y") if self.today_only else None
-        self.rows = self.db.get_auto_trade_attempts(trade_date)
+        all_rows = self.db.get_auto_trade_attempts(trade_date, limit=5000)
+        tab = self.index_tabs.tabText(self.index_tabs.currentIndex())
+        self.rows = all_rows if tab == "ALL INDEXES" else [row for row in all_rows if str(row["symbol"]).upper() == tab]
         self.table.setRowCount(len(self.rows))
         captured = sum(row["outcome"] in ("CAPTURED", "TRADE CAPTURED") for row in self.rows)
         early_watches = sum((row["timing_stage"] or "") == "EARLY WATCH" for row in self.rows)
@@ -89,10 +99,22 @@ class AutoAttemptReportPage(QWidget):
         self.table.resizeColumnsToContents()
         scope = "today" if self.today_only else "all saved dates"
         average_delay = "-" if not measured_delays else f"{sum(measured_delays) / len(measured_delays):.0f} sec"
+        profiles = index_accuracy_profiles(self.db, trade_date)
+        selected = INDEX_SYMBOLS if tab == "ALL INDEXES" else (tab,)
+        accuracy_lines = []
+        for symbol in selected:
+            profile = profiles[symbol]
+            accuracy_lines.append(
+                f"{symbol}: {profile['attempts']} attempts | {profile['closed']} closed | "
+                f"Win {profile['win_rate']:.1f}% | 95% lower bound {profile['wilson_lower_bound']:.1f}% | "
+                f"Expectancy ₹{profile['expectancy']:,.2f} | Best observed score band {profile['best_observed_score_band']} | "
+                f"70% target: {'OBSERVED' if profile['closed'] >= 30 and profile['win_rate'] >= 70 else 'NOT PROVEN'} | {profile['confidence']}"
+            )
         self.summary.setText(
             f"Showing {len(self.rows)} attempts for {scope} | Early Watch: {early_watches} | "
             f"First Valid: {first_valid} | Captured: {captured} | Average discovery-to-valid/capture delay: {average_delay} | "
-            f"Not captured/skipped: {len(self.rows) - captured}"
+            f"Not captured/skipped: {len(self.rows) - captured}\n" + "\n".join(accuracy_lines) +
+            "\nAccuracy sirf closed paper P&L se measured hai; 30 samples aur confidence/expectancy gates se pehle guaranteed probability nahi hai."
         )
         if self.rows:
             self.table.selectRow(0)
