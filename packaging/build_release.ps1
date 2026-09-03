@@ -17,10 +17,10 @@ $BuildNow = Get-Date
 $UpdatedAt = $BuildNow.ToString("dd-MM-yyyy HH:mm:ss") + " IST"
 $FooterTime = $BuildNow.ToString("dd-MM-yyyy HH:mm") + " IST"
 $ReleaseInfoPath = Join-Path $ProjectRoot "release_info.py"
-$ReleaseInfo = Get-Content -LiteralPath $ReleaseInfoPath -Raw
+$Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+$ReleaseInfo = [System.IO.File]::ReadAllText($ReleaseInfoPath, [System.Text.Encoding]::UTF8)
 $ReleaseInfo = [regex]::Replace($ReleaseInfo, '(?m)^LAST_UPDATED_AT = .+$', 'LAST_UPDATED_AT = "' + $UpdatedAt + '"')
 $ReleaseInfo = [regex]::Replace($ReleaseInfo, '(?m)^FOOTER_UPDATE_TEXT = .+$', 'FOOTER_UPDATE_TEXT = "Software Build v' + $Version + ' - ' + $FooterTime + '"')
-$Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 [System.IO.File]::WriteAllText($ReleaseInfoPath, ($ReleaseInfo.TrimEnd() + [Environment]::NewLine), $Utf8NoBom)
 Write-Host "Release metadata stamped at $UpdatedAt"
 
