@@ -8,8 +8,8 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.5"
-LAST_UPDATED_AT = "07-09-2026 23:20:44 IST"
-FOOTER_UPDATE_TEXT = "Software Build v1.5.5 - 07-09-2026 23:20 IST"
+LAST_UPDATED_AT = "07-09-2026 23:28:17 IST"
+FOOTER_UPDATE_TEXT = "Software Build v1.5.5 - 07-09-2026 23:28 IST"
 RELEASE_NOTES = (
     "Completed the remaining AI Development diagnostics: SuperTrend-only conflicts are now identified per index as a replay queue while remaining blocked from entry until outcome evidence validates them.",
     "Fixed final-capture timing telemetry to calculate entry delay from first_valid_trigger_at; AI Development now shows timing-stage counts and measured discovery-to-valid delay instead of losing the field through a mismatched key.",
