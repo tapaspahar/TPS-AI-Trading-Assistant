@@ -19,6 +19,7 @@ class DashboardPage(QWidget):
     funds_loaded = Signal(dict)
     funds_failed = Signal(str)
     reliability_requested = Signal()
+    page_requested = Signal(int)
 
     def __init__(self):
         super().__init__()
@@ -46,6 +47,24 @@ class DashboardPage(QWidget):
         }
         for index, card in enumerate(self.cards.values()):
             grid.addWidget(card, index // 3, index % 3)
+        destinations = {
+            "market": (1, "Open Market Snapshot"),
+            "pnl": (4, "Open Trade Journal"),
+            "ai": (31, "Open AI Development Center"),
+            "win_rate": (10, "Open Backtesting"),
+            "risk": (36, "Open Broker Execution and risk controls"),
+            "trades": (4, "Open Trade Journal"),
+            "funds": (36, "Open Broker Execution and account funds"),
+            "performance": (40, "Open Reliability Cockpit"),
+            "feed": (40, "Open data freshness evidence"),
+            "validation": (40, "Open Paper Accuracy and Shadow Gate"),
+            "today": (32, "Open today's protection and validation controls"),
+            "reliability": (40, "Open Reliability Cockpit"),
+        }
+        for key, (route, tooltip) in destinations.items():
+            card = self.cards[key]
+            card.set_clickable(True, tooltip)
+            card.clicked.connect(lambda page_route=route: self.page_requested.emit(page_route))
         layout.addLayout(grid)
         refresh_button = QPushButton("Refresh Dashboard")
         refresh_button.clicked.connect(self.refresh_all)

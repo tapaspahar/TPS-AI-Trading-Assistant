@@ -219,6 +219,7 @@ class DashboardScreen(QWidget):
             self.stack.addWidget(page)
         self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
         self.dashboardPage.reliability_requested.connect(lambda: self.show_page(40))
+        self.dashboardPage.page_requested.connect(self.show_page)
         self.journalPage.trade_saved.connect(self.reportsPage.refresh)
         self.journalPage.trade_saved.connect(self.optionsPage.update_plan_readiness)
         self.optionsPage.trade_plan_ready.connect(lambda _plan: self.show_page(4))

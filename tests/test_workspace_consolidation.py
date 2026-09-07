@@ -109,6 +109,28 @@ class WorkspaceConsolidationTests(unittest.TestCase):
         self.assertEqual(self.screen.controlsCenter.tabs.currentIndex(), 4)
         self.assertTrue(self.screen.sidebar.controlsCenterButton.isChecked())
 
+    def test_dashboard_cards_jump_to_their_owning_pages(self):
+        cases = (
+            ("market", 1, 0),
+            ("pnl", 4, 0),
+            ("ai", 4, 7),
+            ("funds", 9, 1),
+            ("today", 9, 0),
+            ("reliability", 4, 8),
+        )
+        for key, stack_index, center_tab in cases:
+            with self.subTest(card=key):
+                self.screen.show_page(0)
+                self.screen.dashboardPage.cards[key].clicked.emit()
+                self.assertEqual(self.screen.stack.currentIndex(), stack_index)
+                center = {
+                    1: self.screen.marketCenter,
+                    4: self.screen.reportsCenter,
+                    9: self.screen.controlsCenter,
+                }[stack_index]
+                self.assertEqual(center.tabs.currentIndex(), center_tab)
+                self.assertTrue(self.screen.dashboardPage.cards[key].toolTip())
+
     def test_master_workspace_tabs_keep_every_page_easy_to_reach(self):
         expected = {
             self.screen.marketCenter: (

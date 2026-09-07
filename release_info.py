@@ -8,9 +8,10 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.4"
-LAST_UPDATED_AT = "03-09-2026 16:46:54 IST"
-FOOTER_UPDATE_TEXT = "Software Build v1.5.4 - 03-09-2026 16:46 IST"
+LAST_UPDATED_AT = "07-09-2026 22:35:00 IST"
+FOOTER_UPDATE_TEXT = "Software Build v1.5.4 - 07-09-2026 22:35 IST"
 RELEASE_NOTES = (
+    "Made every Dashboard summary card a direct navigation shortcut to its owning workspace, with pointer cursor, tooltip and keyboard activation for faster one-click access.",
     "Fixed the live database-lock crash: schema creation and legacy migrations now run once per database per process under a shared initialization lock, SQLite waits up to 30 seconds for short concurrent writes, and timer-created workers no longer repeat the complete migration path.",
     "Added an official NSE after-market import workflow in Reliability Cockpit: CM/FO UDiFF Bhavcopy ZIP or CSV files are hash-deduplicated, normalized and retained as BACKFILLED closing OHLC/volume/OI evidence without pretending to replace missing live intraday candles.",
     "Added explicit Market Data Hub watermarks LIVE, DELAYED, STALE and MISSING with active-request visibility; test/mock provider telemetry is now rejected before it can contaminate the production reliability database.",
