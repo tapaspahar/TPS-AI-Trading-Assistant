@@ -8,9 +8,14 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.5"
-LAST_UPDATED_AT = "07-09-2026 22:45:00 IST"
-FOOTER_UPDATE_TEXT = "Software Build v1.5.5 - 07-09-2026 22:45 IST"
+LAST_UPDATED_AT = "07-09-2026 23:20:44 IST"
+FOOTER_UPDATE_TEXT = "Software Build v1.5.5 - 07-09-2026 23:20 IST"
 RELEASE_NOTES = (
+    "Completed the remaining AI Development diagnostics: SuperTrend-only conflicts are now identified per index as a replay queue while remaining blocked from entry until outcome evidence validates them.",
+    "Fixed final-capture timing telemetry to calculate entry delay from first_valid_trigger_at; AI Development now shows timing-stage counts and measured discovery-to-valid delay instead of losing the field through a mismatched key.",
+    "Directional-volume audit codes now use the selected side's actual TRUE/FALSE/UNKNOWN evidence, separating confirmed flow, sparse provider data, low-VIX benchmark misses and opposite/weak participation.",
+    "Added chart/OI level-quality diagnostics for reliable confluence, reliable conflict, chart-only, OI-only and unreliable/missing evidence without weakening proximity safety.",
+    "Applied same-index isolation to both automatic missed-opportunity replay and manual AI Development one-blocker replay, eliminating cross-index future-path contamination in every validation surface.",
     "Started Release 1.5.5 evidence repair: three-index coverage now counts a separate expected slot for NIFTY, BANKNIFTY and SENSEX, so combined coverage can never exceed 100% by sharing one clock denominator.",
     "Fixed counterfactual replay price-scale corruption: each rejected setup now evaluates only later candles from the same index, preventing BANKNIFTY or SENSEX values from becoming impossible NIFTY MFE/MAE.",
     "Serialized outbound Market Data Hub transport calls per provider while retaining cache and identical-request coalescing, reducing Angel One overlap/busy failures without converting missing data into a PASS.",

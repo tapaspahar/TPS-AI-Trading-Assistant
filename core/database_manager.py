@@ -2323,11 +2323,19 @@ class Database:
         volume = capture.get("volume")
         volume_ratio = capture.get("volume_ratio")
         threshold = float(environment.get("volume_threshold") or 1.5)
+        directional_volume = next(
+            (item for item in (selected_side.get("confirmations") or strategy.get("confirmations") or [])
+             if item.get("name") == "Directional volume"),
+            {},
+        )
         volume_reason = (
             "MISSING_PROVIDER_VOLUME" if volume in (None, "", 0, 0.0)
-            else "LOW_VIX_STRICT_BENCHMARK" if environment.get("regime") == "LOW VOLATILITY" and float(volume_ratio or 0) < threshold
-            else "WEAK_PARTICIPATION" if float(volume_ratio or 0) < threshold
-            else "DIRECTIONAL_VOLUME_CONFIRMED"
+            else "SPARSE_PROVIDER_VOLUME" if directional_volume and not directional_volume.get("applicable", True)
+            else "DIRECTIONAL_VOLUME_CONFIRMED" if directional_volume.get("passed")
+            else "LOW_VIX_BELOW_REGIME_BENCHMARK" if environment.get("regime") == "LOW VOLATILITY"
+            else "OPPOSITE_OR_WEAK_PARTICIPATION" if directional_volume
+            else "DIRECTIONAL_VOLUME_CONFIRMED" if float(volume_ratio or 0) >= threshold
+            else "OPPOSITE_OR_WEAK_PARTICIPATION"
         )
         support_match = bool(zones.get("support_confluence"))
         resistance_match = bool(zones.get("resistance_confluence"))

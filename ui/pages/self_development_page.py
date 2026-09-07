@@ -387,6 +387,8 @@ class SelfDevelopmentPage(QWidget):
         volume = evidence["volume"]
         levels = evidence["levels"]
         outcomes = evidence["outcomes"]
+        timing = evidence.get("timing") or {}
+        supertrend = evidence.get("supertrend") or {}
         self.validation_details.setPlainText(
             "EVALUATION PIPELINE\n"
             f"Coverage: {slots['coverage_percent']:.1f}% | Evaluated {slots['evaluated_slots']} | "
@@ -398,8 +400,14 @@ class SelfDevelopmentPage(QWidget):
             f"Volume reason codes: {volume.get('reason_codes') or 'no samples'}\n"
             f"Regime split: {volume.get('regimes') or 'no samples'}\n"
             f"Level confluence: {levels.get('confluence') or 'no samples'} | "
+            f"Level quality: {levels.get('quality') or 'no samples'} | "
             f"Average distance {levels.get('average_distance_atr') or '-'} ATR | "
             f"Average age {levels.get('average_age_seconds') or '-'} sec\n\n"
+            "ENTRY TIMING / SUPERTREND REPLAY QUEUE\n"
+            f"Stages: {timing.get('stages') or 'no samples'} | "
+            f"Average discovery-to-valid delay {timing.get('average_discovery_to_valid_seconds') or '-'} sec\n"
+            f"SuperTrend-only blockers: {supertrend.get('only_blocker_by_symbol') or 'none'} | "
+            f"Strong lag candidates (still blocked): {supertrend.get('strong_lag_candidates_by_symbol') or 'none'}\n\n"
             "OUTCOME POST-MORTEM\n"
             f"Closed samples {outcomes.get('samples', 0)} | Decisive {outcomes.get('decisive_samples', 0)} | "
             f"Avg entry lateness {outcomes.get('average_entry_lateness_seconds') or '-'} sec | "

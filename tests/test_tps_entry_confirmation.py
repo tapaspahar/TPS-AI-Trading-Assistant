@@ -102,6 +102,8 @@ class TpsEntryConfirmationTests(unittest.TestCase):
         self.assertFalse(pe["trade_ready"])
         self.assertFalse(pe["directional_consensus"]["passed"])
         self.assertIn("SuperTrend confirmation", pe["directional_consensus"]["missing"])
+        self.assertTrue(pe["directional_consensus"]["supertrend_lag_candidate"])
+        self.assertTrue(any("queued for one-blocker replay" in warning for warning in pe["quality_warnings"]))
 
     @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
     @patch("engine.tps_entry_confirmation.ema", return_value=95)

@@ -71,6 +71,9 @@ class DevelopmentValidationTests(unittest.TestCase):
         self.assertEqual(health["broker"]["success_rate"], 100.0)
         self.assertEqual(evidence["volume"]["reason_codes"], {"DIRECTIONAL_VOLUME_CONFIRMED": 1})
         self.assertEqual(evidence["levels"]["confluence"], {"BOTH": 1})
+        self.assertEqual(evidence["levels"]["quality"], {"UNRELIABLE_OR_MISSING": 1})
+        self.assertEqual(evidence["timing"]["stages"], {"NONE": 1})
+        self.assertEqual(evidence["supertrend"]["only_blocker_by_symbol"], {})
         self.assertEqual(evidence["outcomes"]["samples"], 0)
 
 

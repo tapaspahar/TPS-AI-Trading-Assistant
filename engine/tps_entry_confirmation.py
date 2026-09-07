@@ -379,6 +379,16 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
                 blockers.append(f"Late PE entry: RSI {rsi:.1f} is below the {pe_min_rsi:.1f} chase limit")
             if not trigger_ok:
                 quality_warnings.append("No fresh bearish EMA/VWAP pullback-and-reversal trigger; checklist/score must qualify without it")
+        supertrend_lag_candidate = bool(
+            missing_direction == ["SuperTrend confirmation"]
+            and trigger_ok and (ce_volume_ok if side == "CE" else pe_volume_ok)
+            and not data_gaps and regular_move_available is not False
+        )
+        if supertrend_lag_candidate:
+            quality_warnings.append(
+                f"{side} chart/VWAP/EMA/fresh-volume evidence agrees but SuperTrend has not flipped; "
+                "entry remains blocked and is queued for one-blocker replay"
+            )
         checklist_matched = applicable_count > 0 and passed >= required
         score_matched = score >= minimum_score
         blockers = unique_messages(blockers)
@@ -425,6 +435,7 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
                 "passed": not missing_direction,
                 "required": sorted(direction_anchor_names),
                 "missing": missing_direction,
+                "supertrend_lag_candidate": supertrend_lag_candidate,
             },
             "data_gaps": data_gaps,
             "evidence_states": {item["name"]: item["evidence_state"] for item in common[side] if item["name"] in enabled},

@@ -23,13 +23,17 @@ def _is_safety_blocker(text: str) -> bool:
     return any(term in value for term in SAFETY_TERMS)
 
 
-def _future_path(rows: list, index: int, candidate: str, entry: float, atr: float) -> dict:
+def _future_path(rows: list, index: int, symbol: str, candidate: str, entry: float, atr: float) -> dict:
     direction = 1 if candidate == "CE" else -1
     stop = entry - direction * atr
     target = entry + direction * atr
     mfe = mae = 0.0
     target_at = stop_at = None
-    for later in rows[index + 1:index + 13]:
+    later_rows = [
+        later for later in rows[index + 1:]
+        if str(later["symbol"] or "").upper() == str(symbol or "").upper()
+    ][:12]
+    for later in later_rows:
         payload = _json(later["details_json"], {})
         capture = ((payload.get("attempt") or {}).get("capture") or {})
         high, low = capture.get("high"), capture.get("low")
@@ -128,7 +132,9 @@ def build_counterfactual_review(
                     "eligible": not remaining and entry > 0 and atr > 0,
                 }
                 if trial["eligible"]:
-                    trial["outcome"] = _future_path(rows, row_index, item["candidate"], entry, atr)
+                    trial["outcome"] = _future_path(
+                        rows, row_index, str(row["symbol"] or ""), item["candidate"], entry, atr,
+                    )
                 blocker_trials.append(trial)
     review = {
         "trade_date": trade_date, "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -180,6 +186,11 @@ def build_evidence_diagnostics(database: Database, trade_date: str) -> dict:
     volume = Counter()
     regimes = defaultdict(lambda: {"evaluations": 0, "captures": 0, "volume_failures": 0})
     level = Counter()
+    level_quality = Counter()
+    timing_stages = Counter()
+    timing_delays = []
+    supertrend_by_symbol = Counter()
+    supertrend_lag_by_symbol = Counter()
     distances = []
     ages = []
     for row in attempts:
@@ -191,6 +202,30 @@ def build_evidence_diagnostics(database: Database, trade_date: str) -> dict:
         regimes[regime]["captures"] += int(str(row["outcome"]) in {"CAPTURED", "TRADE CAPTURED"})
         regimes[regime]["volume_failures"] += int(reason != "DIRECTIONAL_VOLUME_CONFIRMED")
         level[str(row["level_confluence"] or "UNAVAILABLE")] += 1
+        timing_stages[str(row["timing_stage"] or "NONE")] += 1
+        if row["timing_delay_seconds"] is not None:
+            timing_delays.append(float(row["timing_delay_seconds"]))
+        candidate = str(row["candidate"] or "").upper()
+        side = (facts["strategy"].get("side_evaluations") or {}).get(candidate) or {}
+        consensus = side.get("directional_consensus") or {}
+        if consensus.get("missing") == ["SuperTrend confirmation"]:
+            supertrend_by_symbol[str(row["symbol"] or "UNKNOWN")] += 1
+        if consensus.get("supertrend_lag_candidate"):
+            supertrend_lag_by_symbol[str(row["symbol"] or "UNKNOWN")] += 1
+        zones = facts["strategy"].get("zones") or {}
+        chart_key = "resistance_quality" if candidate == "CE" else "support_quality"
+        oi_key = "oi_resistance_reliable" if candidate == "CE" else "oi_support_reliable"
+        chart_reliable = bool((zones.get(chart_key) or {}).get("reliable"))
+        oi_reliable = bool(zones.get(oi_key))
+        agrees = bool(zones.get("resistance_confluence" if candidate == "CE" else "support_confluence"))
+        quality = (
+            "RELIABLE_CONFLUENCE" if chart_reliable and oi_reliable and agrees
+            else "RELIABLE_CONFLICT" if chart_reliable and oi_reliable
+            else "CHART_ONLY_RELIABLE" if chart_reliable
+            else "OI_ONLY_RELIABLE" if oi_reliable
+            else "UNRELIABLE_OR_MISSING"
+        )
+        level_quality[quality] += 1
         if row["level_distance_atr"] is not None:
             distances.append(float(row["level_distance_atr"]))
         if row["level_age_seconds"] is not None:
@@ -209,8 +244,13 @@ def build_evidence_diagnostics(database: Database, trade_date: str) -> dict:
     return {
         "volume": {"reason_codes": dict(volume), "regimes": dict(regimes)},
         "levels": {"confluence": dict(level),
+                   "quality": dict(level_quality),
                    "average_distance_atr": round(sum(distances) / len(distances), 3) if distances else None,
                    "average_age_seconds": round(sum(ages) / len(ages), 1) if ages else None,
                    "maximum_age_seconds": max(ages) if ages else None},
+        "timing": {"stages": dict(timing_stages),
+                   "average_discovery_to_valid_seconds": round(sum(timing_delays) / len(timing_delays), 1) if timing_delays else None},
+        "supertrend": {"only_blocker_by_symbol": dict(supertrend_by_symbol),
+                       "strong_lag_candidates_by_symbol": dict(supertrend_lag_by_symbol)},
         "outcomes": outcomes,
     }
