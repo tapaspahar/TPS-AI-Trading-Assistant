@@ -4,7 +4,7 @@ from core.database_manager import Database
 from engine.three_pm_research_engine import evaluate_three_pm_shadow
 from services.market_data_hub import MarketDataHub
 from services.reliability_intelligence import (
-    broker_freshness, data_quality_gate, execution_quality, score_calibration,
+    automatic_counterfactual_replay, broker_freshness, data_quality_gate, execution_quality, score_calibration,
     shadow_eligibility, strategy_portfolio_risk,
 )
 
@@ -98,3 +98,32 @@ def test_score_calibration_uses_only_closed_linked_outcomes(tmp_path):
     db = Database(tmp_path / "calibration.db")
     # No linked closed paper outcomes means the score remains explicitly uncalibrated.
     assert score_calibration(db) == []
+
+
+def test_counterfactual_replay_never_mixes_index_price_scales(tmp_path):
+    db = Database(tmp_path / "index-replay.db")
+
+    def attempt(symbol, stamp, close, high, low):
+        return {
+            "status": "rejected",
+            "attempt": {
+                "checked_at": stamp, "candle_time": stamp, "candidate": "CE",
+                "outcome": "STRATEGY REJECT",
+                "capture": {"close": close, "high": high, "low": low, "atr_14": 2},
+                "chart": {"score": 100, "decision": "CE REJECTED", "strategy": {
+                    "passed": 5, "total": 5,
+                    "hard_blockers": ["CE directional consensus is incomplete: SuperTrend confirmation"],
+                }},
+            },
+        }
+
+    for symbol, close in (("NIFTY", 100), ("BANKNIFTY", 50000), ("SENSEX", 80000)):
+        db.save_auto_trade_attempt(symbol, attempt(symbol, "2026-09-01T10:00:00+05:30", close, close + 1, close - 1))
+    for symbol, close in (("NIFTY", 103), ("BANKNIFTY", 50003), ("SENSEX", 80003)):
+        db.save_auto_trade_attempt(symbol, attempt(symbol, "2026-09-01T10:05:00+05:30", close, close + 1, close - 1))
+
+    replay = automatic_counterfactual_replay(db, "01-09-2026", 20)
+    nifty = [row for row in replay if row["symbol"] == "NIFTY" and "10:00" in row["time"]]
+    assert nifty
+    assert nifty[0]["mfe_points"] < 10
+    assert nifty[0]["mae_points"] < 10

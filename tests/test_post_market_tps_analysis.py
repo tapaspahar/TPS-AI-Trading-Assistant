@@ -147,6 +147,22 @@ class PostMarketTpsAnalysisTests(unittest.TestCase):
             self.assertEqual(database.get_post_market_source_dates(), ["10-08-2026"])
             database.close()
 
+    def test_three_index_coverage_uses_index_slots_not_one_shared_clock(self):
+        with TemporaryDirectory() as directory:
+            database = Database(Path(directory) / "three-index-coverage.db")
+            stamp = "2026-08-10T09:15:00+05:30"
+            for symbol in ("NIFTY", "BANKNIFTY", "SENSEX"):
+                self.assertTrue(database.save_auto_trade_attempt(symbol, _attempt(stamp)))
+
+            analysis = generate_and_save_post_market_analysis(database, "10-08-2026")
+
+            self.assertEqual(analysis["metrics"]["expected_slots"], 225)
+            self.assertEqual(analysis["metrics"]["observed_slots"], 3)
+            self.assertEqual(analysis["metrics"]["monitored_symbols"], ["BANKNIFTY", "NIFTY", "SENSEX"])
+            self.assertLessEqual(analysis["metrics"]["coverage_percent"], 100.0)
+            self.assertIn("Index-wise 5-minute market slots", analysis["summary_text"])
+            database.close()
+
     def test_each_closed_strategy_is_written_as_a_separate_post_market_report(self):
         with TemporaryDirectory() as directory:
             database = Database(Path(directory) / "strategy-post-market.db")

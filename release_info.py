@@ -1,16 +1,21 @@
 """Application release metadata kept in one place."""
 
 APP_NAME = "TPS AI Trading Assistant"
-VERSION = "1.5.4"
-DISPLAY_VERSION = "Release 1.5.4"
-RELEASE_DATE = "03-09-2026"
+VERSION = "1.5.5"
+DISPLAY_VERSION = "Release 1.5.5"
+RELEASE_DATE = "07-09-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
-SOFTWARE_UPDATE_VERSION = "v1.5.4"
-LAST_UPDATED_AT = "07-09-2026 22:35:00 IST"
-FOOTER_UPDATE_TEXT = "Software Build v1.5.4 - 07-09-2026 22:35 IST"
+SOFTWARE_UPDATE_VERSION = "v1.5.5"
+LAST_UPDATED_AT = "07-09-2026 22:45:00 IST"
+FOOTER_UPDATE_TEXT = "Software Build v1.5.5 - 07-09-2026 22:45 IST"
 RELEASE_NOTES = (
+    "Started Release 1.5.5 evidence repair: three-index coverage now counts a separate expected slot for NIFTY, BANKNIFTY and SENSEX, so combined coverage can never exceed 100% by sharing one clock denominator.",
+    "Fixed counterfactual replay price-scale corruption: each rejected setup now evaluates only later candles from the same index, preventing BANKNIFTY or SENSEX values from becoming impossible NIFTY MFE/MAE.",
+    "Serialized outbound Market Data Hub transport calls per provider while retaining cache and identical-request coalescing, reducing Angel One overlap/busy failures without converting missing data into a PASS.",
+    "AI Development lifecycle now records PAPER FORWARD FAILED when a mature 30-sample and 20-decisive-outcome set remains below 70% target accuracy; code presence alone no longer looks like validation success.",
+    "Strategy ranking now requires evidence from at least ten independent trading sessions before any otherwise-qualified result can be labelled VALIDATED LOW-RISK.",
     "Made every Dashboard summary card a direct navigation shortcut to its owning workspace, with pointer cursor, tooltip and keyboard activation for faster one-click access.",
     "Fixed the live database-lock crash: schema creation and legacy migrations now run once per database per process under a shared initialization lock, SQLite waits up to 30 seconds for short concurrent writes, and timer-created workers no longer repeat the complete migration path.",
     "Added an official NSE after-market import workflow in Reliability Cockpit: CM/FO UDiFF Bhavcopy ZIP or CSV files are hash-deduplicated, normalized and retained as BACKFILLED closing OHLC/volume/OI evidence without pretending to replace missing live intraday candles.",

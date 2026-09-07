@@ -59,6 +59,7 @@ def build_self_development_review(database: Database, trade_date: str, now: date
         round(evaluated * 100 / int(metrics.get("expected_slots") or 0), 1)
         if int(metrics.get("expected_slots") or 0) else 0.0
     )
+    observed_slots = int(metrics.get("observed_slots") or attempts)
     best = list(metrics.get("best_attempts") or [])
     repeats = _historical_repeat_context(database, metrics)
     trades = database.get_trades_for_date(trade_date)
@@ -98,7 +99,8 @@ def build_self_development_review(database: Database, trade_date: str, now: date
         add(
             "coverage_gap", priority, "Monitoring coverage",
             "Trading-session coverage development decisions ke liye insufficient hai.",
-            f"Attempt coverage {coverage:.1f}%; successful evaluation coverage {successful_evaluation_coverage:.1f}%; "
+            f"Attempt coverage {coverage:.1f}% (index slots {observed_slots}/{int(metrics.get('expected_slots') or 0)}); "
+            f"successful evaluation coverage {successful_evaluation_coverage:.1f}%; "
             f"missing ranges: {', '.join(metrics.get('missing_ranges') or []) or 'not itemized'}.",
             "Persistent scheduler heartbeat, missed-slot backfill aur data-gap reason codes add/strengthen karein.",
             "Kam se kam 3 consecutive sessions me 95%+ coverage prove hone par resolved mark karein.",

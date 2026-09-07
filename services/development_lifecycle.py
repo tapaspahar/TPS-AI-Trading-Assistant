@@ -8,7 +8,7 @@ from datetime import datetime
 from core.database_manager import Database
 from release_info import VERSION
 
-BUILD_ID = "v1.5.4-20260903T1040IST"
+BUILD_ID = "v1.5.5-20260907T2245IST"
 
 IMPLEMENTED_FEATURES = {
     "evaluation_pipeline", "coverage_gap", "broker_reliability", "zero_capture_calibration",
@@ -37,12 +37,16 @@ def sync_feature_lifecycle(database: Database) -> dict:
         ).fetchone()
         if key in REPLAY_VALIDATED_FEATURES and int(replay_rows["n"] or 0) and lifecycle == "IMPLEMENTED IN BUILD":
             lifecycle, replay_at = "REPLAY PASSED", replay_at or now
-        if (
+        forward_sample_ready = (
             key in FORWARD_VALIDATED_FEATURES
             and int(validation.get("samples") or 0) >= 30
             and int(validation.get("target_hits") or 0) + int(validation.get("stoploss_hits") or 0) >= 20
-        ):
-            lifecycle, forward_at = "PAPER FORWARD PASSED", forward_at or now
+        )
+        if forward_sample_ready:
+            if float(validation.get("accuracy") or 0) >= 70.0:
+                lifecycle, forward_at = "PAPER FORWARD PASSED", forward_at or now
+            else:
+                lifecycle, forward_at = "PAPER FORWARD FAILED", None
         if approved_at:
             lifecycle = "APPROVED"
         old_evidence = {}

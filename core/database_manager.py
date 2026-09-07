@@ -2766,6 +2766,10 @@ class Database:
             ).fetchall()
             item.update(calibrate_outcomes([value["realized_pnl"] for value in pnl_rows]))
             item["average_pnl"] = item["expectancy"]
+            sessions = int(item.get("independent_sessions") or 0)
+            if item["validation_tier"] == "VALIDATED LOW-RISK" and sessions < 10:
+                item["validation_tier"] = "PAPER VALIDATION"
+                item["validation_reason"] = f"Need {10 - sessions} more independent trading sessions"
             result.append(item)
         tier_rank = {"VALIDATED LOW-RISK": 0, "PAPER VALIDATION": 1, "PAPER ONLY": 2,
                      "UNPROVEN": 3, "REJECTED BY EVIDENCE": 4}

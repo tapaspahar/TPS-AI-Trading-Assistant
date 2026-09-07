@@ -148,6 +148,28 @@ class EvidenceIntegrityTests(unittest.TestCase):
             finally:
                 database.close()
 
+    def test_forward_lifecycle_fails_when_mature_accuracy_is_below_target(self):
+        with tempfile.TemporaryDirectory() as folder:
+            database = Database(Path(folder) / "failed-forward.db")
+            try:
+                for index in range(30):
+                    target = index < 10
+                    database.cursor.execute(
+                        """INSERT INTO trades
+                           (trade_date,trade_time,market,symbol,entry,exit,stoploss,target,quantity,pnl,rr_ratio,
+                            trend,vwap,ema,volume,oi,confidence,ai_score,status,outcome,created_at)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                        ("01-09-2026", "10:00", "PAPER", "NIFTY", 100, 120 if target else 90,
+                         90, 120, 1, 20 if target else -10, 2, 1, 1, 1, 1, 1, 75, 75, "CLOSED",
+                         "TARGET HIT" if target else "STOP LOSS HIT", f"2026-09-01T10:{index:02d}:00"),
+                    )
+                database.connection.commit()
+                rows = sync_feature_lifecycle(database)
+                self.assertEqual(rows["outcome_quality"]["lifecycle_state"], "PAPER FORWARD FAILED")
+                self.assertIsNone(rows["outcome_quality"]["paper_forward_passed_at"])
+            finally:
+                database.close()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -104,17 +104,21 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
     score_pass = checklist_pass = both_pass = 0
     best_attempts: list[dict] = []
     attempt_audit: list[dict] = []
-    observed: set[datetime] = set()
+    observed: set[tuple[str, datetime]] = set()
+    monitored_symbols: set[str] = set()
     evidence_total = evidence_known = 0
 
     for row in attempts:
+        symbol = str(row["symbol"] or "").upper()
+        if symbol:
+            monitored_symbols.add(symbol)
         completeness = _json(row["source_completeness_json"], {})
         evidence_total += int(completeness.get("total") or 0)
         evidence_known += int(completeness.get("known") or 0)
         try:
             candle = datetime.fromisoformat(str(row["candle_time"])).replace(tzinfo=None)
             if candle.date() == day.date() and session_open <= candle.time() <= last_candle_start:
-                observed.add(candle.replace(second=0, microsecond=0))
+                observed.add((symbol, candle.replace(second=0, microsecond=0)))
         except (TypeError, ValueError):
             pass
         if row not in evaluated:
@@ -176,7 +180,13 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
         )
 
     best_attempts.sort(key=lambda item: (item["score"], item["passed"]), reverse=True)
-    expected_slots, missing_ranges = _missing_ranges(observed, day)
+    expected_per_symbol, _ = _missing_ranges(set(), day)
+    expected_slots = expected_per_symbol * len(monitored_symbols)
+    missing_ranges = []
+    for symbol in sorted(monitored_symbols):
+        symbol_observed = {stamp for saved_symbol, stamp in observed if saved_symbol == symbol}
+        _, symbol_missing = _missing_ranges(symbol_observed, day)
+        missing_ranges.extend(f"{symbol} {value}" for value in symbol_missing)
     coverage = round(len(observed) * 100 / expected_slots, 1) if expected_slots else 0.0
     retry_reasons = Counter()
     for row in retry_rows:
@@ -215,7 +225,7 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
             "",
             "2. Auto-check coverage",
             f"Total saved attempts: {len(attempts)}; complete evaluations: {len(evaluated)}; retry/skip: {len(retry_rows)}.",
-            f"5-minute market slots me {len(observed)}/{expected_slots} coverage mili ({coverage:.1f}%).",
+            f"Index-wise 5-minute market slots me {len(observed)}/{expected_slots} coverage mili ({coverage:.1f}%).",
         ]
     )
     if missing_ranges:
@@ -300,7 +310,7 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
     )
     replay = automatic_counterfactual_replay(database, trade_date, 10)
     calibration = score_calibration(database)
-    lines.extend(["", "8. Release 1.5.4 reliability evidence"])
+    lines.extend(["", "8. Release 1.5.5 reliability evidence"])
     lines.append(
         f"Fresh timestamped broker responses {freshness['fresh_success']}/{freshness['timestamped_success']}; "
         f"stale responses {freshness['stale_success']}; p95 latency {freshness['p95_latency_ms'] or 0} ms."
@@ -322,6 +332,8 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
         "retry_or_skipped": len(retry_rows),
         "expected_slots": expected_slots,
         "observed_slots": len(observed),
+        "monitored_symbols": sorted(monitored_symbols),
+        "expected_slots_per_symbol": expected_per_symbol,
         "coverage_percent": coverage,
         "missing_ranges": missing_ranges,
         "candidate_counts": dict(candidate_counts),

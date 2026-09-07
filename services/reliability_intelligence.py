@@ -233,7 +233,13 @@ def automatic_counterfactual_replay(database, trade_date: str, limit: int = 10) 
         if index is None or captures[index][3] is None:
             continue
         row, _high, _low, entry, atr = captures[index]
-        future = [value for value in captures[index + 1:index + 7] if value[1] is not None]
+        symbol = str(row["symbol"] or "").upper()
+        # Three-index attempts are interleaved. Never compare a NIFTY entry
+        # with BANKNIFTY/SENSEX prices; doing so creates impossible MFE/MAE.
+        future = [
+            value for value in captures[index + 1:]
+            if value[1] is not None and str(value[0]["symbol"] or "").upper() == symbol
+        ][:6]
         if not future or not atr:
             continue
         side = str(row["candidate"] or "").upper(); direction = 1 if side == "CE" else -1

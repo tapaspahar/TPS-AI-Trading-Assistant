@@ -17,6 +17,7 @@ class MarketDataHub:
     _lock = Lock()
     _cache = {}
     _inflight = {}
+    _provider_gates = {}
     _metrics = {
         "requests": 0, "hits": 0, "misses": 0, "failures": 0, "coalesced": 0,
         "last_success_at": None, "last_failure_at": None,
@@ -53,8 +54,19 @@ class MarketDataHub:
                     cls._metrics["hits"] += 1
                     return deepcopy(cached["value"])
             raise RuntimeError("Equivalent broker market-data request failed; automatic retry may continue")
+        provider = str(key[0])
+        with cls._lock:
+            provider_gate = cls._provider_gates.setdefault(provider, Lock())
         try:
-            value = loader()
+            # Angel One becomes unreliable when several different candle/
+            # chain keys hit it together. Serialize transport calls per
+            # provider while retaining per-key cache/coalescing above.
+            if not provider_gate.acquire(timeout=45.0):
+                raise RuntimeError(f"{provider} market-data queue is busy after 45 seconds")
+            try:
+                value = loader()
+            finally:
+                provider_gate.release()
         except Exception as error:
             with cls._lock:
                 cls._metrics["failures"] += 1
