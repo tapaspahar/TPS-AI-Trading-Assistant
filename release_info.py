@@ -8,8 +8,8 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.6"
-LAST_UPDATED_AT = "08-09-2026 18:30:00 IST"
-FOOTER_UPDATE_TEXT = "Software Build v1.5.6 - 08-09-2026 18:30 IST"
+LAST_UPDATED_AT = "08-09-2026 16:36:52 IST"
+FOOTER_UPDATE_TEXT = "Software Build v1.5.6 - 08-09-2026 16:36 IST"
 RELEASE_NOTES = (
     "Release 1.5.6 adds exact-contract local OI-delta reconstruction when broker COI is all-zero, with explicit source and coverage watermark; missing history remains DATA GAP.",
     "Added a 3/6/12 completed-candle trend-regime model so one candle or delayed SuperTrend cannot independently define the session direction.",
