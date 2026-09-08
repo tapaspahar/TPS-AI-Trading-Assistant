@@ -11,6 +11,7 @@ SOFTWARE_UPDATE_VERSION = "v1.5.5"
 LAST_UPDATED_AT = "07-09-2026 23:28:17 IST"
 FOOTER_UPDATE_TEXT = "Software Build v1.5.5 - 07-09-2026 23:28 IST"
 RELEASE_NOTES = (
+    "Fixed the Index Component Breadth startup crash when persisted database rows do not expose the nested explanation field; legacy and partial snapshots now receive a safe generated explanation.",
     "Added a PAPER-only fast-trend validation track: when completed-candle structure, VWAP/EMA direction, fresh trigger and directional volume agree, a SuperTrend-only delayed flip is sampled separately while REAL execution and all risk/data/event safeguards remain strict.",
     "Shortened Angel One candle retry backoff from 15+30 seconds to bounded 2+5 second retries so one throttled request cannot consume most of a three-index five-minute evaluation cycle.",
     "Completed the remaining AI Development diagnostics: SuperTrend-only conflicts are now identified per index as a replay queue while remaining blocked from entry until outcome evidence validates them.",

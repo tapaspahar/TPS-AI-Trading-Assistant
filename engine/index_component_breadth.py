@@ -31,5 +31,15 @@ def combine_component_breadth(results: list[dict]) -> dict:
     bullish = sum(row["state"] == "BULLISH" for row in usable)
     bearish = sum(row["state"] == "BEARISH" for row in usable)
     state = "BULLISH" if bullish >= 2 else "BEARISH" if bearish >= 2 else "MIXED" if len(usable) >= 2 else "DATA GAP"
+    explanations = []
+    for row in results:
+        explanation = str(row.get("explanation") or "").strip()
+        if not explanation:
+            symbol = str(row.get("symbol") or "INDEX")
+            row_state = str(row.get("state") or "DATA GAP")
+            observed = row.get("observed", 0)
+            expected = row.get("expected", 0)
+            explanation = f"{symbol}: breadth {row_state}; coverage {observed}/{expected}."
+        explanations.append(explanation)
     return {"state": state, "coverage": f"{len(usable)}/3",
-            "explanation": " | ".join(row["explanation"] for row in results)}
+            "explanation": " | ".join(explanations)}

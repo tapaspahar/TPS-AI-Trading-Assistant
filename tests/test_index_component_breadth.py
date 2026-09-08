@@ -26,6 +26,15 @@ class IndexComponentBreadthTests(unittest.TestCase):
         ])
         self.assertEqual(combined["state"], "BULLISH")
 
+    def test_saved_rows_without_explanation_do_not_crash_startup(self):
+        combined = combine_component_breadth([
+            {"symbol": "NIFTY", "state": "BEARISH", "observed": 50, "expected": 50},
+            {"symbol": "BANKNIFTY", "state": "BEARISH", "observed": 12, "expected": 12},
+            {"symbol": "SENSEX", "state": "DATA GAP", "observed": 20, "expected": 30},
+        ])
+        self.assertEqual(combined["state"], "BEARISH")
+        self.assertIn("NIFTY: breadth BEARISH", combined["explanation"])
+
     def test_snapshot_is_persistent_and_duplicate_safe(self):
         with tempfile.TemporaryDirectory() as folder:
             db = Database(Path(folder) / "breadth.db")
