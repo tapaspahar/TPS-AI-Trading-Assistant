@@ -79,8 +79,8 @@ class AngelOneClient:
             from SmartApi import SmartConnect
         except ImportError as error:
             raise RuntimeError("Angel One packages are not installed. Run the project requirements install.") from error
-        client = SmartConnect(api_key=self.api_key)
         self._suppress_sensitive_smartapi_logs()
+        client = SmartConnect(api_key=self.api_key)
         try:
             response = client.generateSession(self.client_code, self.pin, pyotp.TOTP(self.totp_secret).now())
         except Exception as error:

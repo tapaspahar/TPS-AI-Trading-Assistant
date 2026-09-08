@@ -6,7 +6,7 @@ def build_glass_theme(p):
 QWidget {{
     background: transparent;
     color: {p['text']};
-    font-family: "Segoe UI Variable", "Segoe UI";
+    font-family: "Segoe UI", "Nirmala UI", sans-serif;
     font-size: 9.5pt;
 }}
 QWidget#dashboardScreen {{
