@@ -161,6 +161,42 @@ def broker_freshness(database, limit: int = 500, stale_seconds: int = 300) -> di
     }
 
 
+def three_session_retry_comparison(database) -> list[dict]:
+    """Compare transport timing across the newest three recorded sessions."""
+    rows = database.cursor.execute(
+        "SELECT completed_at,outcome,duration_ms,error_code,details_json FROM broker_request_telemetry ORDER BY id DESC LIMIT 10000"
+    ).fetchall()
+    grouped = defaultdict(list)
+    for row in rows:
+        raw = str(row["completed_at"] or "")
+        try:
+            day = datetime.fromisoformat(raw).strftime("%d-%m-%Y")
+        except ValueError:
+            continue
+        grouped[day].append(row)
+    result = []
+    for day in sorted(grouped, key=lambda x: datetime.strptime(x, "%d-%m-%Y"), reverse=True)[:3]:
+        items = grouped[day]; successes = sum(str(x["outcome"]).upper() == "SUCCESS" for x in items)
+        latency = [int(x["duration_ms"] or 0) for x in items]
+        timeouts = sum(any(word in (str(x["error_code"] or "") + " " + str(x["details_json"] or "")).lower() for word in ("timeout", "busy")) for x in items)
+        result.append({"trade_date": day, "requests": len(items), "success_rate": round(100 * successes / len(items), 1),
+                       "average_latency_ms": round(sum(latency) / len(latency)), "busy_or_timeout": timeouts})
+    return result
+
+
+def fast_vs_supertrend_outcomes(database, trade_date: str | None = None) -> list[dict]:
+    """Outcome evidence by saved validation track; never treats score as accuracy."""
+    where, values = ("WHERE trade_date=?", [trade_date]) if trade_date else ("", [])
+    rows = database.cursor.execute(f"SELECT * FROM trades {where} ORDER BY id", values).fetchall()
+    grouped = defaultdict(list)
+    for row in rows:
+        setup = str(row["setup"] or "STRICT SUPERTREND").upper()
+        track = "FAST TREND" if "FAST TREND" in setup or "SUPERTREND-LAG" in setup else "STRICT SUPERTREND"
+        if str(row["status"] or "").upper() == "CLOSED":
+            grouped[track].append(float(row["pnl"] or 0))
+    return [{"track": track, **calibrate_outcomes(pnls)} for track, pnls in sorted(grouped.items())]
+
+
 def score_calibration(database, bucket_size: int = 10) -> list[dict]:
     """Observed outcome by saved score band; a score is never called probability."""
     rows = database.cursor.execute(

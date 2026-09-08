@@ -14,7 +14,8 @@ from services.market_data_hub import MarketDataHub
 from services.nse_eod_import_service import NseEodImportService
 from services.reliability_intelligence import (
     automatic_counterfactual_replay, broker_freshness, data_quality_gate, execution_quality,
-    score_calibration, shadow_eligibility, strategy_matrix, strategy_portfolio_risk, trade_timeline,
+    fast_vs_supertrend_outcomes, score_calibration, shadow_eligibility, strategy_matrix,
+    strategy_portfolio_risk, three_session_retry_comparison, trade_timeline,
 )
 from ui.widgets.cards.dashboard_card import DashboardCard
 
@@ -66,6 +67,12 @@ class ReliabilityCenterPage(QWidget):
         layout.addWidget(QLabel("Correlated Strategy Exposure — strike variants grouped by family and direction"))
         self.portfolio = self._table(("Family", "Bias", "Variants", "Closed", "Combined P&L", "Defined loss", "Capital", "Win %", "Expectancy"), 220)
         layout.addWidget(self.portfolio)
+        layout.addWidget(QLabel("Fast Trend vs Strict SuperTrend — closed outcome evidence"))
+        self.trend_tracks = self._table(("Track", "Samples", "Wins", "Win %", "95% lower", "Expectancy", "Profit factor", "Drawdown", "Validation"), 170)
+        layout.addWidget(self.trend_tracks)
+        layout.addWidget(QLabel("Newest Three Live Sessions — retry timing and transport comparison"))
+        self.retry_sessions = self._table(("Trading date", "Requests", "Success %", "Average latency", "Busy / timeout"), 170)
+        layout.addWidget(self.retry_sessions)
         scroll.setWidget(body); outer.addWidget(scroll); self.refresh()
 
     @staticmethod
@@ -110,6 +117,8 @@ class ReliabilityCenterPage(QWidget):
         self._fill(self.matrix, [(x['strategy'], x['family'], x['regime'], x['samples'], x['independent_days'], f"{x['win_rate']:.1f}%", f"{x['lower_bound']:.1f}%", f"₹{x['expectancy']:,.2f}", x['profit_factor'], f"₹{x['drawdown']:,.2f}", x['tier']) for x in strategy_matrix(self.db)])
         self._fill(self.calibration, [(x['band'], x['samples'], x['wins'], f"{x['win_rate']:.1f}%", f"{x['wilson_lower_bound']:.1f}%", f"₹{x['expectancy']:,.2f}", x['confidence']) for x in score_calibration(self.db)])
         self._fill(self.portfolio, [(x['family'], x['bias'], x['variants'], x['closed'], f"₹{x['combined_pnl']:,.2f}", f"₹{x['maximum_defined_loss']:,.2f}", f"₹{x['capital_required']:,.2f}", f"{x['metrics']['win_rate']:.1f}%", f"₹{x['metrics']['expectancy']:,.2f}") for x in portfolio['groups']])
+        self._fill(self.trend_tracks, [(x['track'], x['samples'], x['wins'], f"{x['win_rate']:.1f}%", f"{x['wilson_lower_bound']:.1f}%", f"₹{x['expectancy']:,.2f}", x['profit_factor'], f"₹{x['max_drawdown']:,.2f}", x['validation_tier']) for x in fast_vs_supertrend_outcomes(self.db, date)])
+        self._fill(self.retry_sessions, [(x['trade_date'], x['requests'], f"{x['success_rate']:.1f}%", f"{x['average_latency_ms']} ms", x['busy_or_timeout']) for x in three_session_retry_comparison(self.db)])
         self._fill(self.nse_imports, [(x["imported_at"], x["source_file"], x["segment"], x["trade_date"], x["status"], x["row_count"]) for x in self.db.get_nse_eod_imports()])
 
     def import_nse_reports(self):

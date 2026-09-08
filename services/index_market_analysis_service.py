@@ -63,7 +63,17 @@ class IndexMarketAnalysisService:
         quotes = MarketDataHub.option_chain(self.client, contracts[0]["exchange"], [c["token"] for c in contracts])
         from engine.option_chain_engine import analyze_option_chain
         chain = analyze_option_chain(contracts, quotes, spot)
-        flow = analyze_oi_flow(chain["quote_rows"], spot, wing_count=5)
+        prior = self.db.get_latest_index_oi_surface(symbol)
+        previous_rows = None
+        if prior and str(prior.get("expiry")) == str(expiry):
+            previous_time = _time({"time": prior.get("candle_time")})
+            try:
+                recent = previous_time and previous_time.date() == candle_time.date() and timedelta(0) < candle_time - previous_time <= timedelta(minutes=15)
+            except TypeError:
+                recent = False
+            if recent:
+                previous_rows = prior.get("rows")
+        flow = analyze_oi_flow(chain["quote_rows"], spot, wing_count=5, previous_rows=previous_rows)
         flow["call_oi"], flow["put_oi"] = chain["call_oi"], chain["put_oi"]
         cas_active = symbol == "SENSEX" and now.weekday() < 5 and (now.hour, now.minute) >= (15, 15) and (now.hour, now.minute) <= (15, 40)
         result = analyze_index_candle(symbol, candles, flow, cas_active=cas_active)
@@ -76,7 +86,10 @@ class IndexMarketAnalysisService:
             "atm_strike": atm_strike, "atm_ce_premium": atm_call.get("ltp"), "atm_pe_premium": atm_put.get("ltp"),
             "oi_pcr": chain.get("pcr_oi"), "volume_pcr": chain.get("pcr_volume"),
         })
-        result["details_json"] = json.dumps({"expiry": str(expiry), "spot": spot, "cas_active": cas_active, "flow_warnings": flow.get("warnings", [])})
+        result["details_json"] = json.dumps({"expiry": str(expiry), "spot": spot, "cas_active": cas_active,
+            "flow_warnings": flow.get("warnings", []), "coi_source": flow.get("coi_source"),
+            "oi_rows": flow.get("rows", []), "trend_regime": result.get("trend_regime"),
+            "trend_confidence": result.get("trend_confidence"), "trend_horizons": result.get("trend_horizons", {})})
         self.db.save_index_candle_analysis(result)
         return result
 

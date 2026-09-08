@@ -71,6 +71,7 @@ class OptionsPage(QWidget):
         self.paper_monitoring = False
         self.auto_paper_running = False
         self.last_auto_paper_buckets = {}
+        self.auto_paper_retry_counts = {}
         self.auto_paper_resume_requested = False
         self.service = OptionContractService()
         self.db = Database()
@@ -828,17 +829,27 @@ class OptionsPage(QWidget):
                 try:
                     result = run_auto_paper_cycle(LiveSession.client, symbol, SettingsStore().load())
                     self.last_auto_paper_buckets[symbol] = bucket
+                    self.auto_paper_retry_counts.pop((symbol, bucket), None)
                     self.auto_attempt_saved.emit()
                     if result.get("plan"):
                         self.auto_paper_captured.emit(result)
                     else:
                         self.auto_paper_status.emit(result)
                 except (RuntimeError, ValueError) as error:
+                    retry_key = (symbol, bucket)
+                    retry_count = self.auto_paper_retry_counts.get(retry_key, 0) + 1
+                    self.auto_paper_retry_counts[retry_key] = retry_count
+                    exhausted = retry_count >= 3
+                    if exhausted:
+                        self.last_auto_paper_buckets[symbol] = bucket
                     candle_time = (bucket_start - timedelta(minutes=5)).isoformat()
                     result = {
-                        "status": f"Cutie keh rahi hai: {symbol} candle {candle_time} ka retry pending hai: {error} Main isi candle ko automatically retry karungi.",
-                        "retry_pending": True,
-                        "attempt": {"checked_at": datetime.now().astimezone().isoformat(timespec="seconds"), "candle_time": candle_time, "future_symbol": None, "candidate": None, "capture": {}, "chart": {}, "chain": {}, "blockers": [str(error), "Automatic retry remains pending for this candle"]},
+                        "status": (f"Cutie keh rahi hai: {symbol} candle {candle_time} ka recovery retry {retry_count}/3 pending hai: {error}"
+                                   if not exhausted else f"{symbol} candle {candle_time} DATA GAP: 3 bounded recovery attempts fail hue; next candle normally continue hogi."),
+                        "retry_pending": not exhausted,
+                        "attempt": {"checked_at": datetime.now().astimezone().isoformat(timespec="seconds"), "candle_time": candle_time, "future_symbol": None, "candidate": None, "capture": {}, "chart": {}, "chain": {},
+                                    "recovery_queue": {"attempt": retry_count, "maximum": 3, "state": "EXHAUSTED" if exhausted else "PENDING"},
+                                    "blockers": [str(error), "Recovery queue exhausted" if exhausted else "Automatic bounded retry remains pending for this candle"]},
                     }
                     database = Database()
                     try:

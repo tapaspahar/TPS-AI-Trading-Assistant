@@ -1,16 +1,22 @@
 """Application release metadata kept in one place."""
 
 APP_NAME = "TPS AI Trading Assistant"
-VERSION = "1.5.5"
-DISPLAY_VERSION = "Release 1.5.5"
-RELEASE_DATE = "07-09-2026"
+VERSION = "1.5.6"
+DISPLAY_VERSION = "Release 1.5.6"
+RELEASE_DATE = "08-09-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
-SOFTWARE_UPDATE_VERSION = "v1.5.5"
-LAST_UPDATED_AT = "07-09-2026 23:28:17 IST"
-FOOTER_UPDATE_TEXT = "Software Build v1.5.5 - 07-09-2026 23:28 IST"
+SOFTWARE_UPDATE_VERSION = "v1.5.6"
+LAST_UPDATED_AT = "08-09-2026 18:30:00 IST"
+FOOTER_UPDATE_TEXT = "Software Build v1.5.6 - 08-09-2026 18:30 IST"
 RELEASE_NOTES = (
+    "Release 1.5.6 adds exact-contract local OI-delta reconstruction when broker COI is all-zero, with explicit source and coverage watermark; missing history remains DATA GAP.",
+    "Added a 3/6/12 completed-candle trend-regime model so one candle or delayed SuperTrend cannot independently define the session direction.",
+    "Directional option structures that oppose the confirmed regime are retained as SHADOW_ONLY research and cannot be promoted as a primary execution candidate.",
+    "Added a bounded three-attempt missed-candle recovery queue; exhausted slots remain auditable DATA GAP and the next candle continues normally.",
+    "Reliability Cockpit now compares Fast Trend versus Strict SuperTrend closed outcomes and the newest three live sessions' request success, latency and busy/timeout counts.",
+    "AI Development reviews now become FINAL automatically at the post-market evidence boundary; changed source evidence still creates a fresh DRAFT revision.",
     "Index Component Breadth now publishes a consolidated Component + completed 5-minute Chart + quality-gated OI direction, with per-index evidence, final market verdict and last evidence time; missing or low-quality OI never becomes a directional vote.",
     "Replaced the problematic Segoe UI Variable stylesheet request with stable Windows Segoe UI/Nirmala UI fallbacks and suppresses SmartAPI informational console output before client construction for a clean startup terminal.",
     "Fixed the Index Component Breadth startup crash when persisted database rows do not expose the nested explanation field; legacy and partial snapshots now receive a safe generated explanation.",

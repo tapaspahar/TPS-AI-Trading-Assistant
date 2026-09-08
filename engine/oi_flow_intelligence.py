@@ -4,7 +4,32 @@ from __future__ import annotations
 from statistics import median
 
 
-def analyze_oi_flow(rows, spot, wing_count=5):
+def reconstruct_oi_change(rows, previous_rows=None):
+    """Fill missing/all-zero broker COI from two timestamped OI surfaces.
+
+    A local delta is evidence only when the exact contract existed in both
+    snapshots.  It is never invented from PCR or price movement.
+    """
+    current = [dict(row) for row in rows or []]
+    previous = {
+        (float(row.get("strike") or 0), str(row.get("option_type") or "").upper()): float(row.get("oi") or 0)
+        for row in (previous_rows or []) if float(row.get("strike") or 0) > 0
+    }
+    broker_signal = any(abs(float(row.get("oi_change") or 0)) > 0 for row in current)
+    if broker_signal or not previous:
+        return current, "BROKER" if broker_signal else "UNAVAILABLE", 0
+    matched = 0
+    for row in current:
+        key = (float(row.get("strike") or 0), str(row.get("option_type") or "").upper())
+        if key in previous:
+            row["oi_change"] = float(row.get("oi") or 0) - previous[key]
+            matched += 1
+    coverage = round(100 * matched / max(len(current), 1))
+    return current, "LOCAL SNAPSHOT DELTA" if coverage >= 70 else "UNAVAILABLE", coverage
+
+
+def analyze_oi_flow(rows, spot, wing_count=5, previous_rows=None):
+    rows, coi_source, delta_coverage = reconstruct_oi_change(rows, previous_rows)
     rows = [dict(row) for row in rows if float(row.get("strike") or 0) > 0]
     strikes = sorted({float(row["strike"]) for row in rows}, key=lambda value: abs(value - float(spot)))[: 1 + 2 * wing_count]
     focused = [row for row in rows if float(row["strike"]) in strikes]
@@ -53,6 +78,9 @@ def analyze_oi_flow(rows, spot, wing_count=5):
         quality = min(quality, 35)
         direction = "DATA GAP"
         warnings.append("Broker ne sab observed strikes par zero COI diya; OI-flow direction unavailable hai")
+    elif coi_source == "LOCAL SNAPSHOT DELTA":
+        quality = min(quality, 70)
+        warnings.append(f"Broker COI unavailable tha; exact-contract local OI delta use hua ({delta_coverage}% coverage)")
     if premium_coverage < .5: warnings.append("Premium-change coverage low; writing/long-build classification provisional hai")
     if quality < 60: warnings.append("OI flow DATA GAP; direction ko entry permission na maanein")
     return {"direction": direction, "flow_score": round(flow_score, 1), "quality": quality,
@@ -61,4 +89,5 @@ def analyze_oi_flow(rows, spot, wing_count=5):
             "call_coi": call_coi, "put_coi": put_coi, "call_volume": call_vol, "put_volume": put_vol,
             "put_wall": float(put_wall["strike"]) if put_wall else None, "put_wall_health": put_health,
             "call_wall": float(call_wall["strike"]) if call_wall else None, "call_wall_health": call_health,
-            "strikes_observed": len(strikes), "rows": enriched, "warnings": warnings}
+            "strikes_observed": len(strikes), "rows": enriched, "warnings": warnings,
+            "coi_source": coi_source, "delta_coverage": delta_coverage}

@@ -35,7 +35,7 @@ class AutoAttemptReportPage(QWidget):
         layout = QVBoxLayout(body)
         outer.addWidget(self.scroll)
         self.scroll.setWidget(body)
-        title = QLabel("Auto Trade Attempt Report — Three-Index Accuracy Lab • Release 1.5.5")
+        title = QLabel("Auto Trade Attempt Report — Three-Index Accuracy Lab • Release 1.5.6")
         title.setObjectName("pageTitle")
         layout.addWidget(title)
         layout.addWidget(QLabel("Every saved evaluation is shown here whether a paper trade was captured, rejected, or blocked by a safety limit."))

@@ -11,6 +11,26 @@ def _number(value, default=0.0):
         return default
 
 
+def multi_candle_regime(candles):
+    """Classify 3/6/12-candle direction; latest candle alone cannot set regime."""
+    rows = list(candles or [])
+    votes, horizons = [], {}
+    ranges = [_number(r.get("high")) - _number(r.get("low")) for r in rows[-21:] if _number(r.get("high")) >= _number(r.get("low"))]
+    unit = max(median(ranges), 1e-9) if ranges else 1.0
+    for size in (3, 6, 12):
+        if len(rows) < size:
+            continue
+        move = _number(rows[-1].get("close")) - _number(rows[-size].get("open"))
+        normalized = move / unit
+        direction = "BULLISH" if normalized >= .45 else "BEARISH" if normalized <= -.45 else "FLAT"
+        horizons[str(size)] = {"move": round(move, 2), "atr_units": round(normalized, 2), "direction": direction}
+        votes.append(direction)
+    bulls, bears = votes.count("BULLISH"), votes.count("BEARISH")
+    regime = "BULLISH" if bulls >= 2 else "BEARISH" if bears >= 2 else "FLAT / MIXED"
+    confidence = round(100 * max(bulls, bears, votes.count("FLAT")) / max(len(votes), 1))
+    return {"regime": regime, "confidence": confidence, "horizons": horizons}
+
+
 def analyze_index_candle(symbol, candles, oi_flow=None, cas_active=False):
     """Describe price, volume and OI without claiming unobservable causation."""
     rows = list(candles or [])
@@ -47,6 +67,7 @@ def analyze_index_candle(symbol, candles, oi_flow=None, cas_active=False):
     else:
         participation = f"low participation ({volume_ratio:.2f}x)"
     flow = oi_flow or {}
+    regime = multi_candle_regime(rows)
     flow_direction = str(flow.get("direction") or "DATA GAP")
     quality = int(flow.get("quality") or 0)
     aligned = direction in flow_direction
@@ -76,6 +97,8 @@ def analyze_index_candle(symbol, candles, oi_flow=None, cas_active=False):
         "range_ratio": round(range_ratio, 2) if range_ratio is not None else None,
         "volume": volume or None, "volume_ratio": round(volume_ratio, 2) if volume_ratio is not None else None,
         "oi_direction": flow_direction, "oi_quality": quality,
+        "trend_regime": regime["regime"], "trend_confidence": regime["confidence"],
+        "trend_horizons": regime["horizons"],
         "call_oi": flow.get("call_oi"), "put_oi": flow.get("put_oi"),
         "call_coi": flow.get("call_coi"), "put_coi": flow.get("put_coi"),
         "put_wall": flow.get("put_wall"), "put_wall_health": flow.get("put_wall_health"),

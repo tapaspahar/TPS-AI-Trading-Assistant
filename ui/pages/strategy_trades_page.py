@@ -33,6 +33,14 @@ def candidate_structure_key(candidate):
     )
 
 
+def strategy_regime_track(candidate, market_regime):
+    """Keep opposite-direction structures for research, never live promotion."""
+    bias = str(candidate.get("bias") or "NEUTRAL").upper()
+    regime = str(market_regime or "UNKNOWN").upper()
+    opposite = ("BEAR" in regime and "BULL" in bias) or ("BULL" in regime and "BEAR" in bias)
+    return "SHADOW_ONLY" if opposite else "PRIMARY"
+
+
 def strategy_capture_window(now=None, settings=None, observation_minutes=15):
     """Return the automatic strategy-study stage for the configured session."""
     now = now.astimezone(IST) if now and now.tzinfo else now.replace(tzinfo=IST) if now else datetime.now(IST)
@@ -187,9 +195,10 @@ class StrategyTradesPage(QWidget):
                         continue
                     candidate_source = dict(source)
                     aligned = bool(candidate.get("market_alignment"))
+                    regime_track = strategy_regime_track(candidate, source["market_regime"])
                     candidate_source.update({
                         "strategy_market_alignment": aligned,
-                        "strategy_validation_track": "PRIMARY" if aligned else "COUNTERFACTUAL",
+                        "strategy_validation_track": regime_track if regime_track == "SHADOW_ONLY" else ("PRIMARY" if aligned else "COUNTERFACTUAL"),
                         "strategy_target_profit_amount": float(loaded_settings.get("strategy_daily_target_profit") or 0),
                         "strategy_stop_loss_amount": float(loaded_settings.get("strategy_daily_max_loss") or 0),
                     })

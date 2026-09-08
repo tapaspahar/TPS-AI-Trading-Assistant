@@ -241,6 +241,12 @@ def generate_and_save_self_development_review(
 ) -> dict:
     review = build_self_development_review(database, trade_date, now=now)
     review["id"] = database.save_self_development_review(review)
+    # Post-market generation is the source-complete lifecycle boundary.  A
+    # later source refresh automatically creates a new DRAFT revision.
+    current = datetime.now().astimezone()
+    if current.strftime("%d-%m-%Y") != trade_date or (current.hour, current.minute) >= (15, 40):
+        database.finalize_self_development_review(trade_date)
+        review["review_state"] = "FINAL"
     return review
 
 

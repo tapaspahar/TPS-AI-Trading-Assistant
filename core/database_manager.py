@@ -2266,6 +2266,20 @@ class Database:
             (str(symbol).upper(), max(1, min(int(limit), 50000))),
         ).fetchall()
 
+    def get_latest_index_oi_surface(self, symbol: str) -> dict | None:
+        row = self.cursor.execute(
+            "SELECT candle_time, details_json FROM index_candle_analyses WHERE symbol=? ORDER BY candle_time DESC LIMIT 1",
+            (str(symbol).upper(),),
+        ).fetchone()
+        if not row:
+            return None
+        try:
+            details = json.loads(row["details_json"] or "{}")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return None
+        rows = details.get("oi_rows") or []
+        return {"candle_time": row["candle_time"], "expiry": details.get("expiry"), "rows": rows} if rows else None
+
     def save_index_daily_analysis(self, report: dict) -> None:
         self.cursor.execute(
             """INSERT INTO index_daily_analyses
