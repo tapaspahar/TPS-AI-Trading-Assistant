@@ -64,4 +64,4 @@ class AngelOneClientTests(unittest.TestCase):
 
         self.assertEqual(candles[0]["close"], 101)
         self.assertEqual(client.session.calls, 3)
-        self.assertEqual([call.args[0] for call in sleep.call_args_list], [15, 30])
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [2, 5])

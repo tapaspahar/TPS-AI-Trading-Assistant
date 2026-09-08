@@ -19,7 +19,11 @@ class AngelOneClient:
     # Serialising them also avoids several UI pages exhausting the limit together.
     CANDLE_REQUEST_INTERVAL_SECONDS = 3.5
     CANDLE_CACHE_SECONDS = 30
-    CANDLE_RETRY_DELAYS_SECONDS = (15, 30)
+    # A 15s + 30s backoff allowed one bad request to consume most of a
+    # five-minute three-index evaluation cycle.  SmartAPI's transient throttle
+    # is retried briefly, then surfaced as DATA GAP so the next index and the
+    # next scheduled candle can proceed instead of accumulating a queue.
+    CANDLE_RETRY_DELAYS_SECONDS = (2, 5)
 
     @staticmethod
     def _suppress_sensitive_smartapi_logs() -> None:

@@ -93,6 +93,47 @@ class AutoPaperTraderTests(unittest.TestCase):
         self.assertTrue(result["allowed"])
         self.assertEqual(result["validation_track"], "IMPULSE REVERSAL PAPER")
 
+    def test_testing_mode_samples_supertrend_only_lag_with_fast_stack(self):
+        strategy = {
+            "candidate": "PE", "trade_ready": False, "required": 5, "passed": 4,
+            "score": 74, "minimum_score": 95,
+            "side_evaluations": {"PE": {
+                "required": 5, "passed": 4, "score": 74,
+                "selected_confirmations": [
+                    {"name": "Directional volume", "passed": True, "applicable": True},
+                ],
+                "directional_consensus": {
+                    "passed": False, "missing": ["SuperTrend confirmation"],
+                    "supertrend_lag_candidate": True,
+                },
+                "hard_blockers": ["PE directional consensus is incomplete: SuperTrend confirmation"],
+                "risk_blockers": [], "data_gaps": [],
+            }},
+        }
+        result = exploratory_paper_eligibility(strategy, {
+            "paper_validation_testing_mode": True,
+            "paper_validation_soft_miss_allowance": 2,
+            "trade_plan_min_score": 95,
+        })
+        self.assertTrue(result["allowed"])
+        self.assertEqual(result["validation_track"], "FAST TREND / SUPERTREND-LAG PAPER")
+
+    def test_supertrend_lag_allowance_never_applies_without_testing_mode(self):
+        strategy = {
+            "candidate": "PE", "trade_ready": False, "required": 5, "passed": 4,
+            "score": 90, "minimum_score": 95,
+            "side_evaluations": {"PE": {
+                "required": 5, "passed": 4, "score": 90,
+                "selected_confirmations": [{"name": "Directional volume", "passed": True}],
+                "directional_consensus": {"passed": False, "supertrend_lag_candidate": True},
+                "hard_blockers": ["PE directional consensus is incomplete: SuperTrend confirmation"],
+                "risk_blockers": [], "data_gaps": [],
+            }},
+        }
+        self.assertFalse(exploratory_paper_eligibility(strategy, {
+            "paper_validation_testing_mode": False,
+        })["allowed"])
+
     def test_late_session_requires_fresh_current_directional_volume(self):
         strategy = {"candidate": "CE", "trade_ready": True}
         environment = {"time_state": "LATE SESSION", "volume_threshold": 1.5}
