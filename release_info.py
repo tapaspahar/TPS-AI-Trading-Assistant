@@ -11,6 +11,7 @@ SOFTWARE_UPDATE_VERSION = "v1.5.5"
 LAST_UPDATED_AT = "07-09-2026 23:28:17 IST"
 FOOTER_UPDATE_TEXT = "Software Build v1.5.5 - 07-09-2026 23:28 IST"
 RELEASE_NOTES = (
+    "Index Component Breadth now publishes a consolidated Component + completed 5-minute Chart + quality-gated OI direction, with per-index evidence, final market verdict and last evidence time; missing or low-quality OI never becomes a directional vote.",
     "Replaced the problematic Segoe UI Variable stylesheet request with stable Windows Segoe UI/Nirmala UI fallbacks and suppresses SmartAPI informational console output before client construction for a clean startup terminal.",
     "Fixed the Index Component Breadth startup crash when persisted database rows do not expose the nested explanation field; legacy and partial snapshots now receive a safe generated explanation.",
     "Added a PAPER-only fast-trend validation track: when completed-candle structure, VWAP/EMA direction, fresh trigger and directional volume agree, a SuperTrend-only delayed flip is sampled separately while REAL execution and all risk/data/event safeguards remain strict.",

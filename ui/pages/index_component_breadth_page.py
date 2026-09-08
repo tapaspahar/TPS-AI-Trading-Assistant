@@ -8,7 +8,7 @@ from core.database_manager import Database
 from core.market_session import market_session
 from services.analysis_scheduler import AnalysisScheduler
 from services.index_component_breadth_service import IndexComponentBreadthService
-from engine.index_component_breadth import combine_component_breadth
+from engine.index_component_breadth import combine_component_breadth, combine_market_evidence
 from services.live_session import LiveSession
 
 
@@ -22,6 +22,10 @@ class IndexComponentBreadthPage(QWidget):
         note = QLabel("NIFTY, BANKNIFTY aur SENSEX components ko batched live quotes se count karta hai. 60% majority directional breadth hai; 80% se kam component coverage DATA GAP rahegi. Ye chart/OI confirmation hai, akela trade permission nahi.")
         note.setWordWrap(True); layout.addWidget(note)
         self.verdict = QLabel("Waiting for first live component snapshot…"); self.verdict.setObjectName("sectionTitle"); self.verdict.setWordWrap(True); layout.addWidget(self.verdict)
+        self.market_direction = QLabel("Final market direction: waiting for Component + Chart + OI evidence…")
+        self.market_direction.setObjectName("pageTitle"); self.market_direction.setWordWrap(True); layout.addWidget(self.market_direction)
+        self.market_evidence = QLabel("Per-index evidence abhi available nahi hai.")
+        self.market_evidence.setWordWrap(True); layout.addWidget(self.market_evidence)
         refresh = QPushButton("Refresh Component Breadth Now"); refresh.clicked.connect(lambda: self.scan(force=True)); layout.addWidget(refresh)
         self.table = QTableWidget(0, 8)
         self.table.setHorizontalHeaderLabels(("Time", "Index", "Verdict", "Positive", "Negative", "Flat", "Coverage", "Breadth %"))
@@ -71,3 +75,27 @@ class IndexComponentBreadthPage(QWidget):
             self.verdict.setText(
                 f"Combined component verdict: {combined['state']} | Last snapshot {latest_time} | {detail}"
             )
+            candle_rows = self.db.get_index_candle_analyses(datetime.now().strftime("%d-%m-%Y"))
+            latest_candles = {
+                symbol: next((dict(row) for row in candle_rows if row["symbol"] == symbol), None)
+                for symbol in ("NIFTY", "BANKNIFTY", "SENSEX")
+            }
+            market = combine_market_evidence(
+                [dict(row) for row in latest_rows],
+                [row for row in latest_candles.values() if row],
+            )
+            evidence_time = str(market.get("last_evidence_at") or "-")
+            if "T" in evidence_time:
+                evidence_time = evidence_time.split("T", 1)[1][:8]
+            self.market_direction.setText(
+                f"Final market direction: {market['direction']} | Confirmed indices "
+                f"{market['confirmed_indexes']}/3 | Evidence up to {evidence_time}"
+            )
+            self.market_evidence.setText("\n".join(
+                f"{item['symbol']}: {item['direction']} | Components {item['component']} | "
+                f"Chart {item['chart']} | OI {item['oi']} ({item['oi_quality']}/100)"
+                for item in market["indexes"]
+            ))
+        else:
+            self.market_direction.setText("Final market direction: DATA GAP — component snapshot unavailable")
+            self.market_evidence.setText("Component + Chart + OI comparison ke liye live saved evidence nahi hai.")

@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 from core.database_manager import Database
-from engine.index_component_breadth import analyze_component_breadth, combine_component_breadth
+from engine.index_component_breadth import analyze_component_breadth, combine_component_breadth, combine_market_evidence
 
 
 class IndexComponentBreadthTests(unittest.TestCase):
@@ -34,6 +34,30 @@ class IndexComponentBreadthTests(unittest.TestCase):
         ])
         self.assertEqual(combined["state"], "BEARISH")
         self.assertIn("NIFTY: breadth BEARISH", combined["explanation"])
+
+    def test_component_chart_and_oi_form_explainable_market_direction(self):
+        breadth = [
+            {"symbol": symbol, "state": "BEARISH", "captured_at": "2026-09-08T15:01:37+05:30"}
+            for symbol in ("NIFTY", "BANKNIFTY", "SENSEX")
+        ]
+        candles = [
+            {"symbol": symbol, "direction": "BEARISH", "oi_direction": "BEARISH FLOW",
+             "oi_quality": 80, "candle_time": "2026-09-08T14:55:00+05:30"}
+            for symbol in ("NIFTY", "BANKNIFTY", "SENSEX")
+        ]
+        result = combine_market_evidence(breadth, candles)
+        self.assertEqual(result["direction"], "BEARISH")
+        self.assertEqual(result["confirmed_indexes"], 3)
+        self.assertTrue(all(row["direction"] == "BEARISH" for row in result["indexes"]))
+
+    def test_low_quality_oi_is_data_gap_not_a_directional_vote(self):
+        result = combine_market_evidence(
+            [{"symbol": "NIFTY", "state": "BEARISH"}],
+            [{"symbol": "NIFTY", "direction": "BULLISH", "oi_direction": "BEARISH FLOW", "oi_quality": 40}],
+        )
+        nifty = result["indexes"][0]
+        self.assertEqual(nifty["oi"], "DATA GAP")
+        self.assertEqual(nifty["direction"], "MIXED / UNCONFIRMED")
 
     def test_snapshot_is_persistent_and_duplicate_safe(self):
         with tempfile.TemporaryDirectory() as folder:
