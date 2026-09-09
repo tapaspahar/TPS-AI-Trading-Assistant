@@ -2,12 +2,59 @@ import unittest
 from datetime import datetime
 from unittest.mock import patch
 
-from services.auto_paper_trader import (_completed_candle_age_seconds, _completed_candles, exploratory_paper_eligibility,
+from services.auto_paper_trader import (_completed_candle_age_seconds, _completed_candles, chart_volume_quota_eligibility, exploratory_paper_eligibility,
                                         late_session_entry_blocker, run_auto_paper_cycle, signal_timing_stage)
 from ui.pages.options_page import AUTO_PAPER_INDEXES, pending_auto_paper_indexes
 
 
 class AutoPaperTraderTests(unittest.TestCase):
+    def test_chart_volume_quota_allows_paper_sample_with_two_chart_votes(self):
+        strategy = {"candidate": "PE", "side_evaluations": {"PE": {
+            "confirmations": [
+                {"name": "Market structure", "evidence_state": "TRUE"},
+                {"name": "Price vs VWAP", "evidence_state": "TRUE"},
+                {"name": "EMA 5/20/50 alignment", "evidence_state": "FALSE"},
+                {"name": "Directional volume", "evidence_state": "TRUE"},
+            ], "data_gaps": [], "risk_blockers": [],
+        }}}
+        result = chart_volume_quota_eligibility(
+            strategy, {"candle_direction": "BEARISH"},
+            {"paper_validation_testing_mode": True, "paper_chart_volume_daily_quota": 3},
+            {"trades": 1},
+        )
+        self.assertTrue(result["allowed"])
+        self.assertEqual(result["chart_votes"], 2)
+
+    def test_chart_volume_quota_never_bypasses_risk_or_data_gap(self):
+        base = {"candidate": "CE", "side_evaluations": {"CE": {
+            "confirmations": [
+                {"name": "Market structure", "passed": True},
+                {"name": "Price vs VWAP", "passed": True},
+                {"name": "Directional volume", "passed": True},
+            ], "data_gaps": ["OI unavailable"], "risk_blockers": [],
+        }}}
+        result = chart_volume_quota_eligibility(
+            base, {"candle_direction": "BULLISH"}, {"paper_validation_testing_mode": True}, {"trades": 0},
+        )
+        self.assertFalse(result["allowed"])
+        base["side_evaluations"]["CE"]["data_gaps"] = []
+        base["side_evaluations"]["CE"]["risk_blockers"] = ["Late CE entry"]
+        self.assertFalse(chart_volume_quota_eligibility(
+            base, {"candle_direction": "BULLISH"}, {"paper_validation_testing_mode": True}, {"trades": 0},
+        )["allowed"])
+
+    def test_chart_volume_quota_stops_after_three_samples(self):
+        strategy = {"candidate": "CE", "side_evaluations": {"CE": {
+            "confirmations": [
+                {"name": "Market structure", "passed": True},
+                {"name": "EMA 5/20/50 alignment", "passed": True},
+                {"name": "Directional volume", "passed": True},
+            ], "data_gaps": [], "risk_blockers": [],
+        }}}
+        self.assertFalse(chart_volume_quota_eligibility(
+            strategy, {"candle_direction": "BULLISH"}, {"paper_validation_testing_mode": True}, {"trades": 3},
+        )["allowed"])
+
     def test_auto_paper_universe_monitors_all_three_indexes_once_per_bucket(self):
         self.assertEqual(AUTO_PAPER_INDEXES, ("NIFTY", "BANKNIFTY", "SENSEX"))
         bucket = "2026-09-03T10:00:00+05:30"

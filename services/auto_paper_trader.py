@@ -88,6 +88,44 @@ def exploratory_paper_eligibility(strategy: dict, settings: dict) -> dict:
     }
 
 
+def chart_volume_quota_eligibility(strategy: dict, capture: dict, settings: dict, progress: dict) -> dict:
+    """Select up to three PAPER-only chart+volume samples per session.
+
+    This is a validation quota, not a forced order promise. Missing/stale data,
+    option liquidity, event, expiry, position-size and entry-risk locks still
+    fail closed. Only slow/strict strategy confirmation may be held out.
+    """
+    candidate = str(strategy.get("candidate") or "").upper()
+    side = (strategy.get("side_evaluations") or {}).get(candidate) or {}
+    confirmations = side.get("confirmations") or []
+    states = {
+        str(item.get("name")): str(item.get("evidence_state") or ("TRUE" if item.get("passed") else "FALSE")).upper()
+        for item in confirmations if item.get("applicable", True)
+    }
+    directional_name = "BULLISH" if candidate == "CE" else "BEARISH" if candidate == "PE" else ""
+    candle_aligned = str(capture.get("candle_direction") or "").upper() == directional_name
+    volume_confirmed = states.get("Directional volume") == "TRUE"
+    chart_votes = sum(states.get(name) == "TRUE" for name in (
+        "Market structure", "Price vs VWAP", "EMA 5/20/50 alignment",
+    ))
+    data_gaps = unique_messages(side.get("data_gaps") or strategy.get("data_gaps"))
+    risk_blockers = unique_messages(side.get("risk_blockers") or [])
+    quota = max(0, min(3, int(settings.get("paper_chart_volume_daily_quota", 3) or 3)))
+    used = int(progress.get("trades", 0) or 0)
+    allowed = bool(
+        settings.get("paper_validation_testing_mode") and used < quota
+        and candidate in {"CE", "PE"} and candle_aligned and volume_confirmed
+        and chart_votes >= 2 and not data_gaps and not risk_blockers
+    )
+    return {
+        "allowed": allowed, "candidate": candidate, "quota": quota, "used": used,
+        "candle_aligned": candle_aligned, "volume_confirmed": volume_confirmed,
+        "chart_votes": chart_votes, "required_chart_votes": 2,
+        "data_gaps": data_gaps, "risk_blockers": risk_blockers,
+        "validation_track": "CHART + VOLUME DAILY QUOTA PAPER",
+    }
+
+
 def _attempt(status, checked_at, *, capture=None, chart=None, candidate=None, future=None, blockers=None, chain=None, timing=None,
              outcome=None, data_gaps=None, safety_blockers=None, warnings=None):
     """Return a transparent audit record for every automatic decision."""
@@ -291,6 +329,12 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
         )
         strategy = evaluate_tps_entry_v2(candles, capture, chain, settings, environment)
         exploratory = exploratory_paper_eligibility(strategy, settings)
+        quota_sample = chart_volume_quota_eligibility(strategy, capture, settings, progress)
+        if quota_sample["allowed"] and not exploratory["allowed"]:
+            exploratory = {
+                **exploratory, "allowed": True, "validation_track": quota_sample["validation_track"],
+                "score_floor": 0, "soft_misses": max(0, int((strategy.get("required") or 0)) - int((strategy.get("passed") or 0))),
+            }
         candidate = strategy["candidate"]
         selected_confirmations = strategy.get("selected_confirmations") or strategy.get("confirmations") or []
         side_evaluations = strategy.get("side_evaluations") or {}
@@ -305,6 +349,7 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
             "pe_score": (side_evaluations.get("PE") or {}).get("score"),
             "market_environment": environment,
             "event_risk": event_risk,
+            "chart_volume_quota": quota_sample,
             "provider": provider,
             "final_confidence": max(0, round(strategy["score"] * float(environment.get("risk_multiplier", 1)))),
         }
@@ -388,8 +433,11 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
             )
             chart["trade_ready"] = False
             chart["warnings"].append(
-                f"PAPER exploratory capture: {exploratory['soft_misses']}/{exploratory['allowance']} soft misses; "
-                f"score {exploratory['score']}/{exploratory['score_floor']} exploratory floor"
+                (f"PAPER chart+volume quota sample {quota_sample['used'] + 1}/{quota_sample['quota']}: "
+                 f"{quota_sample['chart_votes']}/3 chart votes and directional volume confirmed"
+                 if quota_sample["allowed"] else
+                 f"PAPER exploratory capture: {exploratory['soft_misses']}/{exploratory['allowance']} soft misses; "
+                 f"score {exploratory['score']}/{exploratory['score_floor']} exploratory floor")
             )
         plan_chart = dict(chart)
         if exploratory["allowed"]:
@@ -397,7 +445,7 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
             plan_chart["score"] = exploratory["score"]
             plan_chart["volume_confirmed"] = True
         plan_minimum_score = (
-            0 if exploratory.get("impulse_reversal") else exploratory["score_floor"]
+            0 if exploratory.get("impulse_reversal") or quota_sample["allowed"] else exploratory["score_floor"]
         ) if exploratory["allowed"] else int(settings.get("trade_plan_min_score", 95))
         plan = create_review_plan(
             symbol, spot, contracts, chain["quote_rows"], plan_chart, chain, settings,
@@ -420,6 +468,7 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
             "event_context": event_risk, "market_environment": environment,
             "validation_track": exploratory.get("validation_track") if exploratory["allowed"] else "STRICT PAPER",
             "exploratory_validation": exploratory if exploratory["allowed"] else None,
+            "chart_volume_quota": quota_sample,
         }
         plan["strategy"] = {
             "candidate": candidate, "direction": strategy.get("direction"),

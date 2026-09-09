@@ -22,6 +22,7 @@ DEFAULT_SETTINGS = {
     # captures only; TPS remains unable to place a broker order.
     "recovery_mode_enabled": True,
     "recovery_daily_trade_limit": 1,
+    "paper_chart_volume_daily_quota": 3,
     # Explicit paper-only validation mode. It suspends behavioural recovery
     # locks, but keeps a bounded daily capture limit and never enables orders.
     "paper_validation_testing_mode": False,
@@ -252,6 +253,7 @@ class SettingsStore:
             "recovery_mode_enabled": bool(settings.get("recovery_mode_enabled", current["recovery_mode_enabled"])),
             "recovery_daily_trade_limit": int(settings.get("recovery_daily_trade_limit", current["recovery_daily_trade_limit"])),
             "paper_validation_testing_mode": bool(settings.get("paper_validation_testing_mode", current["paper_validation_testing_mode"])),
+            "paper_chart_volume_daily_quota": max(1, min(3, int(settings.get("paper_chart_volume_daily_quota", current["paper_chart_volume_daily_quota"])))),
             "paper_validation_daily_limit": int(settings.get("paper_validation_daily_limit", current["paper_validation_daily_limit"])),
             "paper_validation_soft_miss_allowance": max(0, min(2, int(settings.get("paper_validation_soft_miss_allowance", current["paper_validation_soft_miss_allowance"])))),
             "paper_validation_max_open_trades": max(1, min(10, int(settings.get("paper_validation_max_open_trades", current["paper_validation_max_open_trades"])))),

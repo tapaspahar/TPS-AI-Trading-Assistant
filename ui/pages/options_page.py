@@ -761,7 +761,8 @@ class OptionsPage(QWidget):
             SettingsStore().save(settings)
             self.auto_paper_progress.setText(
                 "Enabled: har completed 5-minute candle check hogi. PAPER testing mode me maximum 10 trades/day aur "
-                "10 concurrent monitored trades; maximum 2 soft checklist misses allowed. Strong fast-trend evidence me "
+                "10 concurrent monitored trades; pehle 3 valid chart+volume samples ko daily validation priority milegi. "
+                "Maximum 2 soft checklist misses allowed. Strong fast-trend evidence me "
                 "SuperTrend-only lag separately validate hoga; hard safety/data/event blockers strict rahenge."
             )
             self.auto_paper_timer.start(30_000)
