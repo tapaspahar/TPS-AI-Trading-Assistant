@@ -162,7 +162,7 @@ class AutoPaperTraderTests(unittest.TestCase):
         self.assertTrue(result["allowed"])
         self.assertEqual(result["validation_track"], "IMPULSE REVERSAL PAPER")
 
-    def test_testing_mode_samples_supertrend_only_lag_with_fast_stack(self):
+    def test_removed_supertrend_lag_cannot_create_a_testing_entry(self):
         strategy = {
             "candidate": "PE", "trade_ready": False, "required": 5, "passed": 4,
             "score": 74, "minimum_score": 95,
@@ -184,8 +184,8 @@ class AutoPaperTraderTests(unittest.TestCase):
             "paper_validation_soft_miss_allowance": 2,
             "trade_plan_min_score": 95,
         })
-        self.assertTrue(result["allowed"])
-        self.assertEqual(result["validation_track"], "FAST TREND / SUPERTREND-LAG PAPER")
+        self.assertFalse(result["allowed"])
+        self.assertEqual(result["validation_track"], "EXPLORATORY PAPER")
 
     def test_supertrend_lag_allowance_never_applies_without_testing_mode(self):
         strategy = {

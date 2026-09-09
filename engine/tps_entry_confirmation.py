@@ -10,7 +10,7 @@ from math import ceil
 
 from engine.evidence_model import EvidenceState, evidence_state, unique_messages
 
-from engine.live_setup_capture import ema, supertrend
+from engine.live_setup_capture import ema, supertrend  # legacy test/report patch point; not used for entry decisions
 from engine.market_structure import analyze_candles
 
 
@@ -18,7 +18,6 @@ CONDITION_WEIGHTS = {
     "Market structure": 16,
     "Price vs VWAP": 16,
     "EMA 5/20/50 alignment": 16,
-    "SuperTrend confirmation": 18,
     "Pullback and reversal": 12,
     "Directional volume": 12,
     "OI/PCR context": 10,
@@ -114,7 +113,6 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
     close = float(capture["close"]); opening = float(capture["open"])
     ema_5, ema_20, ema_50 = (float(capture[key]) for key in ("ema_5", "ema_20", "ema_50"))
     vwap = float(capture["vwap"]) if capture.get("vwap") else None
-    trend_line = float(capture["supertrend"])
     atr = float(capture["atr_14"]) if capture.get("atr_14") else max(close * .001, 1)
     rsi = float(capture["rsi_14"]) if capture.get("rsi_14") else None
     volume_ratio = float(capture["volume_ratio"]) if capture.get("volume_ratio") else 0
@@ -224,7 +222,6 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
             _side_condition("Market structure", structure_state.startswith("Bullish"), structure_state),
             _side_condition("Price vs VWAP", vwap is not None and close > vwap, f"Close {close:.2f} > VWAP {vwap:.2f}" if vwap is not None else "VWAP unavailable", vwap is not None),
             _side_condition("EMA 5/20/50 alignment", ema_5 > ema_20 > ema_50, f"EMA5 {ema_5:.2f} > EMA20 {ema_20:.2f} > EMA50 {ema_50:.2f}"),
-            _side_condition("SuperTrend confirmation", close > trend_line, f"Close {close:.2f} > SuperTrend {trend_line:.2f}"),
             _side_condition("Pullback and reversal", recent_bullish_touch and close > opening, f"EMA/VWAP touch within {tolerance:.2f}; candle {candle_direction}"),
             _side_condition("Directional volume", ce_volume_ok, ce_volume_detail if volume_data_reliable else f"Sparse futures-volume sample ({current_volume:.0f}; EMA20 {volume_ema or 0:.2f}) — excluded, not failed", volume_data_reliable),
             _side_condition("OI/PCR context", pcr_oi is not None and pcr_volume is not None and pcr_oi >= .75 and pcr_volume <= 1.25, f"OI PCR {pcr_oi if pcr_oi is not None else '-'}; Volume PCR {pcr_volume if pcr_volume is not None else '-'}", pcr_oi is not None and pcr_volume is not None),
@@ -234,7 +231,6 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
             _side_condition("Market structure", structure_state.startswith("Bearish"), structure_state),
             _side_condition("Price vs VWAP", vwap is not None and close < vwap, f"Close {close:.2f} < VWAP {vwap:.2f}" if vwap is not None else "VWAP unavailable", vwap is not None),
             _side_condition("EMA 5/20/50 alignment", ema_5 < ema_20 < ema_50, f"EMA5 {ema_5:.2f} < EMA20 {ema_20:.2f} < EMA50 {ema_50:.2f}"),
-            _side_condition("SuperTrend confirmation", close < trend_line, f"Close {close:.2f} < SuperTrend {trend_line:.2f}"),
             _side_condition("Pullback and reversal", recent_bearish_touch and close < opening, f"EMA/VWAP touch within {tolerance:.2f}; candle {candle_direction}"),
             _side_condition("Directional volume", pe_volume_ok, pe_volume_detail if volume_data_reliable else f"Sparse futures-volume sample ({current_volume:.0f}; EMA20 {volume_ema or 0:.2f}) — excluded, not failed", volume_data_reliable),
             _side_condition("OI/PCR context", pcr_oi is not None and pcr_volume is not None and pcr_oi <= 1.25 and pcr_volume >= .80, f"OI PCR {pcr_oi if pcr_oi is not None else '-'}; Volume PCR {pcr_volume if pcr_volume is not None else '-'}", pcr_oi is not None and pcr_volume is not None),
@@ -279,13 +275,13 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
         passed = sum(item["passed"] for item in selected)
         blockers = []
         quality_warnings = []
-        # Checklist selection controls scoring, but these four directional
+        # Checklist selection controls scoring, but these three directional
         # anchors may never be voted away. Premium buying against the actual
         # trend produced misleading high scores in forward testing because
         # unrelated confirmations compensated for a contradictory direction.
         direction_anchor_names = {
             "Market structure", "Price vs VWAP",
-            "EMA 5/20/50 alignment", "SuperTrend confirmation",
+            "EMA 5/20/50 alignment",
         }
         direction_anchors = [
             item for item in common[side] if item["name"] in direction_anchor_names
@@ -379,16 +375,6 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
                 blockers.append(f"Late PE entry: RSI {rsi:.1f} is below the {pe_min_rsi:.1f} chase limit")
             if not trigger_ok:
                 quality_warnings.append("No fresh bearish EMA/VWAP pullback-and-reversal trigger; checklist/score must qualify without it")
-        supertrend_lag_candidate = bool(
-            missing_direction == ["SuperTrend confirmation"]
-            and trigger_ok and (ce_volume_ok if side == "CE" else pe_volume_ok)
-            and not data_gaps and regular_move_available is not False
-        )
-        if supertrend_lag_candidate:
-            quality_warnings.append(
-                f"{side} chart/VWAP/EMA/fresh-volume evidence agrees but SuperTrend has not flipped; "
-                "entry remains blocked and is queued for one-blocker replay"
-            )
         checklist_matched = applicable_count > 0 and passed >= required
         score_matched = score >= minimum_score
         blockers = unique_messages(blockers)
@@ -401,10 +387,7 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
                 opening <= vwap < close if side == "CE" else opening >= vwap > close
             )
         )
-        fast_side_confirmed = bool(
-            close > ema_5 and close > trend_line if side == "CE"
-            else close < ema_5 and close < trend_line
-        )
+        fast_side_confirmed = bool(close > ema_5 if side == "CE" else close < ema_5)
         expected_direction = "BULLISH" if side == "CE" else "BEARISH"
         allowed_slow_misses = {"Market structure", "EMA 5/20/50 alignment"}
         risk_blockers = [item for item in blockers if not item.startswith(f"{side} directional consensus is incomplete:")]
@@ -435,7 +418,6 @@ def evaluate_tps_entry_v2(candles, capture, chain=None, settings=None, environme
                 "passed": not missing_direction,
                 "required": sorted(direction_anchor_names),
                 "missing": missing_direction,
-                "supertrend_lag_candidate": supertrend_lag_candidate,
             },
             "data_gaps": data_gaps,
             "evidence_states": {item["name"]: item["evidence_state"] for item in common[side] if item["name"] in enabled},

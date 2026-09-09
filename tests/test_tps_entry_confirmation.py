@@ -72,8 +72,8 @@ class TpsEntryConfirmationTests(unittest.TestCase):
                     "tps_enabled_conditions": ["Price vs VWAP", "EMA 5/20/50 alignment", "SuperTrend confirmation"]}
         result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain, settings)
         ce = result["side_evaluations"]["CE"]
-        self.assertEqual(ce["total"], 3)
-        self.assertEqual(ce["passed"], 3)
+        self.assertEqual(ce["total"], 2)
+        self.assertEqual(ce["passed"], 2)
         self.assertEqual(ce["score"], 100)
 
     @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
@@ -97,13 +97,12 @@ class TpsEntryConfirmationTests(unittest.TestCase):
         result = evaluate_tps_entry_v2(self.candles, self.capture, self.chain, self.settings)
         pe = result["side_evaluations"]["PE"]
         self.assertGreater(pe["score"], result["side_evaluations"]["CE"]["score"])
-        self.assertFalse(next(item for item in pe["confirmations"] if item["name"] == "SuperTrend confirmation")["passed"])
+        self.assertNotIn("SuperTrend confirmation", {item["name"] for item in pe["confirmations"]})
         self.assertEqual(result["candidate"], "PE")
-        self.assertFalse(pe["trade_ready"])
-        self.assertFalse(pe["directional_consensus"]["passed"])
-        self.assertIn("SuperTrend confirmation", pe["directional_consensus"]["missing"])
-        self.assertTrue(pe["directional_consensus"]["supertrend_lag_candidate"])
-        self.assertTrue(any("queued for one-blocker replay" in warning for warning in pe["quality_warnings"]))
+        self.assertTrue(pe["trade_ready"])
+        self.assertTrue(pe["directional_consensus"]["passed"])
+        self.assertNotIn("SuperTrend confirmation", pe["directional_consensus"]["missing"])
+        self.assertFalse(any("SuperTrend" in warning for warning in pe["quality_warnings"]))
 
     @patch("engine.tps_entry_confirmation.supertrend", return_value=90)
     @patch("engine.tps_entry_confirmation.ema", return_value=95)
@@ -254,7 +253,7 @@ class TpsEntryConfirmationTests(unittest.TestCase):
         self.assertEqual(not_applicable["OI/PCR context"], "UNKNOWN")
         self.assertNotIn("EMA 5/20/50 alignment", not_applicable)
         self.assertNotIn("SuperTrend confirmation", not_applicable)
-        self.assertEqual(ce["total"], 7)
+        self.assertEqual(ce["total"], 6)
         self.assertLessEqual(ce["required"], ce["total"])
 
     @patch("engine.tps_entry_confirmation.analyze_candles", return_value={
@@ -290,7 +289,7 @@ class TpsEntryConfirmationTests(unittest.TestCase):
         volume = next(item for item in ce["confirmations"] if item["name"] == "Directional volume")
         self.assertEqual(volume["status"], "UNKNOWN")
         self.assertIn("Sparse futures-volume", volume["detail"])
-        self.assertEqual((ce["passed"], ce["required"], ce["total"]), (4, 4, 4))
+        self.assertEqual((ce["passed"], ce["required"], ce["total"]), (3, 3, 3))
         self.assertFalse(ce["trade_ready"])
         self.assertTrue(any("Directional volume evidence unavailable" in item for item in ce["data_gaps"]))
         self.assertTrue(ce["entry_quality"]["timely"])

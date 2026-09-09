@@ -1,16 +1,17 @@
 """Application release metadata kept in one place."""
 
 APP_NAME = "TPS AI Trading Assistant"
-VERSION = "1.5.6"
-DISPLAY_VERSION = "Release 1.5.6"
-RELEASE_DATE = "08-09-2026"
+VERSION = "1.5.7"
+DISPLAY_VERSION = "Release 1.5.7"
+RELEASE_DATE = "09-09-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
-SOFTWARE_UPDATE_VERSION = "v1.5.6"
-LAST_UPDATED_AT = "08-09-2026 16:36:52 IST"
-FOOTER_UPDATE_TEXT = "Software Build v1.5.6 - 08-09-2026 16:36 IST"
+SOFTWARE_UPDATE_VERSION = "v1.5.7"
+LAST_UPDATED_AT = "09-09-2026 21:46:54 IST"
+FOOTER_UPDATE_TEXT = "Software Build v1.5.7 - 09-09-2026 21:46 IST"
 RELEASE_NOTES = (
+    "Release 1.5.7 permanently removes SuperTrend from the TPS entry checklist, score and directional-consensus blocker; chart structure, VWAP, EMA alignment, volume, OI/PCR and existing risk/data safeguards continue to govern entries, and legacy saved settings are migrated automatically.",
     "Index-component breadth now directly prefers PE when at least 60% of covered constituents are bearish, or CE when at least 60% are bullish, provided coverage is 80%+; the preferred side keeps its original risk blockers and DATA GAP state.",
     "Added a PAPER-testing daily validation quota of up to three chart-and-volume aligned samples: at least two of structure/VWAP/EMA plus directional volume must agree, while stale data, liquidity, event, expiry, position-size and entry-risk safeguards remain fail-closed.",
     "Release 1.5.6 adds exact-contract local OI-delta reconstruction when broker COI is all-zero, with explicit source and coverage watermark; missing history remains DATA GAP.",

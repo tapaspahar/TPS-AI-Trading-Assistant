@@ -54,7 +54,7 @@ DEFAULT_SETTINGS = {
     "tps_match_mode": "adaptive",
     "tps_enabled_conditions": [
         "Market structure", "Price vs VWAP", "EMA 5/20/50 alignment",
-        "SuperTrend confirmation", "Pullback and reversal", "Directional volume", "OI/PCR context",
+        "Pullback and reversal", "Directional volume", "OI/PCR context",
         "Market environment / VIX",
     ],
     "news_risk_pause": False,
@@ -208,6 +208,17 @@ class SettingsStore:
         if not saved:
             saved = self._read_file(self.backup_path)
         values = {**DEFAULT_SETTINGS, **saved}
+        # Release 1.5.7 permanently removes SuperTrend from the entry
+        # checklist. Filter legacy saved preferences so it cannot return after
+        # an upgrade, then keep the configured match count within the new list.
+        values["tps_enabled_conditions"] = [
+            name for name in values.get("tps_enabled_conditions", [])
+            if name != "SuperTrend confirmation"
+        ] or list(DEFAULT_SETTINGS["tps_enabled_conditions"])
+        values["tps_required_matches"] = min(
+            max(1, int(values.get("tps_required_matches", 5))),
+            len(values["tps_enabled_conditions"]),
+        )
         # Release 1.5.2 Options Workspace validation uses a fixed safe testing
         # ceiling of ten; transparently migrate the older 20-trade preference.
         values["paper_validation_daily_limit"] = min(10, max(1, int(values.get("paper_validation_daily_limit", 10))))
@@ -272,7 +283,7 @@ class SettingsStore:
             "auto_paper_monitor_enabled": bool(settings.get("auto_paper_monitor_enabled", current["auto_paper_monitor_enabled"])),
             "tps_required_matches": int(settings.get("tps_required_matches", current["tps_required_matches"])),
             "tps_match_mode": str(settings.get("tps_match_mode", current["tps_match_mode"])),
-            "tps_enabled_conditions": list(settings.get("tps_enabled_conditions", current["tps_enabled_conditions"])),
+            "tps_enabled_conditions": [name for name in settings.get("tps_enabled_conditions", current["tps_enabled_conditions"]) if name != "SuperTrend confirmation"],
             "news_risk_pause": bool(settings.get("news_risk_pause", current["news_risk_pause"])),
             "event_no_trade_minutes": int(settings.get("event_no_trade_minutes", current["event_no_trade_minutes"])),
             "economic_calendar_api_key": str(settings.get("economic_calendar_api_key", current["economic_calendar_api_key"])).strip(),
@@ -353,7 +364,7 @@ class SettingsStore:
             raise ValueError("Regular scalp confirmations must be between 1 and 8.")
         allowed_conditions = {
             "Market structure", "Price vs VWAP", "EMA 5/20/50 alignment",
-            "SuperTrend confirmation", "Pullback and reversal", "Directional volume", "OI/PCR context",
+            "Pullback and reversal", "Directional volume", "OI/PCR context",
             "Market environment / VIX",
         }
         if not values["tps_enabled_conditions"] or not set(values["tps_enabled_conditions"]) <= allowed_conditions:

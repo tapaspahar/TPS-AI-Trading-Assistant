@@ -73,7 +73,7 @@ class DevelopmentValidationTests(unittest.TestCase):
         self.assertEqual(evidence["levels"]["confluence"], {"BOTH": 1})
         self.assertEqual(evidence["levels"]["quality"], {"UNRELIABLE_OR_MISSING": 1})
         self.assertEqual(evidence["timing"]["stages"], {"NONE": 1})
-        self.assertEqual(evidence["supertrend"]["only_blocker_by_symbol"], {})
+        self.assertNotIn("supertrend", evidence)
         self.assertEqual(evidence["outcomes"]["samples"], 0)
 
 

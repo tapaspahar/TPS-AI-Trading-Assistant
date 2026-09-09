@@ -57,24 +57,9 @@ def exploratory_paper_eligibility(strategy: dict, settings: dict) -> dict:
         settings.get("paper_validation_testing_mode") and candidate in {"CE", "PE"}
         and impulse_reversal and volume_pass and not risk_blockers and not data_gaps
     )
-    consensus = side.get("directional_consensus") or {}
-    supertrend_lag = bool(consensus.get("supertrend_lag_candidate"))
-    # SuperTrend is deliberately retained as a slow context indicator.  In
-    # explicit PAPER validation only, a setup whose *only* directional miss is
-    # that delayed flip may be sampled when the faster price/VWAP/EMA,
-    # completed-candle trigger and directional-volume stack already agrees.
-    # Risk, data, event, expiry, liquidity and position-size blockers remain
-    # fail-closed and REAL execution never uses this research allowance.
-    fast_trend_allowed = bool(
-        settings.get("paper_validation_testing_mode") and candidate in {"CE", "PE"}
-        and not strategy.get("trade_ready") and supertrend_lag and volume_pass
-        and score >= score_floor and misses <= max(1, allowance)
-        and not risk_blockers and not data_gaps
-    )
-    allowed = standard_allowed or reversal_allowed or fast_trend_allowed
+    allowed = standard_allowed or reversal_allowed
     validation_track = (
-        "FAST TREND / SUPERTREND-LAG PAPER" if fast_trend_allowed
-        else "IMPULSE REVERSAL PAPER" if reversal_allowed
+        "IMPULSE REVERSAL PAPER" if reversal_allowed
         else "EXPLORATORY PAPER"
     )
     return {
@@ -84,7 +69,6 @@ def exploratory_paper_eligibility(strategy: dict, settings: dict) -> dict:
         "hard_blockers": risk_blockers if reversal_allowed else hard_blockers, "data_gaps": data_gaps,
         "validation_track": validation_track,
         "impulse_reversal": impulse_reversal,
-        "supertrend_lag": supertrend_lag,
     }
 
 

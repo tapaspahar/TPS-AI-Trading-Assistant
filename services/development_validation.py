@@ -189,8 +189,6 @@ def build_evidence_diagnostics(database: Database, trade_date: str) -> dict:
     level_quality = Counter()
     timing_stages = Counter()
     timing_delays = []
-    supertrend_by_symbol = Counter()
-    supertrend_lag_by_symbol = Counter()
     distances = []
     ages = []
     for row in attempts:
@@ -207,11 +205,6 @@ def build_evidence_diagnostics(database: Database, trade_date: str) -> dict:
             timing_delays.append(float(row["timing_delay_seconds"]))
         candidate = str(row["candidate"] or "").upper()
         side = (facts["strategy"].get("side_evaluations") or {}).get(candidate) or {}
-        consensus = side.get("directional_consensus") or {}
-        if consensus.get("missing") == ["SuperTrend confirmation"]:
-            supertrend_by_symbol[str(row["symbol"] or "UNKNOWN")] += 1
-        if consensus.get("supertrend_lag_candidate"):
-            supertrend_lag_by_symbol[str(row["symbol"] or "UNKNOWN")] += 1
         zones = facts["strategy"].get("zones") or {}
         chart_key = "resistance_quality" if candidate == "CE" else "support_quality"
         oi_key = "oi_resistance_reliable" if candidate == "CE" else "oi_support_reliable"
@@ -250,7 +243,5 @@ def build_evidence_diagnostics(database: Database, trade_date: str) -> dict:
                    "maximum_age_seconds": max(ages) if ages else None},
         "timing": {"stages": dict(timing_stages),
                    "average_discovery_to_valid_seconds": round(sum(timing_delays) / len(timing_delays), 1) if timing_delays else None},
-        "supertrend": {"only_blocker_by_symbol": dict(supertrend_by_symbol),
-                       "strong_lag_candidates_by_symbol": dict(supertrend_lag_by_symbol)},
         "outcomes": outcomes,
     }
