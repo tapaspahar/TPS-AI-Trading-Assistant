@@ -8,9 +8,10 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.7"
-LAST_UPDATED_AT = "09-09-2026 21:46:54 IST"
-FOOTER_UPDATE_TEXT = "Software Build v1.5.7 - 09-09-2026 21:46 IST"
+LAST_UPDATED_AT = "09-09-2026 22:05:00 IST"
+FOOTER_UPDATE_TEXT = "Software Build v1.5.7 - 09-09-2026 22:05 IST"
 RELEASE_NOTES = (
+    "Dashboard Journal P&L is now scoped to the current IST journal date, displays that date on the card, and automatically refreshes at midnight so a new trading day starts at zero until a current-date trade closes.",
     "Release 1.5.7 permanently removes SuperTrend from the TPS entry checklist, score and directional-consensus blocker; chart structure, VWAP, EMA alignment, volume, OI/PCR and existing risk/data safeguards continue to govern entries, and legacy saved settings are migrated automatically.",
     "Index-component breadth now directly prefers PE when at least 60% of covered constituents are bearish, or CE when at least 60% are bullish, provided coverage is 80%+; the preferred side keeps its original risk blockers and DATA GAP state.",
     "Added a PAPER-testing daily validation quota of up to three chart-and-volume aligned samples: at least two of structure/VWAP/EMA plus directional volume must agree, while stale data, liquidity, event, expiry, position-size and entry-risk safeguards remain fail-closed.",

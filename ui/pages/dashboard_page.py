@@ -9,6 +9,7 @@ from services.analysis_scheduler import AnalysisScheduler
 from services.market_data_hub import MarketDataHub
 from core.settings_store import SettingsStore
 from core.market_session import market_session
+from core.market_session import IST
 from engine.performance_calibration import calibrate_outcomes
 from ui.widgets.cards.dashboard_card import DashboardCard
 
@@ -24,6 +25,7 @@ class DashboardPage(QWidget):
     def __init__(self):
         super().__init__()
         self.db = Database()
+        self._journal_summary_date = None
         self._funds_refresh_running = False
         self.funds_loaded.connect(self._show_funds)
         self.funds_failed.connect(self._show_funds_error)
@@ -33,7 +35,7 @@ class DashboardPage(QWidget):
         grid.setVerticalSpacing(20)
         self.cards = {
             "market": DashboardCard("Live Data Status", "Not connected"),
-            "pnl": DashboardCard("Journal P&L", "₹0.00"),
+            "pnl": DashboardCard("Today's Journal P&L", "₹0.00"),
             "ai": DashboardCard("Average AI Confidence", "0%"),
             "win_rate": DashboardCard("Win Rate", "0%"),
             "risk": DashboardCard("Risk Status", "Review each trade"),
@@ -77,18 +79,25 @@ class DashboardPage(QWidget):
         self.funds_timer.setInterval(60_000)
         self.funds_timer.timeout.connect(self.refresh_funds)
         QTimer.singleShot(AnalysisScheduler.stagger_ms("dashboard-funds"), self.funds_timer.start)
+        self.date_rollover_timer = QTimer(self)
+        self.date_rollover_timer.setInterval(30_000)
+        self.date_rollover_timer.timeout.connect(self._refresh_on_date_rollover)
+        self.date_rollover_timer.start()
         self.refresh()
 
     def refresh(self):
         summary = self.db.get_summary()
+        current_date = datetime.now(IST).strftime("%d-%m-%Y")
+        daily_summary = self.db.get_day_summary(current_date)
+        self._journal_summary_date = current_date
         self.cards["market"].set_value(
             "Connected (read-only)\nOpen Market Snapshot" if LiveSession.connected() else "Not connected\nOpen Settings"
         )
-        self.cards["pnl"].set_value(f"₹{summary['pnl']:,.2f}")
+        self.cards["pnl"].set_value(f"₹{daily_summary['pnl']:,.2f}\n{current_date}")
         self.cards["ai"].set_value(f"{summary['average_ai']:.0f}%")
         self.cards["win_rate"].set_value(f"{summary['win_rate']:.1f}%")
         self.cards["trades"].set_value(summary["trades"])
-        self.cards["risk"].set_value("Safe" if summary["trades"] == 0 or summary["pnl"] >= 0 else "Review loss")
+        self.cards["risk"].set_value("Safe" if daily_summary["trades"] == 0 or daily_summary["pnl"] >= 0 else "Review loss")
         metrics = AnalysisScheduler.metrics()
         active = sum(bool(item.get("active")) for item in metrics.values())
         runs = sum(int(item.get("runs", 0)) for item in metrics.values())
@@ -112,7 +121,7 @@ class DashboardPage(QWidget):
             f"Expectancy ₹{calibration['expectancy']:,.2f} | PF {factor}"
         )
         settings = SettingsStore().load()
-        today = datetime.now().strftime("%d-%m-%Y")
+        today = current_date
         progress = self.db.paper_trade_progress(today)
         session = market_session(settings=settings)
         mode = "PAPER TEST" if settings.get("paper_validation_testing_mode") else str(settings.get("execution_mode", "PAPER"))
@@ -138,6 +147,12 @@ class DashboardPage(QWidget):
     def refresh_all(self):
         self.refresh()
         self.refresh_funds()
+
+    def _refresh_on_date_rollover(self):
+        """Clear yesterday's dashboard P&L as soon as the IST date changes."""
+        current_date = datetime.now(IST).strftime("%d-%m-%Y")
+        if current_date != self._journal_summary_date:
+            self.refresh()
 
     def refresh_funds(self):
         if not LiveSession.connected() or LiveSession.broker_id != "angel_one":
