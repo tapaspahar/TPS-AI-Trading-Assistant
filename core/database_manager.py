@@ -2240,6 +2240,12 @@ class Database:
             (trade_date, max(1, min(int(limit), 3000))),
         ).fetchall()
 
+    def get_latest_index_component_breadth(self, symbol: str, trade_date: str):
+        return self.cursor.execute(
+            "SELECT * FROM index_component_breadth WHERE trade_date=? AND symbol=? ORDER BY captured_at DESC LIMIT 1",
+            (str(trade_date), str(symbol).upper()),
+        ).fetchone()
+
     def save_index_candle_analysis(self, analysis: dict) -> bool:
         columns = (
             "trade_date", "candle_time", "analyzed_at", "symbol", "state", "direction", "aggression",

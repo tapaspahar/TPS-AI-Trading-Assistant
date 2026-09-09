@@ -11,6 +11,7 @@ SOFTWARE_UPDATE_VERSION = "v1.5.6"
 LAST_UPDATED_AT = "08-09-2026 16:36:52 IST"
 FOOTER_UPDATE_TEXT = "Software Build v1.5.6 - 08-09-2026 16:36 IST"
 RELEASE_NOTES = (
+    "Index-component breadth now directly prefers PE when at least 60% of covered constituents are bearish, or CE when at least 60% are bullish, provided coverage is 80%+; the preferred side keeps its original risk blockers and DATA GAP state.",
     "Added a PAPER-testing daily validation quota of up to three chart-and-volume aligned samples: at least two of structure/VWAP/EMA plus directional volume must agree, while stale data, liquidity, event, expiry, position-size and entry-risk safeguards remain fail-closed.",
     "Release 1.5.6 adds exact-contract local OI-delta reconstruction when broker COI is all-zero, with explicit source and coverage watermark; missing history remains DATA GAP.",
     "Added a 3/6/12 completed-candle trend-regime model so one candle or delayed SuperTrend cannot independently define the session direction.",

@@ -2,12 +2,34 @@ import unittest
 from datetime import datetime
 from unittest.mock import patch
 
-from services.auto_paper_trader import (_completed_candle_age_seconds, _completed_candles, chart_volume_quota_eligibility, exploratory_paper_eligibility,
+from services.auto_paper_trader import (_completed_candle_age_seconds, _completed_candles, chart_volume_quota_eligibility, component_breadth_preference, exploratory_paper_eligibility,
                                         late_session_entry_blocker, run_auto_paper_cycle, signal_timing_stage)
 from ui.pages.options_page import AUTO_PAPER_INDEXES, pending_auto_paper_indexes
 
 
 class AutoPaperTraderTests(unittest.TestCase):
+    def test_bearish_component_majority_prefers_pe_without_erasing_risk(self):
+        strategy = {"candidate": "CE", "score": 80, "side_evaluations": {
+            "CE": {"score": 80, "risk_blockers": []},
+            "PE": {"score": 92, "passed": 5, "total": 5, "required": 5,
+                   "risk_blockers": ["Late PE entry"], "data_gaps": [],
+                   "hard_blockers": ["Late PE entry"], "selected_confirmations": []},
+        }}
+        result = component_breadth_preference(strategy, {
+            "state": "BEARISH", "coverage": 96, "positive_pct": 25, "negative_pct": 72,
+            "captured_at": "2026-09-09T12:00:00+05:30",
+        })
+        self.assertEqual(result["candidate"], "PE")
+        self.assertTrue(result["component_breadth_preference"]["applied"])
+        self.assertIn("Late PE entry", result["risk_blockers"])
+
+    def test_low_coverage_breadth_cannot_choose_direction(self):
+        result = component_breadth_preference({"candidate": "CE", "side_evaluations": {}}, {
+            "state": "BEARISH", "coverage": 70, "positive_pct": 10, "negative_pct": 80,
+        })
+        self.assertEqual(result["candidate"], "CE")
+        self.assertFalse(result["component_breadth_preference"]["applied"])
+
     def test_chart_volume_quota_allows_paper_sample_with_two_chart_votes(self):
         strategy = {"candidate": "PE", "side_evaluations": {"PE": {
             "confirmations": [

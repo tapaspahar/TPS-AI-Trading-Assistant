@@ -126,6 +126,47 @@ def chart_volume_quota_eligibility(strategy: dict, capture: dict, settings: dict
     }
 
 
+def component_breadth_preference(strategy: dict, breadth) -> dict:
+    """Prefer the side confirmed by broad index-component participation."""
+    result = dict(strategy)
+    if not breadth:
+        result["component_breadth_preference"] = {"state": "DATA GAP", "applied": False}
+        return result
+    try:
+        row = dict(breadth)
+    except (TypeError, ValueError):
+        result["component_breadth_preference"] = {"state": "DATA GAP", "applied": False}
+        return result
+    coverage = float(row.get("coverage") or 0)
+    positive = float(row.get("positive_pct") or 0)
+    negative = float(row.get("negative_pct") or 0)
+    side = "PE" if coverage >= 80 and negative >= 60 else "CE" if coverage >= 80 and positive >= 60 else None
+    preference = {
+        "state": row.get("state") or "MIXED", "coverage": coverage,
+        "positive_pct": positive, "negative_pct": negative, "preferred_side": side,
+        "captured_at": row.get("captured_at"), "applied": False,
+    }
+    evaluation = (result.get("side_evaluations") or {}).get(side) if side else None
+    if evaluation:
+        # The breadth vote chooses between already-computed CE/PE evaluations;
+        # it never changes their evidence, risk blockers or data gaps.
+        result.update({
+            "candidate": side, "score": evaluation.get("score", result.get("score")),
+            "passed": evaluation.get("passed", result.get("passed")),
+            "total": evaluation.get("total", result.get("total")),
+            "required": evaluation.get("required", result.get("required")),
+            "selected_confirmations": evaluation.get("selected_confirmations") or result.get("selected_confirmations"),
+            "hard_blockers": evaluation.get("hard_blockers") or [],
+            "risk_blockers": evaluation.get("risk_blockers") or [],
+            "data_gaps": evaluation.get("data_gaps") or [],
+            "primary_blocker": evaluation.get("primary_blocker"),
+            "secondary_warnings": evaluation.get("secondary_warnings") or [],
+        })
+        preference["applied"] = True
+    result["component_breadth_preference"] = preference
+    return result
+
+
 def _attempt(status, checked_at, *, capture=None, chart=None, candidate=None, future=None, blockers=None, chain=None, timing=None,
              outcome=None, data_gaps=None, safety_blockers=None, warnings=None):
     """Return a transparent audit record for every automatic decision."""
@@ -328,6 +369,15 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
             1 if environment["vix_zone"] == "EXTREME RISK" else 2 if environment["regime"] == "LOW VOLATILITY" else int(settings.get("max_trades_per_day", 5)),
         )
         strategy = evaluate_tps_entry_v2(candles, capture, chain, settings, environment)
+        breadth = database.get_latest_index_component_breadth(symbol, today)
+        if breadth:
+            try:
+                breadth_age = (checked_at.replace(tzinfo=None) - datetime.fromisoformat(str(breadth["captured_at"])).replace(tzinfo=None)).total_seconds()
+                if breadth_age < 0 or breadth_age > 600:
+                    breadth = None
+            except (KeyError, TypeError, ValueError):
+                breadth = None
+        strategy = component_breadth_preference(strategy, breadth)
         exploratory = exploratory_paper_eligibility(strategy, settings)
         quota_sample = chart_volume_quota_eligibility(strategy, capture, settings, progress)
         if quota_sample["allowed"] and not exploratory["allowed"]:
