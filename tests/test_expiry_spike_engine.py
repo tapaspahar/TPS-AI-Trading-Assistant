@@ -2,7 +2,15 @@ import unittest
 from datetime import date, datetime, time, timedelta, timezone
 
 from engine.expiry_spike_engine import evaluate_spike, predict_expiry_spike, select_nearby_expiry_contracts
-from ui.pages.expiry_observation_page import cas_context, expiry_monitor_window, select_atm_parity_pair
+from ui.pages.expiry_observation_page import (cas_context, daily_forward_test_window,
+                                              expiry_monitor_window, select_atm_parity_pair)
+
+
+def test_daily_forward_test_window_is_after_three_and_before_close():
+    from datetime import datetime, time
+    now = datetime(2026, 9, 11, 15, 5)
+    assert daily_forward_test_window(now, True, time(15, 30)) == "MONITORING"
+    assert daily_forward_test_window(now.replace(hour=14), True, time(15, 30)) == "ARMED UNTIL 3:00 PM"
 
 
 class ExpirySpikeEngineTests(unittest.TestCase):

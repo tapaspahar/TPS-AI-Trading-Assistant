@@ -14,6 +14,7 @@ from core.database_manager import Database
 from core.market_session import IST, parse_session_times
 from core.settings_store import SettingsStore
 from engine.expiry_spike_engine import evaluate_spike, format_spike_event, predict_expiry_spike, select_nearby_expiry_contracts
+from engine.pair_forward_test_engine import SOURCE_PAGE, build_forward_test_plan, summarize_forward_test
 from engine.three_pm_research_engine import evaluate_three_pm_shadow
 from services.expiry_observation_store import ExpiryObservationStore
 from services.live_session import LiveSession
@@ -51,6 +52,16 @@ def expiry_monitor_window(now, enabled, expiry_date, market_close):
     return "MONITORING"
 
 
+def daily_forward_test_window(now, enabled, market_close):
+    if not enabled:
+        return "OFF"
+    if now.time() < time(15, 0):
+        return "ARMED UNTIL 3:00 PM"
+    if now.time() >= market_close:
+        return "MARKET CLOSED"
+    return "MONITORING"
+
+
 def cas_context(now):
     if now.time() < time(15, 15):
         return "PRE-CAS / CONTINUOUS INDEX SESSION"
@@ -65,8 +76,8 @@ class _Signals(QObject):
 
 
 class _ScanTask(QRunnable):
-    def __init__(self, underlying):
-        super().__init__(); self.underlying = underlying; self.signals = _Signals()
+    def __init__(self, underlying, expiry_only=True):
+        super().__init__(); self.underlying = underlying; self.expiry_only = expiry_only; self.signals = _Signals()
 
     def run(self):
         try:
@@ -78,7 +89,7 @@ class _ScanTask(QRunnable):
             spot = float(client.get_option_quote(spot_item["exchange"], spot_item["token"]).get("ltp", 0) or 0)
             contracts = service.get_contracts(self.underlying)
             selected = select_nearby_expiry_contracts(contracts, spot)
-            if not selected or selected[0]["expiry"] != datetime.now(IST).date():
+            if not selected or (self.expiry_only and selected[0]["expiry"] != datetime.now(IST).date()):
                 expiry = min((row["expiry"] for row in contracts), default=None)
                 self.signals.done.emit({"underlying": self.underlying, "spot": spot, "expiry": expiry, "rows": []}); return
             by_exchange = {}
@@ -152,6 +163,29 @@ class ExpiryObservationPage(QWidget):
         self.pair_status = QLabel("No open expiry pair. REAL authority har app restart par locked rahegi.")
         self.pair_status.setWordWrap(True); execution.addWidget(self.pair_status, 6, 0, 1, 4)
         layout.addWidget(execution_box)
+        validation_box = QGroupBox("30 Market-Session CE+PE PAPER Forward Test")
+        validation = QGridLayout(validation_box)
+        self.forward_test = QCheckBox("Daily 3 PM nearest same-strike CE+PE PAPER test (premium gap ≤ ₹10)")
+        self.forward_test.setChecked(self.settings.value("pair_forward_test/enabled", False, bool))
+        self.forward_capital = QDoubleSpinBox(); self.forward_capital.setRange(1000, 10000000); self.forward_capital.setPrefix("₹")
+        self.forward_capital.setValue(self.settings.value("pair_forward_test/capital", 100000.0, float))
+        self.forward_target = QDoubleSpinBox(); self.forward_target.setRange(1, 1000000); self.forward_target.setPrefix("₹")
+        self.forward_target.setValue(self.settings.value("pair_forward_test/target_net", 2000.0, float))
+        self.forward_costs = QDoubleSpinBox(); self.forward_costs.setRange(0, 100000); self.forward_costs.setPrefix("₹")
+        self.forward_costs.setValue(self.settings.value("pair_forward_test/costs", 100.0, float))
+        self.forward_loss = QDoubleSpinBox(); self.forward_loss.setRange(1, 1000000); self.forward_loss.setPrefix("₹")
+        self.forward_loss.setValue(self.settings.value("pair_forward_test/max_loss", 2000.0, float))
+        validation.addWidget(self.forward_test, 0, 0, 1, 4)
+        validation.addWidget(QLabel("Capital ceiling"), 1, 0); validation.addWidget(self.forward_capital, 1, 1)
+        validation.addWidget(QLabel("Daily target after estimated costs"), 1, 2); validation.addWidget(self.forward_target, 1, 3)
+        validation.addWidget(QLabel("Estimated round-trip costs"), 2, 0); validation.addWidget(self.forward_costs, 2, 1)
+        validation.addWidget(QLabel("Combined maximum loss"), 2, 2); validation.addWidget(self.forward_loss, 2, 3)
+        self.forward_summary = QLabel("30-session PAPER evidence abhi collect nahi hua.")
+        self.forward_summary.setWordWrap(True); validation.addWidget(self.forward_summary, 3, 0, 1, 4)
+        layout.addWidget(validation_box)
+        self.forward_test.toggled.connect(self._save_forward_preferences)
+        for field in (self.forward_capital, self.forward_target, self.forward_costs, self.forward_loss):
+            field.valueChanged.connect(self._save_forward_preferences)
         for field in (self.pair_lots, self.pair_target, self.pair_stop, self.pair_time):
             if hasattr(field, "valueChanged"): field.valueChanged.connect(self._save_pair_preferences)
             else: field.editingFinished.connect(self._save_pair_preferences)
@@ -173,6 +207,14 @@ class ExpiryObservationPage(QWidget):
         self.settings.setValue("expiry_pair/target", self.pair_target.value())
         self.settings.setValue("expiry_pair/stop", self.pair_stop.value())
         self.settings.setValue("expiry_pair/time_exit", self.pair_time.text().strip())
+
+    def _save_forward_preferences(self, *_):
+        self.settings.setValue("pair_forward_test/enabled", self.forward_test.isChecked())
+        self.settings.setValue("pair_forward_test/capital", self.forward_capital.value())
+        self.settings.setValue("pair_forward_test/target_net", self.forward_target.value())
+        self.settings.setValue("pair_forward_test/costs", self.forward_costs.value())
+        self.settings.setValue("pair_forward_test/max_loss", self.forward_loss.value())
+        if self.forward_test.isChecked(): self.scan()
 
     def _arm_real_pair(self):
         if not self.real_pair_money_ack.isChecked() or not self.real_pair_session_ack.isChecked():
@@ -207,7 +249,8 @@ class ExpiryObservationPage(QWidget):
         return float(strike), pair
 
     def _place_pair(self, real, strike=None, automatic=False, trigger_type="MANUAL_OR_SPIKE",
-                    observed_at=None, premium_gap=None, pair_override=None, target_pnl_override=None):
+                    observed_at=None, premium_gap=None, pair_override=None, target_pnl_override=None,
+                    lots_override=None, stop_pnl_override=None, source_page_override=None, extra_details=None):
         try:
             if pair_override is None:
                 strike, pair = self._candidate_pair(strike)
@@ -224,12 +267,13 @@ class ExpiryObservationPage(QWidget):
                 if answer != QMessageBox.Yes: return
             result = self.pair_execution.open_pair(
                 underlying=self.underlying.currentText(), expiry=pair["expiry"], strike=strike,
-                ce=pair["CE"], pe=pair["PE"], lots=self.pair_lots.value(),
+                ce=pair["CE"], pe=pair["PE"], lots=self.pair_lots.value() if lots_override is None else int(lots_override),
                 target_pnl=self.pair_target.value() if target_pnl_override is None else float(target_pnl_override),
-                stop_pnl=self.pair_stop.value(),
+                stop_pnl=self.pair_stop.value() if stop_pnl_override is None else float(stop_pnl_override),
                 time_exit=self.pair_time.text().strip(), real=real,
-                source_page="EXPIRY_ATM_PARITY" if trigger_type == "ATM_PREMIUM_PARITY" else "EXPIRY_AFTER_3PM",
+                source_page=source_page_override or ("EXPIRY_ATM_PARITY" if trigger_type == "ATM_PREMIUM_PARITY" else "EXPIRY_AFTER_3PM"),
                 trigger_type=trigger_type, observed_at=observed_at, premium_gap=premium_gap,
+                extra_details=extra_details,
             )
             self.pair_status.setText(f"{result['status']}: {strike:g} CE+PE pair recorded. Combined exits are being monitored.")
         except Exception as error:
@@ -263,11 +307,13 @@ class ExpiryObservationPage(QWidget):
             nearest = min(row["expiry"] for row in OptionContractService().get_contracts(symbol))
         except Exception as error:
             self.status.setText(str(error)); return
-        state = expiry_monitor_window(now, self.expiry_toggle.isChecked(), nearest, close)
-        self.status.setText(f"Status: {state} | Nearest expiry: {nearest.strftime('%d-%m-%Y')} | Poll: 30 seconds")
+        daily_state = daily_forward_test_window(now, self.forward_test.isChecked(), close)
+        state = daily_state if self.forward_test.isChecked() else expiry_monitor_window(now, self.expiry_toggle.isChecked(), nearest, close)
+        mode_text = "30-session PAPER test" if self.forward_test.isChecked() else "expiry observation"
+        self.status.setText(f"Status: {state} | {mode_text} | Nearest expiry: {nearest.strftime('%d-%m-%Y')} | Poll: 30 seconds")
         # A manual refresh must never bypass the expiry-day/3 PM/market-close gate.
         if state != "MONITORING": return
-        self.running = True; self.scan_button.setEnabled(False); task = _ScanTask(symbol)
+        self.running = True; self.scan_button.setEnabled(False); task = _ScanTask(symbol, expiry_only=not self.forward_test.isChecked())
         task.signals.done.connect(self._consume); task.signals.failed.connect(self._failed); QThreadPool.globalInstance().start(task)
 
     def _failed(self, message):
@@ -318,6 +364,28 @@ class ExpiryObservationPage(QWidget):
             f"Evidence: {', '.join(shadow['evidence']) or 'insufficient'}\n{shadow['policy']}"
         )
         pair_auto_attempted = False
+        if self.forward_test.isChecked() and symbol == self.underlying.currentText():
+            parity = select_atm_parity_pair(self.latest_pairs[symbol], spot)
+            if parity is not None:
+                lot_size = int(parity["pair"]["CE"]["contract"].get("lot_size") or 0)
+                try:
+                    plan = build_forward_test_plan(
+                        ce_price=parity["ce_price"], pe_price=parity["pe_price"], lot_size=lot_size,
+                        capital_limit=self.forward_capital.value(), daily_target_net=self.forward_target.value(),
+                        estimated_costs=self.forward_costs.value(), maximum_loss=self.forward_loss.value(),
+                        target_move_points=ATM_PARITY_TARGET_POINTS,
+                    )
+                    # This experiment is intentionally PAPER regardless of the global execution mode.
+                    self._place_pair(
+                        False, parity["strike"], automatic=True, trigger_type="30_SESSION_FORWARD_TEST",
+                        observed_at=now.isoformat(), premium_gap=parity["gap"],
+                        target_pnl_override=plan["target_pnl_gross"], lots_override=plan["lots"],
+                        stop_pnl_override=plan["maximum_loss"], source_page_override=SOURCE_PAGE,
+                        extra_details={**plan, "required_sessions": 30, "paper_only": True},
+                    )
+                    pair_auto_attempted = True
+                except (ValueError, RuntimeError) as error:
+                    self.pair_status.setText(f"30-session PAPER test waiting/blocked: {error}")
         if self.auto_atm_parity.isChecked() and symbol == self.underlying.currentText():
             parity = select_atm_parity_pair(self.latest_pairs[symbol], spot)
             if parity is not None:
@@ -381,6 +449,19 @@ class ExpiryObservationPage(QWidget):
         self.refresh_history()
 
     def refresh_history(self):
+        summary = summarize_forward_test(
+            self.db.get_execution_pairs(SOURCE_PAGE), required_sessions=30,
+            max_drawdown_limit=self.forward_loss.value() * 5,
+        )
+        eligibility = "LIMITED REAL REVIEW ELIGIBLE" if summary["real_review_eligible"] else "REAL NOT ELIGIBLE"
+        self.forward_summary.setText(
+            f"Closed {summary['closed_sessions']}/30 | Remaining {summary['remaining_sessions']} | "
+            f"Target hit {summary['target_hit_rate']:.1f}% | Win {summary['win_rate']:.1f}% | "
+            f"Net after estimated costs ₹{summary['net_pnl']:,.2f} | Avg ₹{summary['average_net']:,.2f} | "
+            f"Max drawdown ₹{summary['max_drawdown']:,.2f} | {eligibility}. "
+            "Review gate: 30 closed sessions, ≥70% target-hit rate, positive net result aur max drawdown ≤ 5 daily loss limits. "
+            "₹2,000 objective hai, guarantee nahi."
+        )
         events = self.store.events(); self.events_table.setRowCount(len(events))
         for r, row in enumerate(events):
             money = lambda value: "-" if value is None else f"₹{float(value):,.2f}"

@@ -135,6 +135,13 @@ DEFAULT_SETTINGS = {
     "expiry_pair_target_pnl": 1000.0,
     "expiry_pair_stop_pnl": 500.0,
     "expiry_pair_time_exit": "15:25",
+    "pair_forward_test_enabled": False,
+    "pair_forward_test_capital": 100000.0,
+    "pair_forward_test_daily_target_net": 2000.0,
+    "pair_forward_test_estimated_costs": 100.0,
+    "pair_forward_test_target_move_points": 50.0,
+    "pair_forward_test_maximum_loss": 2000.0,
+    "pair_forward_test_required_sessions": 30,
     "notifications_enabled": True,
     "notification_sound": True,
     "notification_preferences": {

@@ -946,6 +946,23 @@ class Database:
         ).fetchone()
         return bool(row)
 
+    def has_execution_pair_source_day(self, trading_date, source_page):
+        row = self.cursor.execute(
+            "SELECT 1 FROM execution_pairs WHERE trading_date=? AND source_page=? LIMIT 1",
+            (str(trading_date), str(source_page)),
+        ).fetchone()
+        return bool(row)
+
+    def get_execution_pairs(self, source_page=None, limit=500):
+        sql = "SELECT * FROM execution_pairs"
+        params = []
+        if source_page:
+            sql += " WHERE source_page=?"; params.append(str(source_page))
+        sql += " ORDER BY trading_date, id"
+        if limit:
+            sql += " LIMIT ?"; params.append(int(limit))
+        return list(self.cursor.execute(sql, params).fetchall())
+
     def _backfill_attempt_evidence_states(self) -> int:
         """Recover structured evidence already present in legacy payloads.
 
