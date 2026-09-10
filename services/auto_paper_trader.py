@@ -102,8 +102,8 @@ def chart_volume_quota_eligibility(strategy: dict, capture: dict, settings: dict
     """Select up to three PAPER-only chart+volume samples per session.
 
     This is a validation quota, not a forced order promise. Missing/stale data,
-    option liquidity, event, expiry, position-size and entry-risk locks still
-    fail closed. Only slow/strict strategy confirmation may be held out.
+    stale/missing market data still fails closed. Strategy/risk vetoes are
+    recorded but do not veto this PAPER-only research sample.
     """
     candidate = str(strategy.get("candidate") or "").upper()
     side = (strategy.get("side_evaluations") or {}).get(candidate) or {}
@@ -125,7 +125,7 @@ def chart_volume_quota_eligibility(strategy: dict, capture: dict, settings: dict
     allowed = bool(
         settings.get("paper_validation_testing_mode") and used < quota
         and candidate in {"CE", "PE"} and candle_aligned and volume_confirmed
-        and chart_votes >= 2 and not data_gaps and not risk_blockers
+        and chart_votes >= 2 and not data_gaps
     )
     return {
         "allowed": allowed, "candidate": candidate, "quota": quota, "used": used,
@@ -280,7 +280,9 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
     try:
         checked_at = datetime.now()
         today = checked_at.strftime("%d-%m-%Y")
-        progress = database.paper_trade_progress(today)
+        # The chart+volume validation quota is per index.  A global count used
+        # to let early NIFTY captures consume BANKNIFTY/SENSEX's three samples.
+        progress = database.paper_trade_progress(today, symbol)
         service = OptionContractService()
         future = service.get_front_month_future(symbol)
         provider = getattr(client, "provider_name", "Broker")
@@ -374,7 +376,9 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
         # Options Workspace validation is deliberately capped at ten samples
         # per day even if an older settings file contains the legacy value 20.
         testing_limit = min(10, max(1, int(settings.get("paper_validation_daily_limit", 10))))
-        environment["adaptive_max_trades"] = testing_limit if testing_mode else min(
+        # Release validation requires three independent samples for each index,
+        # rather than allowing the first symbol to consume a global quota.
+        environment["adaptive_max_trades"] = min(3, testing_limit) if testing_mode else min(
             int(settings.get("max_trades_per_day", 5)),
             1 if environment["vix_zone"] == "EXTREME RISK" else 2 if environment["regime"] == "LOW VOLATILITY" else int(settings.get("max_trades_per_day", 5)),
         )
@@ -391,6 +395,25 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
         exploratory = exploratory_paper_eligibility(strategy, settings)
         quota_sample = chart_volume_quota_eligibility(strategy, capture, settings, progress)
         permissive_sample = permissive_paper_eligibility(strategy, settings)
+        # In testing mode an automatic capture must still represent the user's
+        # requested phenomenon: completed candle agrees with the trend, future
+        # volume expands, and at least two chart-direction votes agree. Other
+        # strategy blockers remain in the audit but do not veto PAPER research.
+        if testing_mode and not quota_sample["allowed"]:
+            data_gaps = unique_messages(quota_sample.get("data_gaps"))
+            blockers = data_gaps or [
+                f"Per-index volume sample not ready: candle aligned={quota_sample['candle_aligned']}, "
+                f"volume spike={quota_sample['volume_confirmed']}, chart votes={quota_sample['chart_votes']}/3, "
+                f"quota={quota_sample['used']}/{quota_sample['quota']}"
+            ]
+            result = _attempt(
+                "No paper capture: per-index chart + volume-spike sample is not ready.",
+                checked_at, capture=capture, chart={"strategy": strategy, "chart_volume_quota": quota_sample},
+                candidate=strategy.get("candidate"), future=future, blockers=blockers, chain=chain,
+                outcome="DATA GAP" if data_gaps else "STRATEGY REJECT", data_gaps=data_gaps,
+                warnings=quota_sample.get("risk_blockers"),
+            )
+            return _record(database, symbol, result)
         if quota_sample["allowed"] and not exploratory["allowed"]:
             exploratory = {
                 **exploratory, "allowed": True, "validation_track": quota_sample["validation_track"],

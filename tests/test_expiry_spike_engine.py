@@ -1,11 +1,23 @@
 import unittest
 from datetime import date, datetime, time, timedelta, timezone
 
-from engine.expiry_spike_engine import evaluate_spike, predict_expiry_spike, select_nearby_expiry_contracts
+from engine.expiry_spike_engine import (evaluate_spike, predict_expiry_spike, select_nearby_expiry_contracts,
+                                        select_nearest_itm_pair)
 from ui.pages.expiry_observation_page import cas_context, expiry_monitor_window, select_atm_parity_pair
 
 
 class ExpirySpikeEngineTests(unittest.TestCase):
+    def test_nearest_itm_pair_uses_different_strikes_on_each_side(self):
+        pairs = {
+            74600.0: {"expiry": date(2026, 9, 10), "CE": {"premium": 120}},
+            74700.0: {"expiry": date(2026, 9, 10), "CE": {"premium": 80}, "PE": {"premium": 75}},
+            74800.0: {"expiry": date(2026, 9, 10), "PE": {"premium": 125}},
+        }
+        result = select_nearest_itm_pair(pairs, 74720)
+        self.assertEqual(result["ce_strike"], 74700)
+        self.assertEqual(result["pe_strike"], 74800)
+        self.assertEqual(result["combined_entry"], 205)
+
     def test_atm_parity_uses_closest_strike_and_ten_point_boundary(self):
         pairs = {
             24350.0: {"CE": {"premium": 50}, "PE": {"premium": 50}},

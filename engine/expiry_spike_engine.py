@@ -34,6 +34,33 @@ def select_nearby_expiry_contracts(contracts, spot, itm_depth=2):
     return sorted(result, key=lambda row: (row["option_type"], abs(row["atm_distance"])))
 
 
+def select_nearest_itm_pair(pairs, spot):
+    """Select nearest strictly-ITM CE and PE from one quote snapshot.
+
+    CE and PE cannot both be ITM at the same strike.  This therefore returns
+    the nearest strike below spot for CE and nearest strike above spot for PE.
+    """
+    spot = float(spot or 0)
+    if spot <= 0:
+        return None
+    ce = [(float(strike), value["CE"], value.get("expiry")) for strike, value in (pairs or {}).items()
+          if float(strike) < spot and "CE" in value and float(value["CE"].get("premium") or 0) > 0]
+    pe = [(float(strike), value["PE"], value.get("expiry")) for strike, value in (pairs or {}).items()
+          if float(strike) > spot and "PE" in value and float(value["PE"].get("premium") or 0) > 0]
+    if not ce or not pe:
+        return None
+    ce_strike, ce_leg, ce_expiry = min(ce, key=lambda item: spot - item[0])
+    pe_strike, pe_leg, pe_expiry = min(pe, key=lambda item: item[0] - spot)
+    if str(ce_expiry) != str(pe_expiry):
+        return None
+    return {
+        "reference_strike": min((ce_strike, pe_strike), key=lambda value: abs(value - spot)),
+        "ce_strike": ce_strike, "pe_strike": pe_strike, "expiry": ce_expiry,
+        "CE": ce_leg, "PE": pe_leg,
+        "combined_entry": round(float(ce_leg["premium"]) + float(pe_leg["premium"]), 2),
+    }
+
+
 def _volume_ratio(samples):
     if len(samples) < 3:
         return None

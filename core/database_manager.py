@@ -1955,11 +1955,15 @@ class Database:
             "overnight_state": row["overnight_state"] or "INTRADAY",
         } for row in rows]
 
-    def paper_trade_progress(self, trade_date: str | None = None) -> dict:
+    def paper_trade_progress(self, trade_date: str | None = None, symbol: str | None = None) -> dict:
         """Return forward-test progress without mixing it with manual real trades."""
-        where, values = "", ()
+        clauses, values = [], []
         if trade_date:
-            where, values = "WHERE t.trade_date = ?", (trade_date,)
+            clauses.append("t.trade_date = ?"); values.append(trade_date)
+        if symbol:
+            clauses.append("UPPER(t.symbol) = ?"); values.append(str(symbol).upper())
+        where = "WHERE " + " AND ".join(clauses) if clauses else ""
+        values = tuple(values)
         row = self.cursor.execute(
             f"""SELECT COUNT(*) AS trades, COUNT(DISTINCT t.trade_date) AS days,
                        SUM(CASE WHEN t.status = 'OPEN' THEN 1 ELSE 0 END) AS open_trades,

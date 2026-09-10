@@ -65,7 +65,7 @@ class AutoPaperTraderTests(unittest.TestCase):
         self.assertTrue(result["allowed"])
         self.assertEqual(result["chart_votes"], 2)
 
-    def test_chart_volume_quota_never_bypasses_risk_or_data_gap(self):
+    def test_chart_volume_quota_records_risk_but_never_bypasses_data_gap(self):
         base = {"candidate": "CE", "side_evaluations": {"CE": {
             "confirmations": [
                 {"name": "Market structure", "passed": True},
@@ -79,9 +79,11 @@ class AutoPaperTraderTests(unittest.TestCase):
         self.assertFalse(result["allowed"])
         base["side_evaluations"]["CE"]["data_gaps"] = []
         base["side_evaluations"]["CE"]["risk_blockers"] = ["Late CE entry"]
-        self.assertFalse(chart_volume_quota_eligibility(
+        result = chart_volume_quota_eligibility(
             base, {"candle_direction": "BULLISH"}, {"paper_validation_testing_mode": True}, {"trades": 0},
-        )["allowed"])
+        )
+        self.assertTrue(result["allowed"])
+        self.assertEqual(result["risk_blockers"], ["Late CE entry"])
 
     def test_chart_volume_quota_stops_after_three_samples(self):
         strategy = {"candidate": "CE", "side_evaluations": {"CE": {
