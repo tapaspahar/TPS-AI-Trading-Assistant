@@ -8,8 +8,8 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.7"
-LAST_UPDATED_AT = "09-09-2026 22:05:14 IST"
-FOOTER_UPDATE_TEXT = "Software Build v1.5.7 - 09-09-2026 22:05 IST"
+LAST_UPDATED_AT = "10-09-2026 08:18:26 IST"
+FOOTER_UPDATE_TEXT = "Software Build v1.5.7 - 10-09-2026 08:18 IST"
 RELEASE_NOTES = (
     "Dashboard Journal P&L is now scoped to the current IST journal date, displays that date on the card, and automatically refreshes at midnight so a new trading day starts at zero until a current-date trade closes.",
     "Release 1.5.7 permanently removes SuperTrend from the TPS entry checklist, score and directional-consensus blocker; chart structure, VWAP, EMA alignment, volume, OI/PCR and existing risk/data safeguards continue to govern entries, and legacy saved settings are migrated automatically.",
