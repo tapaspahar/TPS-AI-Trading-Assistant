@@ -1,4 +1,4 @@
-"""Angel One order-book live and post-trade intelligence page."""
+"""Broker-synced open-position intelligence and durable order history."""
 from __future__ import annotations
 
 from threading import Thread
@@ -14,7 +14,7 @@ from services.order_intelligence import OrderIntelligenceService
 
 
 class OrderIntelligencePage(QWidget):
-    scan_ready = Signal(list)
+    scan_ready = Signal(dict)
     scan_failed = Signal(str)
 
     def __init__(self):
@@ -22,13 +22,15 @@ class OrderIntelligencePage(QWidget):
         outer = QVBoxLayout(self); outer.setContentsMargins(0, 0, 0, 0)
         scroll = QScrollArea(); scroll.setWidgetResizable(True); scroll.setFrameShape(QScrollArea.NoFrame)
         body = QWidget(); layout = QVBoxLayout(body); layout.setContentsMargins(18, 16, 18, 22)
-        title = QLabel("Angel One Order Intelligence — Live & Post-Trade Review"); title.setObjectName("pageTitle"); layout.addWidget(title)
+        title = QLabel("Broker Order Intelligence — Live Positions & Synced History"); title.setObjectName("pageTitle"); layout.addWidget(title)
         note = QLabel(
-            "Cutie Angel One order book ko read-only scan karti hai. Live state explanation hai, guaranteed HOLD/EXIT advice nahi. "
+            "Cutie connected broker ke sirf non-zero open positions/pending orders ka live analysis karti hai. "
+            "Completed, cancelled aur rejected orders broker se sync hokar neeche history me preserve rehte hain. "
             "Linked target/stop unavailable ho toh software unhe invent nahi karega; broker position aur risk controls final source rahenge."
         ); note.setWordWrap(True); layout.addWidget(note)
-        self.status = QLabel("Angel One connect hone ke baad order book scan hoga."); self.status.setWordWrap(True); layout.addWidget(self.status)
-        refresh = QPushButton("Refresh Angel One Order Analysis Now"); refresh.clicked.connect(self.refresh); layout.addWidget(refresh)
+        self.status = QLabel("Broker connect hone ke baad auto-sync hoga."); self.status.setWordWrap(True); layout.addWidget(self.status)
+        refresh = QPushButton("Sync Broker Orders Now"); refresh.clicked.connect(self.refresh); layout.addWidget(refresh)
+        layout.addWidget(QLabel("Open positions / pending orders — live analysis"))
         self.table = QTableWidget(0, 11)
         self.table.setHorizontalHeaderLabels(("Order", "Symbol", "Side", "Qty", "Status", "Entry", "Market", "P/L pts", "MFE", "MAE", "Cutie review"))
         self.table.setMinimumHeight(300); self.table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -36,6 +38,11 @@ class OrderIntelligencePage(QWidget):
         layout.addWidget(self.table)
         layout.addWidget(QLabel("Selected order — complete evidence and hindsight limits"))
         self.detail = QLabel("Select an order row."); self.detail.setWordWrap(True); self.detail.setMinimumHeight(150); layout.addWidget(self.detail)
+        layout.addWidget(QLabel("Closed / completed broker order history — synchronized record"))
+        self.history = QTableWidget(0, 6)
+        self.history.setHorizontalHeaderLabels(("Synced at", "Order", "Symbol", "Side", "Qty", "Final status"))
+        self.history.setMinimumHeight(260); self.history.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.history.setHorizontalScrollMode(QTableWidget.ScrollPerPixel); layout.addWidget(self.history)
         scroll.setWidget(body); outer.addWidget(scroll)
         self.scan_ready.connect(self._show_results); self.scan_failed.connect(self._show_error)
         self.timer = QTimer(self); self.timer.setInterval(30_000); self.timer.timeout.connect(self.refresh)
@@ -51,9 +58,9 @@ class OrderIntelligencePage(QWidget):
 
     def refresh(self):
         if not LiveSession.connected() or LiveSession.broker_id != "angel_one":
-            self.status.setText("Angel One live session connected nahi hai. Settings se broker connect karein."); return
+            self.status.setText("Connected broker session available nahi hai. Settings se broker connect karein."); return
         if self.scanning: return
-        self.scanning = True; self.status.setText("Angel One order book aur post-entry candles analyse ho rahe hain…")
+        self.scanning = True; self.status.setText("Broker positions aur final order history sync ho rahe hain…")
         Thread(target=self._scan, daemon=True).start()
 
     def _scan(self):
@@ -68,9 +75,14 @@ class OrderIntelligencePage(QWidget):
     def _show_error(self, message):
         self.scanning = False; self.status.setText(f"Order-book scan unavailable: {message}")
 
-    def _show_results(self, rows):
-        self.scanning = False; self.rows = list(rows)
-        self.status.setText(f"{len(self.rows)} broker order(s) analysed. Live orders har 30 seconds refresh honge.")
+    def _show_results(self, payload):
+        self.scanning = False; self.rows = list(payload.get("open") or [])
+        database = Database()
+        try: history_rows = database.get_closed_order_intelligence_history()
+        finally: database.close()
+        self.status.setText(
+            f"Open analysis {len(self.rows)} | Closed history {len(history_rows)} | Auto-sync every 30 seconds"
+        )
         self.table.setRowCount(len(self.rows))
         for r, row in enumerate(self.rows):
             values = (row["broker_order_id"], row["trading_symbol"], row["side"], row["quantity"], row["order_status"],
@@ -78,6 +90,15 @@ class OrderIntelligencePage(QWidget):
             for c, value in enumerate(values): self.table.setItem(r, c, QTableWidgetItem("-" if value is None else str(value)))
         self.table.resizeColumnsToContents()
         if self.rows: self.table.selectRow(0)
+        else: self.detail.setText("Koi non-zero open broker position ya pending order nahi hai.")
+        self.history.setRowCount(len(history_rows))
+        for r, row in enumerate(history_rows):
+            try: details = __import__("json").loads(row.get("details_json") or "{}")
+            except (TypeError, ValueError): details = {}
+            values = (row.get("captured_at"), row.get("broker_order_id"), row.get("trading_symbol"),
+                      details.get("side", "-"), details.get("quantity", "-"), row.get("order_status"))
+            for c, value in enumerate(values): self.history.setItem(r, c, QTableWidgetItem(str(value)))
+        self.history.resizeColumnsToContents()
 
     def show_selected(self):
         row = self.table.currentRow()

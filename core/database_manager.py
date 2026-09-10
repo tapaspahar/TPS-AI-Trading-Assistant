@@ -862,6 +862,20 @@ class Database:
             (max(1, min(int(limit), 5000)),),
         ).fetchall()
 
+    def get_closed_order_intelligence_history(self, limit: int = 500):
+        """Return the newest durable final-state snapshot per broker order."""
+        rows = self.cursor.execute(
+            """SELECT s.* FROM order_intelligence_snapshots s
+               JOIN (SELECT broker_order_id, MAX(captured_at) latest
+                       FROM order_intelligence_snapshots
+                       WHERE order_status IN ('COMPLETE','COMPLETED','FILLED','TRADED','REJECTED','CANCELLED','CANCELED')
+                       GROUP BY broker_order_id) x
+                 ON x.broker_order_id=s.broker_order_id AND x.latest=s.captured_at
+               ORDER BY s.captured_at DESC LIMIT ?""",
+            (max(1, min(int(limit), 5000)),),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
     def count_execution_orders(self, trading_date):
         row = self.cursor.execute(
             "SELECT COUNT(*) n FROM execution_audit WHERE trading_date=? AND status NOT IN ('BLOCKED','REJECTED','PAPER_PLAN')",

@@ -6,7 +6,7 @@ from datetime import datetime
 from core.database_manager import Database
 
 
-FINAL_STATES = {"COMPLETE", "COMPLETED", "FILLED", "REJECTED", "CANCELLED", "CANCELED"}
+FINAL_STATES = {"COMPLETE", "COMPLETED", "FILLED", "TRADED", "REJECTED", "CANCELLED", "CANCELED"}
 
 
 def _number(row: dict, *keys) -> float:
@@ -81,25 +81,61 @@ class OrderIntelligenceService:
     def __init__(self, client, database: Database | None = None):
         self.client = client; self.database = database or Database()
 
-    def scan(self) -> list[dict]:
-        now = datetime.now().astimezone(); results = []; market_cache = {}
-        # Angel One can return a long day book. Bound the live scan and reuse
-        # one quote/candle request for repeated orders in the same contract.
+    def scan(self) -> dict:
+        now = datetime.now().astimezone(); live_results = []; closed_results = []; market_cache = {}
         orders = list(self.client.get_order_book())[-100:]
-        for order in reversed(orders):
+        try:
+            positions = list(self.client.get_positions())
+        except (AttributeError, RuntimeError):
+            positions = []
+
+        # Final broker orders are synchronized to durable history without
+        # wasting quote/candle requests on already-final rows.
+        for order in orders:
+            status = _text(order, "status", "orderstatus", "orderStatus", default="UNKNOWN").upper()
+            if status not in FINAL_STATES:
+                continue
+            result = analyze_order(order)
+            result.update({"captured_at": now.isoformat(timespec="seconds"), "trading_date": now.date().isoformat()})
+            self.database.save_order_intelligence_snapshot(result); closed_results.append(result)
+
+        # A completed BUY order is not necessarily a closed position. Broker
+        # position truth (non-zero net quantity) is the live-analysis grain.
+        live_items = []
+        for position in positions:
+            net_qty = int(_number(position, "netqty", "netQty", "netQuantity", "net_quantity"))
+            if not net_qty:
+                continue
+            live_items.append({
+                "orderid": "POSITION:" + _text(position, "tradingsymbol", "tradingSymbol", default="UNKNOWN"),
+                "tradingsymbol": _text(position, "tradingsymbol", "tradingSymbol", default="UNKNOWN"),
+                "exchange": _text(position, "exchange", default="NFO"),
+                "symboltoken": _text(position, "symboltoken", "symbolToken"),
+                "transactiontype": "BUY" if net_qty > 0 else "SELL",
+                "averageprice": _number(position, "avgnetprice", "avgNetPrice", "averageprice", "buyavgprice", "sellavgprice"),
+                "quantity": abs(net_qty), "filledshares": abs(net_qty), "status": "OPEN POSITION",
+                "position_ltp": _number(position, "ltp", "lastTradedPrice"),
+            })
+        live_items.extend(order for order in orders if _text(
+            order, "status", "orderstatus", "orderStatus", default="UNKNOWN"
+        ).upper() not in FINAL_STATES)
+
+        for order in reversed(live_items):
             token = _text(order, "symboltoken", "symbolToken")
             exchange = _text(order, "exchange", default="NFO")
-            quote, candles = {}, []
+            quote = {"ltp": _number(order, "position_ltp")} if _number(order, "position_ltp") else {}
+            candles = []
             if token:
                 key = (exchange, token)
                 if key not in market_cache:
-                    try: quote = self.client.get_option_quote(exchange, token) or {}
+                    try: fetched_quote = self.client.get_option_quote(exchange, token) or {}
                     except Exception: quote = {}
+                    else: quote = fetched_quote or quote
                     try: candles = self.client.get_recent_candles(exchange, token, "FIVE_MINUTE", 1) or []
                     except Exception: candles = []
                     market_cache[key] = (quote, candles)
                 quote, candles = market_cache[key]
             result = analyze_order(order, quote, candles)
             result.update({"captured_at": now.isoformat(timespec="seconds"), "trading_date": now.date().isoformat()})
-            self.database.save_order_intelligence_snapshot(result); results.append(result)
-        return results
+            self.database.save_order_intelligence_snapshot(result); live_results.append(result)
+        return {"open": live_results, "closed": closed_results, "synced_at": now.isoformat(timespec="seconds")}

@@ -202,7 +202,6 @@ class DashboardScreen(QWidget):
         self.controlsCenter = ConsolidatedWorkspace((
             (self.recoveryCenterPage, "Overtrading Protection"),
             (self.executionControlPage, "Broker Execution"),
-            (self.orderIntelligencePage, "Angel One Order Intelligence"),
             (self.cutieCommandPage, "Cutie AI Commands"),
             (self.settingsPage, "Settings"),
         ))
@@ -211,6 +210,7 @@ class DashboardScreen(QWidget):
         pages[0], pages[1], pages[2] = self.dashboardPage, self.marketCenter, self.tradingCenter
         pages[4], pages[9] = self.reportsCenter, self.controlsCenter
         pages[15], pages[16] = self.aboutPage, self.helpPage
+        pages[42] = self.orderIntelligencePage
         for page in pages:
             self.stack.addWidget(page)
         self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
@@ -253,6 +253,7 @@ class DashboardScreen(QWidget):
                               (self.sidebar.tradingCenterButton, 2),
                               (self.sidebar.reportsCenterButton, 4),
                               (self.sidebar.controlsCenterButton, 9),
+                              (self.sidebar.orderIntelligenceButton, 42),
                               (self.sidebar.aboutButton, 15),
                               (self.sidebar.helpButton, 16)):
             button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
@@ -263,7 +264,7 @@ class DashboardScreen(QWidget):
             (self.marketCenter, (1, 39, 13, 24, 19, 28, 41, 26, 43)),
             (self.tradingCenter, (2, 21, 34, 27, 29, 35, 37)),
             (self.reportsCenter, (4, 14, 30, 8, 22, 10, 12, 31, 40)),
-            (self.controlsCenter, (32, 36, 42, 38, 9)),
+            (self.controlsCenter, (32, 36, 38, 9)),
         ):
             center.tabs.currentChanged.connect(
                 lambda tab_index, route_list=routes: self.defer_page_refresh(route_list[tab_index])
@@ -308,7 +309,7 @@ class DashboardScreen(QWidget):
             ("Reliability Cockpit", 40, "timeline missed execution shadow data quality"),
             ("Smart Options Memory", 41, "five minute candle volume oi coi historical analog"),
             ("Index Component Breadth", 43, "heat map nifty banknifty sensex constituents green red"),
-            ("Angel One Order Intelligence", 42, "broker order book live mfe mae review"),
+            ("Broker Order Intelligence", 42, "broker order book open positions live mfe mae review"),
             ("Broker Execution", 36, "orders funds"),
             ("Settings", 9, "configuration broker mode"),
             ("Help", 16, "manual"),
@@ -535,9 +536,9 @@ class DashboardScreen(QWidget):
             40: (4, self.reportsCenter, 8, None, 0),
             32: (9, self.controlsCenter, 0, None, 0),
             36: (9, self.controlsCenter, 1, None, 0),
-            42: (9, self.controlsCenter, 2, None, 0),
-            38: (9, self.controlsCenter, 3, None, 0),
-            9: (9, self.controlsCenter, 4, None, 0),
+            42: (42, None, 0, None, 0),
+            38: (9, self.controlsCenter, 2, None, 0),
+            9: (9, self.controlsCenter, 3, None, 0),
             7: (16, None, 0, None, 0),
             15: (15, None, 0, None, 0),
             16: (16, None, 0, None, 0),

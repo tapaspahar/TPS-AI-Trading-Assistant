@@ -49,6 +49,7 @@ class Sidebar(QFrame):
         self.strategyTradesButton = nav("Strategy Trades")
         self.expiryObservationButton = nav("Expiry After 3 PM")
         self.executionControlButton = nav("Broker Execution")
+        self.orderIntelligenceButton = nav("Broker Order Intelligence")
         self.optionsAlgoButton = nav("Options Algo Trading")
         self.cutieCommandButton = nav("Cutie AI Commands")
         self.indexMarketAnalysisButton = nav("Index Market Analysis")
@@ -66,7 +67,7 @@ class Sidebar(QFrame):
         self.buttons = (
             self.dashboardButton, self.marketCenterButton, self.tradingCenterButton,
             self.reportsCenterButton, self.controlsCenterButton,
-            self.aboutButton, self.helpButton,
+            self.orderIntelligenceButton, self.aboutButton, self.helpButton,
         )
         # Stack page numbers intentionally remain stable even when the visual
         # menu order changes.  This prevents the wrong sidebar item being
@@ -79,6 +80,7 @@ class Sidebar(QFrame):
             9: self.controlsCenterButton,
             15: self.aboutButton,
             16: self.helpButton,
+            42: self.orderIntelligenceButton,
         }
         self.menu_group = QButtonGroup(self)
         self.menu_group.setExclusive(True)

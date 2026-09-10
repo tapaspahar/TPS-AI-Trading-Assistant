@@ -41,18 +41,19 @@ class WorkspaceConsolidationTests(unittest.TestCase):
 
     def test_sidebar_contains_only_primary_workspaces(self):
         labels = "\n".join(button.text() for button in self.screen.sidebar.buttons)
-        self.assertEqual(len(self.screen.sidebar.buttons), 7)
+        self.assertEqual(len(self.screen.sidebar.buttons), 8)
         for workspace_label in (
             "Dashboard",
             "Market Intelligence",
             "Trading & Strategies",
             "Reports & Learning",
             "Controls & Settings",
+            "Broker Order Intelligence",
             "About",
             "Help",
         ):
             self.assertIn(workspace_label, labels)
-        self.assertLessEqual(self.screen.sidebar.menu_widget.minimumHeight(), 360)
+        self.assertLessEqual(self.screen.sidebar.menu_widget.minimumHeight(), 410)
 
     def test_legacy_routes_open_the_matching_consolidated_tabs(self):
         cases = (
@@ -109,8 +110,14 @@ class WorkspaceConsolidationTests(unittest.TestCase):
         self.screen.show_page(0)
         self.screen.header.settingsButton.click()
         self.assertEqual(self.screen.stack.currentIndex(), 9)
-        self.assertEqual(self.screen.controlsCenter.tabs.currentIndex(), 4)
+        self.assertEqual(self.screen.controlsCenter.tabs.currentIndex(), 3)
         self.assertTrue(self.screen.sidebar.controlsCenterButton.isChecked())
+
+    def test_broker_order_intelligence_is_a_direct_main_page(self):
+        self.screen.sidebar.orderIntelligenceButton.click()
+        self.assertEqual(self.screen.stack.currentIndex(), 42)
+        self.assertIs(self.screen.stack.currentWidget(), self.screen.orderIntelligencePage)
+        self.assertTrue(self.screen.sidebar.orderIntelligenceButton.isChecked())
 
     def test_dashboard_cards_jump_to_their_owning_pages(self):
         cases = (
@@ -150,7 +157,7 @@ class WorkspaceConsolidationTests(unittest.TestCase):
                 "Post Market", "Backtesting", "Candle Replay", "AI Development", "Reliability Cockpit",
             ),
             self.screen.controlsCenter: (
-                "Overtrading Protection", "Broker Execution", "Angel One Order Intelligence", "Cutie AI Commands",
+                "Overtrading Protection", "Broker Execution", "Cutie AI Commands",
                 "Settings",
             ),
         }

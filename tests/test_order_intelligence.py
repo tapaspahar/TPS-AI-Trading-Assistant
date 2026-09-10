@@ -8,6 +8,9 @@ class Client:
                  "transactiontype": "BUY", "averageprice": 100, "quantity": 65, "status": "complete"}]
 
     def get_option_quote(self, exchange, token): return {"ltp": 112}
+    def get_positions(self):
+        return [{"tradingsymbol": "NIFTYCE", "exchange": "NFO", "symboltoken": "1",
+                 "netqty": 65, "avgnetprice": 100, "ltp": 112}]
     def get_recent_candles(self, exchange, token, interval, days):
         return [{"high": 120, "low": 95, "close": 112}]
 
@@ -32,8 +35,10 @@ def test_missing_live_quote_stays_data_gap():
 def test_scan_persists_read_only_order_snapshot(tmp_path):
     db = Database(tmp_path / "orders.db")
     result = OrderIntelligenceService(Client(), db).scan()
-    assert len(result) == 1
+    assert len(result["open"]) == 1
+    assert len(result["closed"]) == 1
     rows = db.get_order_intelligence_snapshots()
-    assert len(rows) == 1
-    assert rows[0]["broker_order_id"] == "A1"
-    assert rows[0]["analysis_state"] == "HOLD REVIEW"
+    assert len(rows) == 2
+    history = db.get_closed_order_intelligence_history()
+    assert len(history) == 1
+    assert history[0]["broker_order_id"] == "A1"
