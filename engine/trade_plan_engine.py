@@ -57,10 +57,12 @@ def create_review_plan(underlying, spot_price, contracts, quote_rows, chart_cont
             itm_penalty = 0 if itm else 1
         return (itm_penalty, abs(strike - float(spot_price)), -item[3])
     contract, quote, premium, volume, spread = min(candidates, key=contract_rank)
-    stop_evidence = adaptive_option_stop(premium, environment, settings, spread)
+    stop_evidence = adaptive_option_stop(premium, environment, settings, spread, underlying=underlying)
     stop_loss = stop_evidence["stoploss"]
     minimum_rr = float(settings.get("minimum_rr_ratio", 1.5))
-    target_multiple = max(minimum_rr, float(environment.get("target_atr_multiplier", 2)))
+    regime = str(environment.get("regime") or environment.get("vix_regime") or "NORMAL").upper()
+    regime_target_add = .15 if "TREND" in regime else -.10 if "RANGE" in regime else 0.0
+    target_multiple = max(minimum_rr, float(stop_evidence["target_r"]) + regime_target_add)
     target = round(premium + (premium - stop_loss) * target_multiple, 2)
     underlying_target_points = float(environment.get("regular_move_target_points") or 0)
     underlying_target = (
@@ -118,6 +120,8 @@ def create_review_plan(underlying, spot_price, contracts, quote_rows, chart_cont
         "entry_price_source": "ASK" if float(quote.get("ask", 0) or 0) > 0 else "LTP_FALLBACK",
         "adaptive_risk_percent": round(adjusted_risk_percent, 3),
         "stop_method": stop_evidence["method"],
+        "risk_profile": stop_evidence["profile"],
+        "risk_calibration_state": stop_evidence["calibration_state"],
         "stop_distance_percent": stop_evidence["distance_percent"],
         "stop_evidence": stop_evidence,
         "rule_version": "TPS V2 configurable review — chart/volume/OI confirmation",
@@ -126,7 +130,7 @@ def create_review_plan(underlying, spot_price, contracts, quote_rows, chart_cont
             f"Focused OI/PCR context: {chain_context.get('context', 'available')}",
             f"Near-ATM liquid contract selected (volume {volume:,.0f})",
             f"Adaptive environment: {environment.get('regime', 'unavailable')}; strike {environment.get('strike_preference', 'ATM')}",
-            f"Adaptive stop: {stop_evidence['distance_percent']:.2f}% premium breathing room; quantity rupee-risk cap se sized",
+            f"{stop_evidence['profile']} risk profile: stop {stop_evidence['distance_percent']:.2f}% and target {target_multiple:.2f}R; quantity rupee-risk cap se sized",
         ],
         "warning": "Conditional review plan: verify live premium, bid/ask, volume, stop-loss and target in Angel One before manually placing an order. " + risk_warning,
     }

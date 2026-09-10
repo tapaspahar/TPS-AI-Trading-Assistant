@@ -8,7 +8,43 @@ stop to manufacture eligibility.
 from __future__ import annotations
 
 
-def adaptive_option_stop(entry: float, environment: dict, settings: dict, spread_percent=None) -> dict:
+# These are deliberately modest behavioural offsets, not claims of a proven
+# win rate.  The underlying-specific defaults prevent a low-premium NIFTY
+# contract and the generally faster BANKNIFTY/SENSEX contracts from receiving
+# the same percentage breathing room.  Rupee risk remains controlled by lot
+# sizing in trade_plan_engine.
+INDEX_OPTION_RISK_PROFILES = {
+    "NIFTY": {
+        "label": "NIFTY balanced",
+        "stop_offset_percent": 0.0,
+        "maximum_stop_percent": 32.0,
+        "target_r": 1.50,
+    },
+    "BANKNIFTY": {
+        "label": "BANKNIFTY fast premium",
+        "stop_offset_percent": 3.0,
+        "maximum_stop_percent": 38.0,
+        "target_r": 1.60,
+    },
+    "SENSEX": {
+        "label": "SENSEX expiry-sensitive",
+        "stop_offset_percent": 4.0,
+        "maximum_stop_percent": 40.0,
+        "target_r": 1.70,
+    },
+}
+
+
+def index_option_risk_profile(underlying: str | None) -> dict:
+    symbol = str(underlying or "NIFTY").upper().replace(" ", "")
+    if symbol in {"NIFTY50", "CNXNIFTY"}:
+        symbol = "NIFTY"
+    elif symbol in {"NIFTYBANK", "BANKNIFTYINDEX"}:
+        symbol = "BANKNIFTY"
+    return {"underlying": symbol, **INDEX_OPTION_RISK_PROFILES.get(symbol, INDEX_OPTION_RISK_PROFILES["NIFTY"])}
+
+
+def adaptive_option_stop(entry: float, environment: dict, settings: dict, spread_percent=None, underlying=None) -> dict:
     entry = float(entry)
     if entry <= 0:
         raise ValueError("Option entry premium must be positive.")
@@ -26,13 +62,19 @@ def adaptive_option_stop(entry: float, environment: dict, settings: dict, spread
     multiplier = max(0.5, min(2.0, float(environment.get("stop_atr_multiplier", 1.0) or 1.0)))
     spread_buffer = min(5.0, max(0.0, float(spread_percent or 0.0) * 0.5))
     sweep_buffer = max(0.0, min(10.0, float(settings.get("stop_sweep_buffer_percent", 2.0))))
-    raw = minimum * multiplier + regime_add + spread_buffer + sweep_buffer
-    distance_percent = min(maximum, max(minimum, raw))
+    profile = index_option_risk_profile(underlying)
+    profile_maximum = min(60.0, max(maximum, float(profile["maximum_stop_percent"])))
+    raw = minimum * multiplier + regime_add + spread_buffer + sweep_buffer + float(profile["stop_offset_percent"])
+    distance_percent = min(profile_maximum, max(minimum, raw))
     stop = round(entry * (1.0 - distance_percent / 100.0), 2)
     return {
         "stoploss": max(0.05, stop),
         "distance_percent": round(distance_percent, 2),
         "method": "VOLATILITY + LIQUIDITY + SWEEP BUFFER",
         "regime": regime,
+        "underlying": profile["underlying"],
+        "profile": profile["label"],
+        "target_r": profile["target_r"],
+        "calibration_state": "FORWARD TEST — 30 CLOSED TRADES REQUIRED PER INDEX",
         "note": "Stop ko breathing room diya gaya hai; rupee risk quantity reduction se control hoga.",
     }

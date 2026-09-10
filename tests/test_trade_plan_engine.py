@@ -22,9 +22,10 @@ class TradePlanEngineTests(unittest.TestCase):
         self.assertEqual(plan["option_type"], "CE")
         self.assertEqual(plan["entry"], 100)
         self.assertEqual(plan["stoploss"], 80)
-        self.assertEqual(plan["target"], 140)
+        self.assertEqual(plan["target"], 130)
+        self.assertEqual(plan["risk_profile"], "NIFTY balanced")
+        self.assertEqual(plan["rr_ratio"], 1.5)
         self.assertEqual(plan["quantity"], 1500)
-        self.assertEqual(plan["rr_ratio"], 2.0)
 
     def test_rejects_non_strong_chart_context(self):
         with self.assertRaisesRegex(ValueError, "95"):
