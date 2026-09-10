@@ -4,6 +4,7 @@ from PySide6.QtWidgets import QHBoxLayout, QScrollArea, QSizePolicy, QStackedWid
 
 from ui.widgets.header import Header
 from ui.widgets.information_panel import InformationPanel
+from ui.widgets.market_direction_ribbon import MarketDirectionRibbon
 from ui.widgets.navigation.sidebar import Sidebar
 from ui.pages.dashboard_page import DashboardPage
 from ui.pages.live_market_page import LiveMarketPage
@@ -273,6 +274,9 @@ class DashboardScreen(QWidget):
             )
         body_layout.addWidget(self.stack)
         main_layout.addLayout(body_layout, 1)
+        self.marketDirectionRibbon = MarketDirectionRibbon(self)
+        add_glass_shadow(self.marketDirectionRibbon, blur=12, y_offset=1, opacity=55)
+        main_layout.addWidget(self.marketDirectionRibbon)
         self.informationPanel = InformationPanel()
         add_glass_shadow(self.informationPanel, blur=16, y_offset=2, opacity=60)
         main_layout.addWidget(self.informationPanel)

@@ -34,6 +34,7 @@ QLabel#title {{ color: {p['text_strong']}; font-size: 23px; font-weight: 800; le
 QLabel#pageTitle {{ color: {p['text_strong']}; font-size: 15px; font-weight: 750; }}
 QLabel#subtitle {{ color: {p['text_muted']}; font-size: 9.5pt; }}
 QFrame#informationPanel {{ background: {p['glass']}; border: 1px solid {p['border_soft']}; border-radius: 13px; }}
+QFrame#marketDirectionRibbon {{ background: {p['glass']}; border: 1px solid {p['border_soft']}; border-radius: 11px; }}
 QLabel#informationLabel {{ color: {p['text']}; font-size: 9pt; font-weight: 600; }}
 QLabel#informationDivider {{ color: {p['accent_soft']}; }}
 QLabel#informationBrand {{ color: {p['text_muted']}; font-size: 8.5pt; }}

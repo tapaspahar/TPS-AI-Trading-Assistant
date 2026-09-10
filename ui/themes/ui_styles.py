@@ -45,7 +45,7 @@ QLabel#appBadge { border-radius: 20px; }
 """,
     "minimalism": """
 QWidget#dashboardScreen { background: #0d1117; }
-QFrame#header, QFrame#sidebar, QStackedWidget#contentStack, QFrame#informationPanel { background: #0d1117; border: none; border-radius: 0; }
+QFrame#header, QFrame#sidebar, QStackedWidget#contentStack, QFrame#informationPanel, QFrame#marketDirectionRibbon { background: #0d1117; border: none; border-radius: 0; }
 QFrame#dashboardCard, QGroupBox { background: transparent; border: 1px solid #30363d; border-radius: 6px; }
 QPushButton { background: transparent; border: 1px solid #30363d; border-radius: 5px; font-weight: 500; }
 QPushButton:hover { background: #161b22; }
@@ -62,7 +62,7 @@ QLabel#title, QLabel#cardValue { color: #fef08a; }
 """,
     "brutalism": """
 QWidget#dashboardScreen { background: #f4e900; color: #050505; }
-QFrame#header, QFrame#sidebar, QGroupBox, QFrame#dashboardCard, QStackedWidget#contentStack, QFrame#informationPanel { background: #f8f8ef; color: #050505; border: 4px solid #050505; border-radius: 0; }
+QFrame#header, QFrame#sidebar, QGroupBox, QFrame#dashboardCard, QStackedWidget#contentStack, QFrame#informationPanel, QFrame#marketDirectionRibbon { background: #f8f8ef; color: #050505; border: 4px solid #050505; border-radius: 0; }
 QLabel, QLabel#title, QLabel#subtitle, QLabel#cardTitle, QLabel#cardValue, QLabel#informationLabel, QLabel#informationBrand { color: #050505; }
 QPushButton { background: #ff4d00; color: #050505; border: 4px solid #050505; border-radius: 0; font-weight: 900; }
 QPushButton:hover { background: #00d9ff; color: #050505; border-color: #050505; }
