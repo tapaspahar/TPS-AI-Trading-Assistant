@@ -8,6 +8,7 @@ market day cannot silently change production behaviour.
 from __future__ import annotations
 
 import json
+import hashlib
 from collections import Counter
 from datetime import datetime
 
@@ -233,6 +234,13 @@ def build_self_development_review(database: Database, trade_date: str, now: date
         "suggestions": suggestions,
         "feature_version": VERSION,
         "build_id": BUILD_ID,
+        "source_fingerprint": hashlib.sha256(
+            json.dumps(metrics, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")
+        ).hexdigest(),
+        "review_state": "FINAL" if (
+            (now or datetime.now().astimezone()).strftime("%d-%m-%Y") != trade_date
+            or ((now or datetime.now().astimezone()).hour, (now or datetime.now().astimezone()).minute) >= (15, 40)
+        ) else "PROVISIONAL",
     }
 
 
@@ -243,10 +251,17 @@ def generate_and_save_self_development_review(
     review["id"] = database.save_self_development_review(review)
     # Post-market generation is the source-complete lifecycle boundary.  A
     # later source refresh automatically creates a new DRAFT revision.
-    current = datetime.now().astimezone()
+    current = now or datetime.now().astimezone()
     if current.strftime("%d-%m-%Y") != trade_date or (current.hour, current.minute) >= (15, 40):
         database.finalize_self_development_review(trade_date)
         review["review_state"] = "FINAL"
+    else:
+        review["review_state"] = "PROVISIONAL"
+        database.cursor.execute(
+            "UPDATE self_development_reviews SET review_state = 'PROVISIONAL', finalized_at = NULL WHERE trade_date = ?",
+            (trade_date,),
+        )
+        database.connection.commit()
     return review
 
 
@@ -255,7 +270,13 @@ def ensure_completed_self_development_reviews(database: Database, limit: int = 6
     updated = []
     for source in database.get_post_market_tps_analyses(limit=limit):
         existing = database.get_self_development_review(str(source["trade_date"]))
-        if existing is None or str(existing["source_generated_at"]) != str(source["generated_at"]):
+        current = datetime.now().astimezone()
+        should_finalize = (
+            existing is not None
+            and str(existing["review_state"] or "") != "FINAL"
+            and (current.strftime("%d-%m-%Y") != str(source["trade_date"]) or (current.hour, current.minute) >= (15, 40))
+        )
+        if existing is None or str(existing["source_generated_at"]) != str(source["generated_at"]) or should_finalize:
             generate_and_save_self_development_review(database, str(source["trade_date"]))
             updated.append(str(source["trade_date"]))
     return updated

@@ -163,6 +163,17 @@ class PostMarketTpsAnalysisTests(unittest.TestCase):
             self.assertIn("Index-wise 5-minute market slots", analysis["summary_text"])
             database.close()
 
+    def test_silent_scheduler_reports_full_three_index_denominator(self):
+        with TemporaryDirectory() as directory:
+            database = Database(Path(directory) / "silent-coverage.db")
+            analysis = generate_and_save_post_market_analysis(database, "10-08-2026")
+            self.assertEqual(analysis["metrics"]["expected_slots"], 225)
+            self.assertEqual(analysis["metrics"]["observed_slots"], 0)
+            self.assertEqual(analysis["metrics"]["coverage_percent"], 0.0)
+            self.assertEqual(analysis["metrics"]["monitored_symbols"], ["BANKNIFTY", "NIFTY", "SENSEX"])
+            self.assertTrue(analysis["metrics"]["missing_ranges"])
+            database.close()
+
     def test_each_closed_strategy_is_written_as_a_separate_post_market_report(self):
         with TemporaryDirectory() as directory:
             database = Database(Path(directory) / "strategy-post-market.db")

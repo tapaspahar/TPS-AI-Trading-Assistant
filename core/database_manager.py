@@ -641,6 +641,19 @@ class Database:
         )
         self.cursor.execute(
             """
+            CREATE TABLE IF NOT EXISTS development_feature_measurements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                feature_key TEXT NOT NULL,
+                feature_version TEXT NOT NULL,
+                trade_date TEXT NOT NULL,
+                measured_at TEXT NOT NULL,
+                metrics_json TEXT NOT NULL,
+                UNIQUE(feature_key, feature_version, trade_date)
+            )
+            """
+        )
+        self.cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS evaluation_slots (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 trade_date TEXT NOT NULL,
@@ -997,7 +1010,9 @@ class Database:
         ).hexdigest())
         source_changed = existing is None or str(existing["source_fingerprint"] or "") != source_fingerprint
         next_revision = (int(existing["revision"] or 1) + 1) if existing and source_changed else (int(existing["revision"] or 1) if existing else 1)
-        review_state = "DRAFT" if source_changed else str(existing["review_state"] or "DRAFT")
+        review_state = str(review.get("review_state") or (
+            "DRAFT" if source_changed else (existing["review_state"] if existing else "DRAFT")
+        ))
         self.cursor.execute(
             """
             INSERT INTO self_development_reviews
@@ -1073,6 +1088,28 @@ class Database:
 
     def get_development_feature_evidence(self) -> dict[str, sqlite3.Row]:
         return {str(row["feature_key"]): row for row in self.cursor.execute("SELECT * FROM development_feature_evidence").fetchall()}
+
+    def save_development_feature_measurement(
+        self, feature_key: str, feature_version: str, trade_date: str, metrics: dict,
+    ) -> None:
+        now = datetime.now().astimezone().isoformat(timespec="seconds")
+        self.cursor.execute(
+            """INSERT INTO development_feature_measurements
+               (feature_key, feature_version, trade_date, measured_at, metrics_json)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(feature_key, feature_version, trade_date) DO UPDATE SET
+                 measured_at=excluded.measured_at, metrics_json=excluded.metrics_json""",
+            (feature_key, feature_version, trade_date, now,
+             json.dumps(metrics, ensure_ascii=False, default=str)),
+        )
+        self.connection.commit()
+
+    def get_development_feature_measurements(self, feature_key: str) -> list[sqlite3.Row]:
+        return self.cursor.execute(
+            """SELECT * FROM development_feature_measurements WHERE feature_key = ?
+               ORDER BY substr(trade_date,7,4)||substr(trade_date,4,2)||substr(trade_date,1,2), id""",
+            (feature_key,),
+        ).fetchall()
 
     def get_self_development_review(self, trade_date: str) -> sqlite3.Row | None:
         return self.cursor.execute(

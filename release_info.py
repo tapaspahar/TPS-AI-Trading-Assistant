@@ -1,16 +1,17 @@
 """Application release metadata kept in one place."""
 
 APP_NAME = "TPS AI Trading Assistant"
-VERSION = "1.5.7"
-DISPLAY_VERSION = "Release 1.5.7"
-RELEASE_DATE = "09-09-2026"
+VERSION = "1.5.8"
+DISPLAY_VERSION = "Release 1.5.8"
+RELEASE_DATE = "10-09-2026"
 PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
-SOFTWARE_UPDATE_VERSION = "v1.5.7"
-LAST_UPDATED_AT = "10-09-2026 08:18:26 IST"
-FOOTER_UPDATE_TEXT = "Software Build v1.5.7 - 10-09-2026 08:18 IST"
+SOFTWARE_UPDATE_VERSION = "v1.5.8"
+LAST_UPDATED_AT = "10-09-2026 13:05:00 IST"
+FOOTER_UPDATE_TEXT = "Software Build v1.5.8 - 10-09-2026 13:05 IST"
 RELEASE_NOTES = (
+    "Release 1.5.8 starts evidence-correct AI Development reviews: the current session can publish a clearly marked PROVISIONAL review, market-close evidence becomes FINAL, and a silent three-index scheduler reports the full expected slot denominator instead of misleading 0/0 coverage.",
     "PAPER validation testing now captures every CE/PE thesis with readable fresh candle and option-price data even when checklist, score, timing, event, recovery or execution-risk checks fail; every bypassed reason remains in the audit, the ten-trade/open-position limits remain bounded, and REAL execution safeguards are unchanged.",
     "Dashboard Journal P&L is now scoped to the current IST journal date, displays that date on the card, and automatically refreshes at midnight so a new trading day starts at zero until a current-date trade closes.",
     "Release 1.5.7 permanently removes SuperTrend from the TPS entry checklist, score and directional-consensus blocker; chart structure, VWAP, EMA alignment, volume, OI/PCR and existing risk/data safeguards continue to govern entries, and legacy saved settings are migrated automatically.",

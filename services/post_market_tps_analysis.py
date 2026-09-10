@@ -11,6 +11,8 @@ from services.reliability_intelligence import (
     automatic_counterfactual_replay, broker_freshness, score_calibration, strategy_portfolio_risk,
 )
 
+MONITORED_INDEXES = ("NIFTY", "BANKNIFTY", "SENSEX")
+
 
 def _json(value: str | None, fallback):
     try:
@@ -105,7 +107,9 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
     best_attempts: list[dict] = []
     attempt_audit: list[dict] = []
     observed: set[tuple[str, datetime]] = set()
-    monitored_symbols: set[str] = set()
+    # Coverage describes the monitor we promised to run, not only symbols that
+    # happened to leave a row behind. Otherwise a dead scheduler reports 0/0.
+    monitored_symbols: set[str] = set(MONITORED_INDEXES)
     evidence_total = evidence_known = 0
 
     for row in attempts:
@@ -310,7 +314,7 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
     )
     replay = automatic_counterfactual_replay(database, trade_date, 10)
     calibration = score_calibration(database)
-    lines.extend(["", "8. Release 1.5.7 reliability evidence"])
+    lines.extend(["", "8. Release 1.5.8 reliability evidence"])
     lines.append(
         f"Fresh timestamped broker responses {freshness['fresh_success']}/{freshness['timestamped_success']}; "
         f"stale responses {freshness['stale_success']}; p95 latency {freshness['p95_latency_ms'] or 0} ms."

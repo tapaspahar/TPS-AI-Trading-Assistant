@@ -92,6 +92,19 @@ class SelfDevelopmentDecisionTests(unittest.TestCase):
         self.assertLessEqual(review["health_score"], 74)
         self.assertEqual(review["verdict"], "REVIEW REQUIRED")
 
+    def test_current_session_review_is_provisional_and_old_session_is_final(self):
+        self.save_source()
+        provisional = generate_and_save_self_development_review(
+            self.db, "13-08-2026", now=datetime(2026, 8, 13, 12, 0)
+        )
+        self.assertEqual(provisional["review_state"], "PROVISIONAL")
+        self.assertEqual(self.db.get_self_development_review("13-08-2026")["review_state"], "PROVISIONAL")
+        final = generate_and_save_self_development_review(
+            self.db, "13-08-2026", now=datetime(2026, 8, 13, 15, 45)
+        )
+        self.assertEqual(final["review_state"], "FINAL")
+        self.assertEqual(self.db.get_self_development_review("13-08-2026")["review_state"], "FINAL")
+
 
 if __name__ == "__main__":
     unittest.main()

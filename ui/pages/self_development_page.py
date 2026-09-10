@@ -20,6 +20,7 @@ from services.self_development_decision import (
 from services.development_validation import (
     build_counterfactual_review, build_evaluation_health, build_evidence_diagnostics,
 )
+from services.post_market_tps_analysis import generate_and_save_post_market_analysis
 from services.development_lifecycle import build_implementation_benefit_report
 from core.settings_store import SettingsStore
 from ui.widgets.excel_export_dialog import open_excel_export
@@ -34,6 +35,7 @@ class SelfDevelopmentPage(QWidget):
         self.rows = []
         self.suggestions = []
         self.implementation_rows = []
+        self.current_trade_date = ""
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         scroll = QScrollArea()
@@ -50,7 +52,7 @@ class SelfDevelopmentPage(QWidget):
         title.setObjectName("pageTitle")
         layout.addWidget(title)
         intro = QLabel(
-            "Market close ke baad TPS saved attempts, data gaps, blockers aur trade outcomes audit karke "
+            "Market ke dauran PROVISIONAL aur market close ke baad FINAL review me TPS saved attempts, data gaps, blockers aur trade outcomes audit karke "
             "development rectification suggestions deta hai. AI code ya strategy rules khud change nahi karta; "
             "har change replay, paper forward-test aur human approval ke baad hi consider hoga."
         )
@@ -269,20 +271,25 @@ class SelfDevelopmentPage(QWidget):
 
     def generate_selected(self):
         trade_date = self.date_input.date().toString("dd-MM-yyyy")
-        if self.db.get_post_market_tps_analysis(trade_date) is None:
+        if trade_date == QDate.currentDate().toString("dd-MM-yyyy"):
+            generate_and_save_post_market_analysis(self.db, trade_date)
+        elif self.db.get_post_market_tps_analysis(trade_date) is None:
             QMessageBox.information(
                 self, "AI Self-Development Decision Center",
-                "Is date ka Post Market Analysis of TPS available nahi hai. Pehle post-market report generate karein.",
+                "Is historical date ka saved Post Market Analysis available nahi hai.",
             )
             return
         review = generate_and_save_self_development_review(self.db, trade_date)
-        self.status.setText(f"{trade_date} ka evidence-led AI development review update ho gaya. ID: {review['id']}.")
+        self.status.setText(
+            f"{trade_date} ka {review.get('review_state', 'DRAFT')} evidence-led AI development review update ho gaya. ID: {review['id']}."
+        )
         self.refresh(auto_generate=False)
 
     def load_selected_review(self, current, _previous=None):
         if current is None:
             return
         trade_date = str(current.data(Qt.UserRole))
+        self.current_trade_date = trade_date
         try:
             parsed = datetime.strptime(trade_date, "%d-%m-%Y")
             self.date_input.setDate(QDate(parsed.year, parsed.month, parsed.day))
@@ -323,7 +330,9 @@ class SelfDevelopmentPage(QWidget):
             self.details.setPlainText(str(row["summary_text"]))
 
     def refresh_implementation_report(self):
-        self.implementation_rows = build_implementation_benefit_report(self.db, self.suggestions)
+        self.implementation_rows = build_implementation_benefit_report(
+            self.db, self.suggestions, self.current_trade_date or None,
+        )
         self.implementation_table.setRowCount(len(self.implementation_rows))
         for row_index, record in enumerate(self.implementation_rows):
             values = (
@@ -350,6 +359,8 @@ class SelfDevelopmentPage(QWidget):
             f"BENEFIT STATUS\n{record['benefit_status']}\n{record['benefit']}\n\n"
             f"PENDING / NOT IMPLEMENTED REASON\n{record['reason']}\n\n"
             f"NEXT RELEASE ACTION\n{record['next_action']}\n\n"
+            f"FEATURE-SPECIFIC CURRENT MEASUREMENT\n{record.get('measurement', '{}')}\n\n"
+            f"PREVIOUS RELEASE COMPARISON\n{record.get('comparison', '{}')}\n\n"
             "Note: Cutie code present hone ko profit proof nahi maanti; benefit sirf saved replay ya paper-forward evidence se update hota hai."
         )
 

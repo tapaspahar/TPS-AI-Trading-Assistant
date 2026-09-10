@@ -132,6 +132,9 @@ class EvidenceIntegrityTests(unittest.TestCase):
                 self.assertEqual(report[0]["build_status"], "IMPLEMENTED IN BUILD")
                 self.assertEqual(report[0]["benefit_status"], "MEASUREMENT PENDING")
                 self.assertIn("proof nahi", report[0]["benefit"])
+                measurements = database.get_development_feature_measurements("evidence_integrity")
+                self.assertEqual(len(measurements), 1)
+                self.assertEqual(measurements[0]["feature_version"], "1.5.8")
             finally:
                 database.close()
 
