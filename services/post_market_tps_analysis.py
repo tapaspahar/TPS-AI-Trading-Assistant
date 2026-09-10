@@ -204,6 +204,17 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
         else:
             retry_reasons["data/service retry"] += 1
 
+    index_quality = {}
+    for symbol in sorted(monitored_symbols):
+        symbol_rows = [row for row in attempts if str(row["symbol"] or "").upper() == symbol]
+        symbol_gaps = sum(str(row["outcome"] or "").upper() in {"DATA GAP", "RETRY PENDING", "SKIPPED"} for row in symbol_rows)
+        symbol_captures = sum(str(row["outcome"] or "").upper() in {"CAPTURED", "TRADE CAPTURED"} for row in symbol_rows)
+        index_quality[symbol] = {
+            "attempts": len(symbol_rows), "data_gaps": symbol_gaps, "captures": symbol_captures,
+            "data_gap_rate": round(symbol_gaps * 100 / len(symbol_rows), 1) if symbol_rows else 100.0,
+            "status": "LIVE" if symbol_rows and symbol_gaps / len(symbol_rows) <= 0.05 else "DEGRADED" if symbol_rows else "MISSING",
+        }
+
     lines = [
         "POST MARKET ANALYSIS OF TPS",
         f"Trading date: {trade_date}",
@@ -347,6 +358,7 @@ def build_post_market_analysis(database: Database, trade_date: str, now: datetim
         "failed_conditions": dict(failed_conditions),
         "hard_blockers": dict(hard_blockers),
         "retry_reasons": dict(retry_reasons),
+        "index_quality": index_quality,
         "best_attempts": best_attempts[:10],
         "attempt_audit_count": len(attempt_audit),
         "structured_evidence_total": evidence_total,

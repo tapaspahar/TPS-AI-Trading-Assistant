@@ -159,6 +159,9 @@ class PostMarketTpsAnalysisTests(unittest.TestCase):
             self.assertEqual(analysis["metrics"]["expected_slots"], 225)
             self.assertEqual(analysis["metrics"]["observed_slots"], 3)
             self.assertEqual(analysis["metrics"]["monitored_symbols"], ["BANKNIFTY", "NIFTY", "SENSEX"])
+            self.assertEqual(analysis["metrics"]["index_quality"]["NIFTY"]["attempts"], 1)
+            self.assertEqual(analysis["metrics"]["index_quality"]["BANKNIFTY"]["attempts"], 1)
+            self.assertEqual(analysis["metrics"]["index_quality"]["SENSEX"]["attempts"], 1)
             self.assertLessEqual(analysis["metrics"]["coverage_percent"], 100.0)
             self.assertIn("Index-wise 5-minute market slots", analysis["summary_text"])
             database.close()
@@ -171,6 +174,7 @@ class PostMarketTpsAnalysisTests(unittest.TestCase):
             self.assertEqual(analysis["metrics"]["observed_slots"], 0)
             self.assertEqual(analysis["metrics"]["coverage_percent"], 0.0)
             self.assertEqual(analysis["metrics"]["monitored_symbols"], ["BANKNIFTY", "NIFTY", "SENSEX"])
+            self.assertTrue(all(value["status"] == "MISSING" for value in analysis["metrics"]["index_quality"].values()))
             self.assertTrue(analysis["metrics"]["missing_ranges"])
             database.close()
 

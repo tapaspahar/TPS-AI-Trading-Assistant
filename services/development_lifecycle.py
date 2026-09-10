@@ -50,7 +50,8 @@ def _feature_measurement(database: Database, key: str, trade_date: str) -> dict:
                       evidence_coverage=float(metrics.get("structured_evidence_coverage") or 0))
     elif key == "broker_reliability":
         result.update(retries=retries, retry_rate=round(retries * 100 / max(attempts, 1), 1),
-                      retry_reasons=metrics.get("retry_reasons") or {})
+                      retry_reasons=metrics.get("retry_reasons") or {},
+                      index_quality=metrics.get("index_quality") or {})
     elif key == "zero_capture_calibration":
         result.update(capture_rate=round(captured * 100 / max(evaluated, 1), 1),
                       score_and_checklist_pass=int(metrics.get("score_and_checklist_pass") or 0))
