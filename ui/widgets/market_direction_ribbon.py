@@ -6,7 +6,7 @@ from services.market_direction_ribbon_service import build_market_direction_ribb
 
 
 class MarketDirectionRibbon(QFrame):
-    """Persistent bottom marquee backed by saved chart, OI and breadth evidence."""
+    """Persistent full-width direction ribbon backed by saved market evidence."""
 
     COLORS = {"BULLISH": "#35d07f", "BEARISH": "#ff647c", "FLAT": "#ffd166", "DATA GAP": "#aab2c8"}
 
@@ -14,18 +14,13 @@ class MarketDirectionRibbon(QFrame):
         super().__init__(parent)
         self.setObjectName("marketDirectionRibbon")
         self.setFixedHeight(34)
-        self._text = "TPS MARKET DIRECTION • waiting for completed 5-minute evidence"
-        self._offset = 0
         layout = QHBoxLayout(self)
         layout.setContentsMargins(10, 2, 10, 2)
-        self.label = QLabel(self._text)
+        self.label = QLabel("TPS MARKET DIRECTION  |  Waiting for completed 5-minute evidence")
         self.label.setObjectName("marketDirectionRibbonLabel")
-        self.label.setAlignment(Qt.AlignVCenter)
+        self.label.setAlignment(Qt.AlignCenter)
+        self.label.setMinimumWidth(0)
         layout.addWidget(self.label, 1)
-        self.scroll_timer = QTimer(self)
-        self.scroll_timer.setInterval(180)
-        self.scroll_timer.timeout.connect(self._scroll)
-        self.scroll_timer.start()
         self.refresh_timer = QTimer(self)
         self.refresh_timer.setInterval(15_000)
         self.refresh_timer.timeout.connect(self.refresh)
@@ -38,18 +33,11 @@ class MarketDirectionRibbon(QFrame):
             result = build_market_direction_ribbon(database)
         finally:
             database.close()
-        index_text = "   •   ".join(f"{row['symbol']} {row['direction']}" for row in result["indexes"])
-        self._text = (
-            f"TPS MARKET: {result['overall']}   •   {index_text}   •   "
-            f"Evidence candle {result['evidence_time']}   •   Session {result['session']}"
+        index_text = "  |  ".join(f"{row['symbol']} {row['direction']}" for row in result["indexes"])
+        self.label.setText(
+            f"TPS MARKET {result['overall']}  |  {index_text}  |  "
+            f"CANDLE {result['evidence_time']}  |  {result['session']}"
         )
         color = self.COLORS.get(result["overall"], self.COLORS["DATA GAP"])
         self.label.setStyleSheet(f"color: {color}; font-weight: 700;")
         self.setToolTip("Chart + quality-gated OI + component breadth verdict. DATA GAP ko direction nahi maana jata.")
-
-    def _scroll(self):
-        padded = self._text + "        "
-        if not padded:
-            return
-        self._offset = (self._offset + 1) % len(padded)
-        self.label.setText(padded[self._offset:] + padded[:self._offset])
