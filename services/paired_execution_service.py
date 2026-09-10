@@ -22,7 +22,10 @@ class PairedExecutionService:
 
     @property
     def armed(self):
-        return self._pair_armed and self.execution.armed
+        # Header REAL selection is the explicit one-click session authority.
+        # The legacy page-level arm button remains available, but a second
+        # phrase is no longer required after the shared session is armed.
+        return self.execution.armed
 
     def arm_real(self, execution_phrase, pair_phrase):
         if pair_phrase.strip().upper() != self.ARM_PHRASE:

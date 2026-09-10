@@ -29,19 +29,45 @@ class OrderRequest:
 
 class ExecutionService:
     UNLOCK_PHRASE = "ENABLE REAL TRADING"
+    # One in-memory authority shared by every execution page/service. It is
+    # intentionally lost on application restart and never written to disk.
+    _session_armed = False
+    _session_kill_switch = False
 
     def __init__(self, database, settings_store, live_session):
         self.database = database
         self.settings_store = settings_store
         self.live_session = live_session
-        self._armed = False
-        self._kill_switch = False
 
     @property
     def armed(self):
-        return self._armed and not self._kill_switch
+        return type(self)._session_armed and not type(self)._session_kill_switch
+
+    @classmethod
+    def session_armed(cls):
+        return cls._session_armed and not cls._session_kill_switch
+
+    @classmethod
+    def arm_from_saved_mode(cls, settings_store):
+        """Arm this process after an explicit REAL mode click."""
+        cls._session_armed = False
+        settings = settings_store.load()
+        if str(settings.get("execution_mode", "PAPER")).upper() != "REAL":
+            raise RuntimeError("Order mode is PAPER.")
+        if not bool(settings.get("real_execution_enabled", False)):
+            raise RuntimeError("Real execution is disabled in saved safety settings.")
+        if not bool(settings.get("limited_real_pilot_enabled", False)):
+            raise RuntimeError("Enable Limited REAL Pilot Mode before arming a real-money session.")
+        cls._session_kill_switch = False
+        cls._session_armed = True
+        return True
+
+    @classmethod
+    def disarm_session(cls):
+        cls._session_armed = False
 
     def arm(self, phrase: str):
+        type(self)._session_armed = False
         if phrase.strip().upper() != self.UNLOCK_PHRASE:
             raise ValueError(f'Type exactly: {self.UNLOCK_PHRASE}')
         settings = self.settings_store.load()
@@ -51,15 +77,15 @@ class ExecutionService:
             raise RuntimeError("Real execution is disabled in saved safety settings.")
         if not bool(settings.get("limited_real_pilot_enabled", False)):
             raise RuntimeError("Enable Limited REAL Pilot Mode before arming a real-money session.")
-        self._kill_switch = False
-        self._armed = True
+        type(self)._session_kill_switch = False
+        type(self)._session_armed = True
 
     def disarm(self):
-        self._armed = False
+        type(self)._session_armed = False
 
     def emergency_stop(self):
-        self._kill_switch = True
-        self._armed = False
+        type(self)._session_kill_switch = True
+        type(self)._session_armed = False
 
     @staticmethod
     def fingerprint(order: OrderRequest) -> str:

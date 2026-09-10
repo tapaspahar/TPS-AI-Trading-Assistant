@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLay
 
 from core.market_session import IST, format_remaining, market_session
 from core.settings_store import SettingsStore
+from services.execution_service import ExecutionService
 
 
 class ClickableStatusLabel(QLabel):
@@ -22,7 +23,12 @@ def toggle_execution_mode(store=None):
     settings = store.load()
     current = str(settings.get("execution_mode", "PAPER")).upper()
     settings["execution_mode"] = "REAL" if current == "PAPER" else "PAPER"
-    return store.save(settings)["execution_mode"]
+    mode = store.save(settings)["execution_mode"]
+    if mode == "PAPER":
+        ExecutionService.disarm_session()
+    else:
+        ExecutionService.arm_from_saved_mode(store)
+    return mode
 
 
 class Header(QFrame):
@@ -93,8 +99,13 @@ class Header(QFrame):
         self.updateClock()
 
     def toggleMode(self):
-        mode = toggle_execution_mode()
-        self.execution_mode_changed.emit(mode)
+        try:
+            mode = toggle_execution_mode()
+            self.execution_mode_changed.emit(mode)
+        except RuntimeError as error:
+            # Keep REAL visibly selected so the user can open Settings and
+            # complete the saved pilot controls; authority remains locked.
+            self.ai.setToolTip(str(error))
         self.updateClock()
 
     def updateClock(self):
@@ -104,4 +115,5 @@ class Header(QFrame):
         self.clock.setText(now.strftime("%d-%m-%Y   %H:%M:%S IST"))
         self.market.setText(f"Market Status: {session['label']} in {remaining}")
         mode = str(SettingsStore().load().get("execution_mode", "PAPER")).upper()
-        self.ai.setText(f"AI: Ready • {'REAL TRADE' if mode == 'REAL' else 'PAPER TRADE'}")
+        state = " • ARMED" if mode == "REAL" and ExecutionService.session_armed() else " • LOCKED" if mode == "REAL" else ""
+        self.ai.setText(f"AI: Ready • {'REAL TRADE' if mode == 'REAL' else 'PAPER TRADE'}{state}")
