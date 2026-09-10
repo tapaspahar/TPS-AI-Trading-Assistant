@@ -205,17 +205,12 @@ class DashboardScreen(QWidget):
             (self.orderIntelligencePage, "Angel One Order Intelligence"),
             (self.cutieCommandPage, "Cutie AI Commands"),
             (self.settingsPage, "Settings"),
-            (self.aboutPage, "About"),
-            (self.helpPage, "Help"),
         ))
         retired = lambda: QWidget()
-        pages = (
-            self.dashboardPage, self.marketCenter, self.tradingCenter, retired(), self.reportsCenter,
-            retired(), retired(), retired(), retired(), self.controlsCenter,
-            retired(), retired(), retired(), retired(), retired(), retired(), retired(), retired(), retired(),
-            retired(), retired(), retired(), retired(), retired(), retired(), retired(), retired(), retired(), retired(),
-            retired(), retired(), retired(), retired(), retired(), retired(), retired(), retired(), retired(), retired(), retired(),
-        )
+        pages = [retired() for _ in range(44)]
+        pages[0], pages[1], pages[2] = self.dashboardPage, self.marketCenter, self.tradingCenter
+        pages[4], pages[9] = self.reportsCenter, self.controlsCenter
+        pages[15], pages[16] = self.aboutPage, self.helpPage
         for page in pages:
             self.stack.addWidget(page)
         self.journalPage.trade_saved.connect(self.dashboardPage.refresh)
@@ -257,7 +252,9 @@ class DashboardScreen(QWidget):
         for button, index in ((self.sidebar.dashboardButton, 0), (self.sidebar.marketCenterButton, 1),
                               (self.sidebar.tradingCenterButton, 2),
                               (self.sidebar.reportsCenterButton, 4),
-                              (self.sidebar.controlsCenterButton, 9)):
+                              (self.sidebar.controlsCenterButton, 9),
+                              (self.sidebar.aboutButton, 15),
+                              (self.sidebar.helpButton, 16)):
             button.clicked.connect(lambda _checked=False, page_index=index: self.show_page(page_index))
         # Keep navigation instant.  The expensive page preparation is
         # debounced below so rapidly moving across tabs does not rebuild every
@@ -266,7 +263,7 @@ class DashboardScreen(QWidget):
             (self.marketCenter, (1, 39, 13, 24, 19, 28, 41, 26, 43)),
             (self.tradingCenter, (2, 21, 34, 27, 29, 35, 37)),
             (self.reportsCenter, (4, 14, 30, 8, 22, 10, 12, 31, 40)),
-            (self.controlsCenter, (32, 36, 42, 38, 9, 15, 16)),
+            (self.controlsCenter, (32, 36, 42, 38, 9)),
         ):
             center.tabs.currentChanged.connect(
                 lambda tab_index, route_list=routes: self.defer_page_refresh(route_list[tab_index])
@@ -541,17 +538,18 @@ class DashboardScreen(QWidget):
             42: (9, self.controlsCenter, 2, None, 0),
             38: (9, self.controlsCenter, 3, None, 0),
             9: (9, self.controlsCenter, 4, None, 0),
-            7: (9, self.controlsCenter, 4, None, 0),
-            15: (9, self.controlsCenter, 5, None, 0),
-            16: (9, self.controlsCenter, 6, None, 0),
+            7: (16, None, 0, None, 0),
+            15: (15, None, 0, None, 0),
+            16: (16, None, 0, None, 0),
         }
         if requested_index == 0:
             index = 0
         else:
             index, center, center_tab, inner, inner_tab = routes.get(requested_index, routes[2])
-            center.select_tab(center_tab)
-            if inner is not None:
-                inner.select_tab(inner_tab)
+            if center is not None:
+                center.select_tab(center_tab)
+                if inner is not None:
+                    inner.select_tab(inner_tab)
         self.sidebar.set_active(index)
         self.stack.setCurrentIndex(index)
         self.defer_page_refresh(requested_index)

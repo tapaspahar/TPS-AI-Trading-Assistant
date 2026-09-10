@@ -41,16 +41,18 @@ class WorkspaceConsolidationTests(unittest.TestCase):
 
     def test_sidebar_contains_only_primary_workspaces(self):
         labels = "\n".join(button.text() for button in self.screen.sidebar.buttons)
-        self.assertEqual(len(self.screen.sidebar.buttons), 5)
+        self.assertEqual(len(self.screen.sidebar.buttons), 7)
         for workspace_label in (
             "Dashboard",
             "Market Intelligence",
             "Trading & Strategies",
             "Reports & Learning",
             "Controls & Settings",
+            "About",
+            "Help",
         ):
             self.assertIn(workspace_label, labels)
-        self.assertLessEqual(self.screen.sidebar.menu_widget.minimumHeight(), 260)
+        self.assertLessEqual(self.screen.sidebar.menu_widget.minimumHeight(), 360)
 
     def test_legacy_routes_open_the_matching_consolidated_tabs(self):
         cases = (
@@ -74,7 +76,8 @@ class WorkspaceConsolidationTests(unittest.TestCase):
         self.screen.show_page(3)
         self.assertEqual(self.screen.stack.currentIndex(), 2)
         self.screen.show_page(7)
-        self.assertEqual(self.screen.stack.currentIndex(), 9)
+        self.assertEqual(self.screen.stack.currentIndex(), 16)
+        self.assertTrue(self.screen.sidebar.helpButton.isChecked())
 
     def test_primary_routes_return_to_the_first_tab(self):
         cases = (
@@ -148,7 +151,7 @@ class WorkspaceConsolidationTests(unittest.TestCase):
             ),
             self.screen.controlsCenter: (
                 "Overtrading Protection", "Broker Execution", "Angel One Order Intelligence", "Cutie AI Commands",
-                "Settings", "About", "Help",
+                "Settings",
             ),
         }
         for center, labels in expected.items():

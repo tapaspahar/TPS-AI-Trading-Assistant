@@ -66,6 +66,7 @@ class Sidebar(QFrame):
         self.buttons = (
             self.dashboardButton, self.marketCenterButton, self.tradingCenterButton,
             self.reportsCenterButton, self.controlsCenterButton,
+            self.aboutButton, self.helpButton,
         )
         # Stack page numbers intentionally remain stable even when the visual
         # menu order changes.  This prevents the wrong sidebar item being
@@ -76,6 +77,8 @@ class Sidebar(QFrame):
             2: self.tradingCenterButton,
             4: self.reportsCenterButton,
             9: self.controlsCenterButton,
+            15: self.aboutButton,
+            16: self.helpButton,
         }
         self.menu_group = QButtonGroup(self)
         self.menu_group.setExclusive(True)
