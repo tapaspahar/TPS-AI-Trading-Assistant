@@ -3,6 +3,7 @@ from datetime import datetime
 
 from core.market_session import IST
 from services.market_direction_ribbon_service import build_market_direction_ribbon
+from ui.widgets.market_direction_ribbon import format_market_direction_text
 
 
 class FakeDatabase:
@@ -18,6 +19,19 @@ class FakeDatabase:
 
 
 class MarketDirectionRibbonTests(unittest.TestCase):
+    def test_ticker_text_uses_colon_separated_index_verdicts(self):
+        text = format_market_direction_text({
+            "overall": "FLAT", "evidence_time": "15:25", "session": "CLOSED",
+            "indexes": [
+                {"symbol": "NIFTY", "direction": "FLAT"},
+                {"symbol": "BANKNIFTY", "direction": "BEARISH"},
+                {"symbol": "SENSEX", "direction": "BULLISH"},
+            ],
+        })
+        self.assertIn("NIFTY : FLAT", text)
+        self.assertIn("BANKNIFTY : BEARISH", text)
+        self.assertIn("SENSEX : BULLISH", text)
+
     def test_three_confirmed_indexes_publish_bullish_ribbon(self):
         breadth = {symbol: {"captured_at": "2026-09-10T12:05:00+05:30", "symbol": symbol, "state": "BULLISH"}
                    for symbol in ("NIFTY", "BANKNIFTY", "SENSEX")}
