@@ -13,8 +13,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDoubleSpinBox, QGridLayout
 from core.database_manager import Database
 from core.market_session import IST, parse_session_times
 from core.settings_store import SettingsStore
-from engine.expiry_spike_engine import (evaluate_spike, format_spike_event, predict_expiry_spike,
-                                        select_nearby_expiry_contracts, select_nearest_itm_pair)
+from engine.expiry_spike_engine import evaluate_spike, format_spike_event, predict_expiry_spike, select_nearby_expiry_contracts
 from engine.three_pm_research_engine import evaluate_three_pm_shadow
 from services.expiry_observation_store import ExpiryObservationStore
 from services.live_session import LiveSession
@@ -23,6 +22,7 @@ from services.paired_execution_service import PairedExecutionService
 
 
 ATM_PARITY_MAX_GAP = 10.0
+ATM_PARITY_TARGET_POINTS = 50.0
 
 
 def select_atm_parity_pair(pairs, spot, max_gap=ATM_PARITY_MAX_GAP):
@@ -130,16 +130,9 @@ class ExpiryObservationPage(QWidget):
         self.auto_pair = QCheckBox("Spike confirmed hone par auto pair capture/submit (sirf current session)")
         self.auto_pair.setChecked(False)
         self.auto_atm_parity = QCheckBox(
-            "3 PM ke baad ATM CE/PE premium gap ≤ ₹10 ho toh same-snapshot pair auto entry (current session)"
+            "3 PM ke baad nearest same-strike CE+PE gap ≤ ₹10: auto pair, combined target +50 points"
         )
         self.auto_atm_parity.setChecked(False)
-        self.auto_itm_research = QCheckBox(
-            "Expiry 3:00 PM par nearest ITM CE + ITM PE PAPER pair; combined premium target +50 points"
-        )
-        self.auto_itm_research.setChecked(self.settings.value("expiry_pair/itm_paper_enabled", False, bool))
-        self.auto_itm_research.toggled.connect(
-            lambda checked: self.settings.setValue("expiry_pair/itm_paper_enabled", checked)
-        )
         self.real_pair_money_ack = QCheckBox("I understand CE+PE REAL pair actual money use karega")
         self.real_pair_session_ack = QCheckBox("Is app session ke liye REAL expiry pair activate karein")
         self.paper_pair = QPushButton("Capture PAPER CE+PE Pair"); self.paper_pair.clicked.connect(lambda: self._place_pair(False))
@@ -152,13 +145,12 @@ class ExpiryObservationPage(QWidget):
         execution.addWidget(QLabel("Time exit (HH:MM)"), 1, 2); execution.addWidget(self.pair_time, 1, 3)
         execution.addWidget(self.auto_pair, 2, 0, 1, 4)
         execution.addWidget(self.auto_atm_parity, 3, 0, 1, 4)
-        execution.addWidget(self.auto_itm_research, 4, 0, 1, 4)
-        execution.addWidget(self.real_pair_money_ack, 5, 0, 1, 2)
-        execution.addWidget(self.real_pair_session_ack, 5, 2, 1, 2)
-        execution.addWidget(self.paper_pair, 6, 0); execution.addWidget(self.arm_pair, 6, 1)
-        execution.addWidget(self.real_pair, 6, 2); execution.addWidget(self.stop_pair, 6, 3)
+        execution.addWidget(self.real_pair_money_ack, 4, 0, 1, 2)
+        execution.addWidget(self.real_pair_session_ack, 4, 2, 1, 2)
+        execution.addWidget(self.paper_pair, 5, 0); execution.addWidget(self.arm_pair, 5, 1)
+        execution.addWidget(self.real_pair, 5, 2); execution.addWidget(self.stop_pair, 5, 3)
         self.pair_status = QLabel("No open expiry pair. REAL authority har app restart par locked rahegi.")
-        self.pair_status.setWordWrap(True); execution.addWidget(self.pair_status, 7, 0, 1, 4)
+        self.pair_status.setWordWrap(True); execution.addWidget(self.pair_status, 6, 0, 1, 4)
         layout.addWidget(execution_box)
         for field in (self.pair_lots, self.pair_target, self.pair_stop, self.pair_time):
             if hasattr(field, "valueChanged"): field.valueChanged.connect(self._save_pair_preferences)
@@ -200,7 +192,7 @@ class ExpiryObservationPage(QWidget):
             QMessageBox.warning(self, "Real pair locked", str(error))
 
     def _emergency_stop(self):
-        self.auto_pair.setChecked(False); self.auto_atm_parity.setChecked(False); self.auto_itm_research.setChecked(False); self.pair_execution.emergency_stop()
+        self.auto_pair.setChecked(False); self.auto_atm_parity.setChecked(False); self.pair_execution.emergency_stop()
         self.real_pair_money_ack.setChecked(False); self.real_pair_session_ack.setChecked(False)
         self.pair_status.setText("Emergency stop active: new REAL pair submission locked. Existing broker positions manually verify karein.")
 
@@ -326,28 +318,16 @@ class ExpiryObservationPage(QWidget):
             f"Evidence: {', '.join(shadow['evidence']) or 'insufficient'}\n{shadow['policy']}"
         )
         pair_auto_attempted = False
-        if self.auto_itm_research.isChecked() and symbol == self.underlying.currentText():
-            itm = select_nearest_itm_pair(self.latest_pairs[symbol], spot)
-            if itm is None:
-                self.pair_status.setText("3 PM ITM PAPER pair waiting: fresh nearest ITM CE aur ITM PE quotes required.")
-            else:
-                quantity = self.pair_lots.value() * int(itm["CE"]["contract"].get("lot_size") or 0)
-                # +50 option-premium points across the pair equals 50 * quantity rupees.
-                target_pnl = 50.0 * quantity
-                synthetic = {"expiry": itm["expiry"], "CE": itm["CE"], "PE": itm["PE"]}
-                self._place_pair(
-                    False, itm["reference_strike"], automatic=True,
-                    trigger_type="THREE_PM_NEAREST_ITM_PAPER", observed_at=now.isoformat(),
-                    pair_override=synthetic, target_pnl_override=target_pnl,
-                )
-                pair_auto_attempted = True
         if self.auto_atm_parity.isChecked() and symbol == self.underlying.currentText():
             parity = select_atm_parity_pair(self.latest_pairs[symbol], spot)
             if parity is not None:
                 real = str(self.settings_store.load().get("execution_mode", "PAPER")).upper() == "REAL"
+                lot_size = int(parity["pair"]["CE"]["contract"].get("lot_size") or 0)
+                target_pnl = ATM_PARITY_TARGET_POINTS * self.pair_lots.value() * lot_size
                 self._place_pair(
                     real, parity["strike"], automatic=True, trigger_type="ATM_PREMIUM_PARITY",
                     observed_at=now.isoformat(), premium_gap=parity["gap"],
+                    target_pnl_override=target_pnl,
                 )
                 pair_auto_attempted = True
         # Save or update paired spike events only after all CE and PE quotes from
