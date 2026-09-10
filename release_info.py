@@ -8,8 +8,8 @@ PUBLISHER = "Tapas Kumar Pahar"
 
 # Update this block whenever a reviewed application update is made.
 SOFTWARE_UPDATE_VERSION = "v1.5.8"
-LAST_UPDATED_AT = "10-09-2026 13:05:00 IST"
-FOOTER_UPDATE_TEXT = "Software Build v1.5.8 - 10-09-2026 13:05 IST"
+LAST_UPDATED_AT = "11-09-2026 00:57:58 IST"
+FOOTER_UPDATE_TEXT = "Software Build v1.5.8 - 11-09-2026 00:57 IST"
 RELEASE_NOTES = (
     "Corrected the Market Direction Ribbon to keep its complete combined and three-index verdict visible across the full application width; the earlier character rotation could begin mid-sentence and clip BANKNIFTY or later evidence fields.",
     "Added a persistent bottom Market Direction Ribbon that scrolls the evidence-timed NIFTY, BANKNIFTY, SENSEX and combined BULLISH/BEARISH/FLAT verdict every 15 seconds; missing chart, OI or breadth evidence remains visibly DATA GAP.",
