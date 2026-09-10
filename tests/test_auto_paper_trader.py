@@ -2,12 +2,30 @@ import unittest
 from datetime import datetime
 from unittest.mock import patch
 
-from services.auto_paper_trader import (_completed_candle_age_seconds, _completed_candles, chart_volume_quota_eligibility, component_breadth_preference, exploratory_paper_eligibility,
+from services.auto_paper_trader import (_completed_candle_age_seconds, _completed_candles, chart_volume_quota_eligibility, component_breadth_preference, exploratory_paper_eligibility, permissive_paper_eligibility,
                                         late_session_entry_blocker, run_auto_paper_cycle, signal_timing_stage)
 from ui.pages.options_page import AUTO_PAPER_INDEXES, pending_auto_paper_indexes
 
 
 class AutoPaperTraderTests(unittest.TestCase):
+    def test_permissive_testing_ignores_strategy_blockers_but_not_data_gaps(self):
+        strategy = {
+            "candidate": "CE",
+            "hard_blockers": ["EMA alignment missing", "Late entry"],
+            "side_evaluations": {"CE": {
+                "hard_blockers": ["EMA alignment missing", "Late entry"],
+                "data_gaps": [],
+            }},
+        }
+        result = permissive_paper_eligibility(strategy, {"paper_validation_testing_mode": True})
+        self.assertTrue(result["allowed"])
+        self.assertEqual(result["validation_track"], "PERMISSIVE PAPER OBSERVATION")
+        self.assertEqual(len(result["bypassed_strategy_blockers"]), 2)
+        strategy["side_evaluations"]["CE"]["data_gaps"] = ["Option quote unavailable"]
+        self.assertFalse(permissive_paper_eligibility(
+            strategy, {"paper_validation_testing_mode": True}
+        )["allowed"])
+
     def test_bearish_component_majority_prefers_pe_without_erasing_risk(self):
         strategy = {"candidate": "CE", "score": 80, "side_evaluations": {
             "CE": {"score": 80, "risk_blockers": []},

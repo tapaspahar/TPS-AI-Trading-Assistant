@@ -11,6 +11,7 @@ SOFTWARE_UPDATE_VERSION = "v1.5.7"
 LAST_UPDATED_AT = "10-09-2026 08:18:26 IST"
 FOOTER_UPDATE_TEXT = "Software Build v1.5.7 - 10-09-2026 08:18 IST"
 RELEASE_NOTES = (
+    "PAPER validation testing now captures every CE/PE thesis with readable fresh candle and option-price data even when checklist, score, timing, event, recovery or execution-risk checks fail; every bypassed reason remains in the audit, the ten-trade/open-position limits remain bounded, and REAL execution safeguards are unchanged.",
     "Dashboard Journal P&L is now scoped to the current IST journal date, displays that date on the card, and automatically refreshes at midnight so a new trading day starts at zero until a current-date trade closes.",
     "Release 1.5.7 permanently removes SuperTrend from the TPS entry checklist, score and directional-consensus blocker; chart structure, VWAP, EMA alignment, volume, OI/PCR and existing risk/data safeguards continue to govern entries, and legacy saved settings are migrated automatically.",
     "Index-component breadth now directly prefers PE when at least 60% of covered constituents are bearish, or CE when at least 60% are bullish, provided coverage is 80%+; the preferred side keeps its original risk blockers and DATA GAP state.",

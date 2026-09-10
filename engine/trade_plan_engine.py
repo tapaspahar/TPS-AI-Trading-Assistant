@@ -70,11 +70,14 @@ def create_review_plan(underlying, spot_price, contracts, quote_rows, chart_cont
     adjusted_risk_percent = float(settings["risk_percent"]) * float(environment.get("risk_multiplier", 1))
     risk = buying_risk(premium - stop_loss, contract["lot_size"], settings["capital"], adjusted_risk_percent)
     safe_lots = risk["lots"]
-    if safe_lots < 1:
+    permissive_paper = bool(chart_context.get("permissive_paper_capture"))
+    if safe_lots < 1 and not permissive_paper:
         raise ValueError(
             "Adaptive structure/volatility stop ke saath ek exchange lot bhi configured rupee-risk cap me fit nahi hota. "
             "TPS stop ko chhota nahi karega; capital/risk review karein ya trade skip karein."
         )
+    if safe_lots < 1:
+        safe_lots = 1
     if requested_lots is None:
         requested_lots = safe_lots
     requested_lots = int(requested_lots)

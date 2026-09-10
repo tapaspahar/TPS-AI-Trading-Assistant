@@ -72,6 +72,32 @@ def exploratory_paper_eligibility(strategy: dict, settings: dict) -> dict:
     }
 
 
+def permissive_paper_eligibility(strategy: dict, settings: dict) -> dict:
+    """Capture every readable CE/PE thesis in explicit PAPER testing mode.
+
+    This intentionally ignores strategy score/checklist/risk vetoes so rejected
+    ideas produce measurable forward outcomes. Missing/stale source data is not
+    converted into a trade because a paper fill without a trustworthy candle or
+    option quote would fabricate accuracy rather than test it.
+    """
+    candidate = str(strategy.get("candidate") or "").upper()
+    side = (strategy.get("side_evaluations") or {}).get(candidate) or {}
+    data_gaps = unique_messages(side.get("data_gaps") or strategy.get("data_gaps"))
+    return {
+        "allowed": bool(
+            settings.get("paper_validation_testing_mode")
+            and candidate in {"CE", "PE"}
+            and not data_gaps
+        ),
+        "candidate": candidate,
+        "data_gaps": data_gaps,
+        "validation_track": "PERMISSIVE PAPER OBSERVATION",
+        "bypassed_strategy_blockers": unique_messages(
+            side.get("hard_blockers") or strategy.get("hard_blockers")
+        ),
+    }
+
+
 def chart_volume_quota_eligibility(strategy: dict, capture: dict, settings: dict, progress: dict) -> dict:
     """Select up to three PAPER-only chart+volume samples per session.
 
@@ -364,10 +390,20 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
         strategy = component_breadth_preference(strategy, breadth)
         exploratory = exploratory_paper_eligibility(strategy, settings)
         quota_sample = chart_volume_quota_eligibility(strategy, capture, settings, progress)
+        permissive_sample = permissive_paper_eligibility(strategy, settings)
         if quota_sample["allowed"] and not exploratory["allowed"]:
             exploratory = {
                 **exploratory, "allowed": True, "validation_track": quota_sample["validation_track"],
                 "score_floor": 0, "soft_misses": max(0, int((strategy.get("required") or 0)) - int((strategy.get("passed") or 0))),
+            }
+        if permissive_sample["allowed"]:
+            exploratory = {
+                **exploratory,
+                "allowed": True,
+                "validation_track": permissive_sample["validation_track"],
+                "score_floor": 0,
+                "soft_misses": max(0, int((strategy.get("required") or 0)) - int((strategy.get("passed") or 0))),
+                "bypassed_strategy_blockers": permissive_sample["bypassed_strategy_blockers"],
             }
         candidate = strategy["candidate"]
         selected_confirmations = strategy.get("selected_confirmations") or strategy.get("confirmations") or []
@@ -414,17 +450,19 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
         )
         operational_blockers = []
         recovery = OvertradingGuard().assess(settings, database, checked_at)
-        if settings.get("news_risk_pause"): operational_blockers.append("Emergency News Risk Pause is ON")
-        if event_risk.get("blocked") and not settings.get("event_risk_override"): operational_blockers.append("High-impact economic event no-trade window is active")
-        if not event_risk.get("available") and settings.get("event_feed_fail_closed"): operational_blockers.append("Economic-calendar feed unavailable (fail-closed)")
+        if not testing_mode:
+            if settings.get("news_risk_pause"): operational_blockers.append("Emergency News Risk Pause is ON")
+            if event_risk.get("blocked") and not settings.get("event_risk_override"): operational_blockers.append("High-impact economic event no-trade window is active")
+            if not event_risk.get("available") and settings.get("event_feed_fail_closed"): operational_blockers.append("Economic-calendar feed unavailable (fail-closed)")
         max_open = min(10, max(1, int(settings.get("paper_validation_max_open_trades", 10)))) if testing_mode else 1
         if int(progress["open_trades"]) >= max_open:
             operational_blockers.append(f"Concurrent open paper-trade limit reached ({progress['open_trades']}/{max_open})")
         adaptive_limit = environment["adaptive_max_trades"]
         if progress["trades"] >= adaptive_limit: operational_blockers.append(f"Adaptive daily paper-trade limit reached ({progress['trades']}/{adaptive_limit})")
         if progress["daily_remaining"] <= 0: operational_blockers.append("Daily loss limit exhausted")
-        operational_blockers.extend(recovery.get("blockers") or [])
-        if strategy.get("trade_ready") or exploratory.get("allowed"):
+        if not testing_mode:
+            operational_blockers.extend(recovery.get("blockers") or [])
+        if not testing_mode and (strategy.get("trade_ready") or exploratory.get("allowed")):
             late_blocker = late_session_entry_blocker(strategy, capture, environment)
             if late_blocker:
                 operational_blockers.append(late_blocker)
@@ -463,7 +501,7 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
             chart["decision"] = (
                 f"{exploratory['validation_track']} {candidate} — strong completed-candle reversal captured for validation"
                 if exploratory.get("impulse_reversal") else
-                f"EXPLORATORY PAPER {candidate} — {exploratory['soft_misses']} soft checklist miss(es)"
+                f"{exploratory['validation_track']} {candidate} — checklist and risk vetoes recorded, not enforced"
             )
             chart["trade_ready"] = False
             chart["warnings"].append(
@@ -478,6 +516,9 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
             plan_chart["direction"] = "BULLISH" if candidate == "CE" else "BEARISH"
             plan_chart["score"] = exploratory["score"]
             plan_chart["volume_confirmed"] = True
+            plan_chart["permissive_paper_capture"] = (
+                exploratory.get("validation_track") == "PERMISSIVE PAPER OBSERVATION"
+            )
         plan_minimum_score = (
             0 if exploratory.get("impulse_reversal") or quota_sample["allowed"] else exploratory["score_floor"]
         ) if exploratory["allowed"] else int(settings.get("trade_plan_min_score", 95))
@@ -557,6 +598,14 @@ def run_auto_paper_cycle(client, symbol: str, settings: dict, *, requested_lots:
             result["proposed_plan"] = plan
             return _record(database, symbol, result)
         plan["historical_outcome_matches"] = database.find_trade_outcome_analogs(current_fingerprint)
+        if testing_mode and not safety["allowed"]:
+            safety["paper_bypassed_blockers"] = list(safety.get("blockers") or [])
+            safety["warnings"] = unique_messages(
+                list(safety.get("warnings") or [])
+                + ["PAPER testing mode recorded execution-safety failures without vetoing the simulated capture"]
+            )
+            safety["allowed"] = True
+            safety["blockers"] = []
         if not safety["allowed"]:
             chart["warnings"].extend(safety["blockers"])
             result = _attempt(
