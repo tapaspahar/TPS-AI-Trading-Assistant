@@ -1,5 +1,7 @@
 import os
+import tempfile
 import unittest
+from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -7,11 +9,21 @@ from PySide6.QtWidgets import QApplication, QLabel, QTabWidget
 
 from release_info import DISPLAY_VERSION, FOOTER_UPDATE_TEXT, LAST_UPDATED_AT, RELEASE_DATE, RELEASE_NOTES, SOFTWARE_UPDATE_VERSION, VERSION
 from ui.pages.about_help_page import AboutPage, HelpPage
-from ui.widgets.header import Header
+from ui.widgets.header import Header, toggle_execution_mode
+from core.settings_store import SettingsStore
 from ui.widgets.information_panel import InformationPanel
 
 
 class ReleaseNotesTests(unittest.TestCase):
+    def test_header_mode_toggle_changes_preference_without_arming_real(self):
+        with tempfile.TemporaryDirectory() as folder:
+            store = SettingsStore(Path(folder) / "settings.json")
+            self.assertEqual(toggle_execution_mode(store), "REAL")
+            loaded = store.load()
+            self.assertEqual(loaded["execution_mode"], "REAL")
+            self.assertFalse(loaded["real_execution_enabled"])
+            self.assertEqual(toggle_execution_mode(store), "PAPER")
+
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])

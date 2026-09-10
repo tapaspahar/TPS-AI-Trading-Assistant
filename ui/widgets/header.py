@@ -1,14 +1,33 @@
 from datetime import datetime
 
-from PySide6.QtCore import QTimer, Signal
+from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
 from core.market_session import IST, format_remaining, market_session
 from core.settings_store import SettingsStore
 
 
+class ClickableStatusLabel(QLabel):
+    clicked = Signal()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+        super().mouseReleaseEvent(event)
+
+
+def toggle_execution_mode(store=None):
+    """Toggle the visible order-mode preference; never arm REAL execution."""
+    store = store or SettingsStore()
+    settings = store.load()
+    current = str(settings.get("execution_mode", "PAPER")).upper()
+    settings["execution_mode"] = "REAL" if current == "PAPER" else "PAPER"
+    return store.save(settings)["execution_mode"]
+
+
 class Header(QFrame):
     settings_requested = Signal()
+    execution_mode_changed = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -33,8 +52,12 @@ class Header(QFrame):
 
         self.market = QLabel("Market Status: Loading…")
         self.market.setObjectName("status")
-        self.ai = QLabel("AI: Ready")
+        self.ai = ClickableStatusLabel("AI: Ready")
         self.ai.setObjectName("status")
+        self.ai.setCursor(Qt.PointingHandCursor)
+        self.ai.setToolTip("Click to switch PAPER / REAL preference. REAL broker orders still require session arming and safeguards.")
+        self.ai.setAccessibleName("Toggle paper or real trade mode")
+        self.ai.clicked.connect(self.toggleMode)
         center = QVBoxLayout()
         center.addWidget(self.market)
         center.addWidget(self.ai)
@@ -67,6 +90,11 @@ class Header(QFrame):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.updateClock)
         self.timer.start(1000)
+        self.updateClock()
+
+    def toggleMode(self):
+        mode = toggle_execution_mode()
+        self.execution_mode_changed.emit(mode)
         self.updateClock()
 
     def updateClock(self):
