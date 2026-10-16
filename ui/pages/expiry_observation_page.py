@@ -17,6 +17,7 @@ from engine.expiry_spike_engine import evaluate_spike, format_spike_event, predi
 from engine.pair_forward_test_engine import SOURCE_PAGE, build_forward_test_plan, summarize_forward_test
 from engine.three_pm_research_engine import evaluate_three_pm_shadow
 from services.expiry_observation_store import ExpiryObservationStore
+from services.expiry_direction_research import ExpiryDirectionResearch
 from services.live_session import LiveSession
 from services.option_contract_service import UNDERLYING_QUOTES, OptionContractService
 from services.paired_execution_service import PairedExecutionService
@@ -113,6 +114,9 @@ class ExpiryObservationPage(QWidget):
         super().__init__()
         self.store = ExpiryObservationStore(); self.settings = QSettings("TPS", "TPS AI Trading Assistant")
         self.db = Database(); self.settings_store = SettingsStore()
+        self.direction_research = ExpiryDirectionResearch(self.db)
+        self.scan_index = 0
+        self.research_day = datetime.now(IST).date()
         self.pair_execution = PairedExecutionService(self.db, self.settings_store, LiveSession)
         self.history = defaultdict(lambda: deque(maxlen=24)); self.last_spot = {}; self.active_events = {}
         self.latest_pairs = {}; self.running = False
@@ -120,9 +124,9 @@ class ExpiryObservationPage(QWidget):
         scroll = QScrollArea(); scroll.setWidgetResizable(True); body = QWidget(); layout = QVBoxLayout(body)
         layout.setContentsMargins(18, 16, 18, 24); layout.setSpacing(10); scroll.setWidget(body); outer.addWidget(scroll)
         title = QLabel("Expiry After 3 PM Observation"); title.setObjectName("pageTitle"); layout.addWidget(title)
-        note = QLabel("Expiry research engine nearby ATM/ITM premium acceleration, volume, OI, spot aur CAS context save karta hai. Optional same-strike CE+PE execution long-straddle hai: profit guaranteed nahi; IV crush, theta, spread, slippage aur dono premiums girne ka risk hai. PAPER default hai.")
+        note = QLabel("Expiry-only NIFTY/SENSEX research: morning trend baseline collect hota hai; 3 PM ke baad premium spikes, OI evidence aur continuation/reversal record hote hain. Dono indices automatic check hote hain. Is page se orders submit nahi hote.")
         note.setWordWrap(True); layout.addWidget(note)
-        controls = QGridLayout(); self.underlying = QComboBox(); self.underlying.addItems(("NIFTY", "BANKNIFTY", "SENSEX"))
+        controls = QGridLayout(); self.underlying = QComboBox(); self.underlying.addItems(("NIFTY", "SENSEX"))
         self.underlying.currentTextChanged.connect(lambda: self.refresh_history())
         self.expiry_toggle = QCheckBox("Today is Expiry — 3 PM observation enable karein")
         self.expiry_toggle.setChecked(self.settings.value("expiry_observation/enabled", False, bool))
@@ -162,7 +166,7 @@ class ExpiryObservationPage(QWidget):
         execution.addWidget(self.real_pair, 5, 2); execution.addWidget(self.stop_pair, 5, 3)
         self.pair_status = QLabel("No open expiry pair. REAL authority har app restart par locked rahegi.")
         self.pair_status.setWordWrap(True); execution.addWidget(self.pair_status, 6, 0, 1, 4)
-        layout.addWidget(execution_box)
+        execution_box.hide()
         validation_box = QGroupBox("30 Market-Session CE+PE PAPER Forward Test")
         validation = QGridLayout(validation_box)
         self.forward_test = QCheckBox("Daily 3 PM nearest same-strike CE+PE PAPER test (premium gap ≤ ₹10)")
@@ -182,7 +186,8 @@ class ExpiryObservationPage(QWidget):
         validation.addWidget(QLabel("Combined maximum loss"), 2, 2); validation.addWidget(self.forward_loss, 2, 3)
         self.forward_summary = QLabel("30-session PAPER evidence abhi collect nahi hua.")
         self.forward_summary.setWordWrap(True); validation.addWidget(self.forward_summary, 3, 0, 1, 4)
-        layout.addWidget(validation_box)
+        validation_box.hide()
+        self.forward_test.setChecked(False)
         self.forward_test.toggled.connect(self._save_forward_preferences)
         for field in (self.forward_capital, self.forward_target, self.forward_costs, self.forward_loss):
             field.valueChanged.connect(self._save_forward_preferences)
@@ -193,6 +198,8 @@ class ExpiryObservationPage(QWidget):
         self.cards = QLabel("Spot: - | Expiry: - | Tracked contracts: 0 | CAS: -"); self.cards.setObjectName("sectionCard"); layout.addWidget(self.cards)
         self.prediction = QLabel("Historical prediction: observation data collect ho raha hai.")
         self.prediction.setObjectName("sectionCard"); self.prediction.setWordWrap(True); layout.addWidget(self.prediction)
+        self.direction_label = QLabel("Morning trend and expiry learning: waiting for observations")
+        self.direction_label.setWordWrap(True); layout.addWidget(self.direction_label)
         self.three_pm_research = QLabel("3 PM shadow research: observation data collect ho raha hai.")
         self.three_pm_research.setObjectName("sectionCard"); self.three_pm_research.setWordWrap(True); layout.addWidget(self.three_pm_research)
         layout.addWidget(QLabel("Spike Events — same-strike CE/PE paired movement log")); self.events_table = QTableWidget(0, 12)
@@ -217,6 +224,7 @@ class ExpiryObservationPage(QWidget):
         if self.forward_test.isChecked(): self.scan()
 
     def _arm_real_pair(self):
+        return  # This workspace is observation-only.
         if not self.real_pair_money_ack.isChecked() or not self.real_pair_session_ack.isChecked():
             QMessageBox.warning(self, "Real pair locked", "REAL expiry pair activate karne ke liye dono safety ticks select karein.")
             return
@@ -251,34 +259,8 @@ class ExpiryObservationPage(QWidget):
     def _place_pair(self, real, strike=None, automatic=False, trigger_type="MANUAL_OR_SPIKE",
                     observed_at=None, premium_gap=None, pair_override=None, target_pnl_override=None,
                     lots_override=None, stop_pnl_override=None, source_page_override=None, extra_details=None):
-        try:
-            if pair_override is None:
-                strike, pair = self._candidate_pair(strike)
-            else:
-                pair = pair_override
-                strike = float(strike)
-            if real and not automatic:
-                answer = QMessageBox.question(
-                    self, "Confirm real long straddle",
-                    f"REAL BUY {self.pair_lots.value()} lot(s) CE + PE at strike {strike:g}?\n"
-                    f"Combined target ₹{self.pair_target.value():,.2f}; max loss ₹{self.pair_stop.value():,.2f}.\n"
-                    "Profit guaranteed nahi hai. Broker fills aur positions verify karna hoga.",
-                )
-                if answer != QMessageBox.Yes: return
-            result = self.pair_execution.open_pair(
-                underlying=self.underlying.currentText(), expiry=pair["expiry"], strike=strike,
-                ce=pair["CE"], pe=pair["PE"], lots=self.pair_lots.value() if lots_override is None else int(lots_override),
-                target_pnl=self.pair_target.value() if target_pnl_override is None else float(target_pnl_override),
-                stop_pnl=self.pair_stop.value() if stop_pnl_override is None else float(stop_pnl_override),
-                time_exit=self.pair_time.text().strip(), real=real,
-                source_page=source_page_override or ("EXPIRY_ATM_PARITY" if trigger_type == "ATM_PREMIUM_PARITY" else "EXPIRY_AFTER_3PM"),
-                trigger_type=trigger_type, observed_at=observed_at, premium_gap=premium_gap,
-                extra_details=extra_details,
-            )
-            self.pair_status.setText(f"{result['status']}: {strike:g} CE+PE pair recorded. Combined exits are being monitored.")
-        except Exception as error:
-            self.pair_status.setText(f"Pair blocked: {error}")
-            if not automatic: QMessageBox.warning(self, "Pair not placed", str(error))
+        self.pair_status.setText("Monitoring-only page: order execution disabled.")
+        return
 
     def _monitor_open_pair(self):
         pair = self.db.get_open_execution_pair(self.underlying.currentText())
@@ -302,18 +284,21 @@ class ExpiryObservationPage(QWidget):
 
     def scan(self, force=False):
         if self.running: return
-        now = datetime.now(IST); _, _, close = parse_session_times(); symbol = self.underlying.currentText()
+        now = datetime.now(IST); _, opening, close = parse_session_times()
+        if not self.expiry_toggle.isChecked():
+            self.status.setText("Monitor OFF"); return
+        if now.weekday() >= 5 or not opening <= now.time() < close:
+            self.status.setText("Outside market session"); return
+        symbols = ("NIFTY", "SENSEX")
+        symbol = symbols[self.scan_index % 2]; self.scan_index += 1
         try:
             nearest = min(row["expiry"] for row in OptionContractService().get_contracts(symbol))
         except Exception as error:
             self.status.setText(str(error)); return
-        daily_state = daily_forward_test_window(now, self.forward_test.isChecked(), close)
-        state = daily_state if self.forward_test.isChecked() else expiry_monitor_window(now, self.expiry_toggle.isChecked(), nearest, close)
-        mode_text = "30-session PAPER test" if self.forward_test.isChecked() else "expiry observation"
-        self.status.setText(f"Status: {state} | {mode_text} | Nearest expiry: {nearest.strftime('%d-%m-%Y')} | Poll: 30 seconds")
-        # A manual refresh must never bypass the expiry-day/3 PM/market-close gate.
-        if state != "MONITORING": return
-        self.running = True; self.scan_button.setEnabled(False); task = _ScanTask(symbol, expiry_only=not self.forward_test.isChecked())
+        if nearest != now.date():
+            self.status.setText(f"{symbol}: not expiry today; checking both indices in rotation"); return
+        self.status.setText(f"{symbol}: {'Morning baseline collection' if now.time() < time(15) else 'After 3 PM monitoring'}")
+        self.running = True; self.scan_button.setEnabled(False); task = _ScanTask(symbol)
         task.signals.done.connect(self._consume); task.signals.failed.connect(self._failed); QThreadPool.globalInstance().start(task)
 
     def _failed(self, message):
@@ -325,9 +310,18 @@ class ExpiryObservationPage(QWidget):
         # fetched even if the user changed the selector while it was running.
         symbol = str(payload.get("underlying") or self.underlying.currentText())
         spot = float(payload.get("spot") or 0); prior_spot = self.last_spot.get(symbol, spot); self.last_spot[symbol] = spot
+        if self.research_day != now.date():
+            self.history.clear(); self.active_events.clear(); self.last_spot.clear(); self.latest_pairs.clear()
+            self.research_day = now.date()
         context = cas_context(now); rows = payload.get("rows") or []
         if not rows:
             self.status.setText("Today selected index ki expiry nahi hai; observation save nahi hua."); return
+        if payload.get("expiry") != now.date() or not time(9, 15) <= now.time() < time(15, 30):
+            return
+        self.direction_research.record(symbol, payload['expiry'], now, spot, rows)
+        self.direction_label.setText(self.direction_research.report(self.underlying.currentText(), now))
+        if now.time() < time(15):
+            return
         current = {}
         results = {}
         research_rows = []
@@ -449,6 +443,7 @@ class ExpiryObservationPage(QWidget):
         self.refresh_history()
 
     def refresh_history(self):
+        self.direction_label.setText(self.direction_research.report(self.underlying.currentText(), datetime.now(IST)))
         summary = summarize_forward_test(
             self.db.get_execution_pairs(SOURCE_PAGE), required_sessions=30,
             max_drawdown_limit=self.forward_loss.value() * 5,
