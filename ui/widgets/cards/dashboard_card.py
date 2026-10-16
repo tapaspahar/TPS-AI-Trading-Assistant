@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout
+from PySide6.QtWidgets import QFrame, QLabel, QVBoxLayout, QSizePolicy
 from PySide6.QtCore import Qt, Signal
 
 
@@ -11,6 +11,7 @@ class DashboardCard(QFrame):
         super().__init__()
 
         self.setObjectName("dashboardCard")
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
         self.compact = False
         self._clickable = False
 
@@ -20,15 +21,15 @@ class DashboardCard(QFrame):
 
         titleLabel = QLabel(title)
         titleLabel.setObjectName("cardTitle")
+        titleLabel.setWordWrap(True)
 
         self.value_label = QLabel(value)
         self.value_label.setObjectName("cardValue")
 
-        self.value_label.setAlignment(Qt.AlignCenter)
+        self.value_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.value_label.setWordWrap(True)
 
         layout.addWidget(titleLabel)
-        layout.addStretch()
         layout.addWidget(self.value_label)
 
     def set_clickable(self, enabled=True, tooltip=""):
