@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from PySide6.QtCore import QTimer, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QGridLayout, QPushButton, QVBoxLayout, QWidget
 
 from core.database_manager import Database
@@ -31,8 +31,11 @@ class DashboardPage(QWidget):
         self.funds_failed.connect(self._show_funds_error)
         layout = QVBoxLayout(self)
         grid = QGridLayout()
-        grid.setHorizontalSpacing(20)
-        grid.setVerticalSpacing(20)
+        grid.setAlignment(Qt.AlignTop)
+        for column in range(3):
+            grid.setColumnStretch(column, 1)
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(12)
         self.cards = {
             "market": DashboardCard("Live Data Status", "Not connected"),
             "pnl": DashboardCard("Today's Journal P&L", "₹0.00"),
@@ -48,7 +51,7 @@ class DashboardPage(QWidget):
             "reliability": DashboardCard("Reliability & Shadow Gate", "Loading evidence"),
         }
         for index, card in enumerate(self.cards.values()):
-            grid.addWidget(card, index // 3, index % 3)
+            grid.addWidget(card, index // 3, index % 3, Qt.AlignTop)
         destinations = {
             "market": (1, "Open Market Snapshot"),
             "pnl": (4, "Open Trade Journal"),
