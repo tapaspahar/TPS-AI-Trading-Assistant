@@ -16,3 +16,14 @@ class SmartMoneyDataServiceTests(unittest.TestCase):
         self.assertEqual(len(result["candles"]), 60)
         client.get_recent_candles.assert_called_once_with("NFO", "1", "FIVE_MINUTE", 5)
 
+    def test_loads_optional_multi_timeframe_context(self):
+        client, contracts = Mock(), Mock()
+        rows = [{"time": f"2026-08-04T{9 + (i // 12):02d}:{(i % 12)*5:02d}:00+05:30",
+                 "open": 100+i, "high": 102+i, "low": 99+i, "close": 101+i, "volume": 100} for i in range(60)]
+        client.get_recent_candles.side_effect = [rows, rows, rows]
+        contracts.get_front_month_future.return_value = {"exchange": "NFO", "token": "1", "symbol": "NIFTYFUT"}
+        result = SmartMoneyDataService(client, contracts).load("NIFTY", "5m", include_context=True)
+        self.assertEqual(set(result["timeframe_candles"]), {"15m", "1h"})
+        self.assertEqual(len(result["timeframe_candles"]["15m"]), 60)
+        self.assertEqual(len(result["timeframe_candles"]["1h"]), 60)
+        self.assertEqual(client.get_recent_candles.call_count, 3)
