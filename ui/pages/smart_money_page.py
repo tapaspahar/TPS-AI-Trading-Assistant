@@ -58,9 +58,9 @@ class SmartMoneyPage(QWidget):
 
     def _worker(self, symbol, timeframe):
         try:
-            data = SmartMoneyDataService(LiveSession.client).load(symbol, timeframe)
-            data["analysis"] = AdvancedSMCEngine().analyze(data["candles"])
-            data.pop("candles", None); self.analysis_loaded.emit(data)
+            data = SmartMoneyDataService(LiveSession.client).load(symbol, timeframe, include_context=True)
+            data["analysis"] = AdvancedSMCEngine().analyze(data["candles"], data.get("timeframe_candles"))
+            data.pop("candles", None); data.pop("timeframe_candles", None); self.analysis_loaded.emit(data)
         except (RuntimeError, ValueError, KeyError, TypeError) as error:
             self.analysis_failed.emit(str(error))
 
@@ -70,7 +70,12 @@ class SmartMoneyPage(QWidget):
 
     def show_result(self, data):
         result = data["analysis"]
-        self.status.setText(f"Source: {data['source']} | Last completed candle: {data['candle_time']}")
+        self.status.setText(
+            f"Source: {data['source']} | Last completed candle: {data['candle_time']} | "
+            f"MTF: {result.get('advanced_smc', {}).get('timeframe_alignment', 'NOT PROVIDED')}"
+        )
+        if data.get("context_warnings"):
+            self.status.setText(self.status.text() + " | Context gaps: " + "; ".join(data["context_warnings"]))
         self.cards["Direction"].setText(result["direction"])
         self.cards["Score / Grade"].setText(f"{result['score']}/100 - {result['grade']}\nBull {result['bullish_score']} | Bear {result['bearish_score']}")
         self.cards["Structure"].setText(result["structure"])
