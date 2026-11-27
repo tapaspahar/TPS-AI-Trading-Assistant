@@ -10,7 +10,7 @@ class SmartMoneyDataService:
         self.client = client
         self.contract_service = contract_service or OptionContractService()
 
-    def load(self, symbol, timeframe="5m"):
+    def load(self, symbol, timeframe="5m", include_context=False):
         symbol = str(symbol).upper()
         if timeframe not in ("5m", "15m"):
             raise ValueError("Choose 5m or 15m.")
@@ -28,6 +28,29 @@ class SmartMoneyDataService:
             pass
         if len(candles) < 55:
             raise RuntimeError("At least 55 completed future candles are required.")
+        context, context_warnings = {}, []
+        if include_context:
+            for context_tf in ("5m", "15m", "1h"):
+                if context_tf == timeframe:
+                    continue
+                context_interval, context_minutes = TIMEFRAMES[context_tf]
+                try:
+                    rows = list(self.client.get_recent_candles(
+                        future["exchange"], future["token"], context_interval, context_minutes
+                    ))
+                    if rows:
+                        last_time = datetime.fromisoformat(str(rows[-1]["time"]))
+                        now = datetime.now(last_time.tzinfo) if last_time.tzinfo else datetime.now()
+                        if last_time + timedelta(minutes=context_minutes) > now:
+                            rows.pop()
+                    if len(rows) >= 10:
+                        context[context_tf] = rows
+                    else:
+                        context_warnings.append(f"{context_tf}: fewer than 10 completed candles")
+                except (RuntimeError, ValueError, KeyError, TypeError) as error:
+                    context_warnings.append(f"{context_tf}: unavailable ({error})")
         return {"symbol": symbol, "future_symbol": future["symbol"], "timeframe": timeframe,
-                "candles": candles, "candle_time": str(candles[-1].get("time", "")),
+                "candles": candles, "timeframe_candles": context,
+                "context_warnings": context_warnings,
+                "candle_time": str(candles[-1].get("time", "")),
                 "source": f"{getattr(self.client, 'provider_name', 'Broker')} {future['symbol']} completed {timeframe} OHLCV candles"}
