@@ -138,14 +138,14 @@ def _break_events(candles, highs, lows, trend, tolerance):
         level = highs[-1][1]
         if close > level + tolerance and previous_close <= level + tolerance:
             events.append({
-                "event": "BOS" if trend == "BULLISH" else "CHOCH",
+                "event": "BOS" if trend == "BULLISH" else "CHOCH" if trend == "BEARISH" else "STRUCTURE BREAK",
                 "direction": "BULLISH", "level": level, "confirmed_by": "completed candle close",
             })
     if lows:
         level = lows[-1][1]
         if close < level - tolerance and previous_close >= level - tolerance:
             events.append({
-                "event": "BOS" if trend == "BEARISH" else "CHOCH",
+                "event": "BOS" if trend == "BEARISH" else "CHOCH" if trend == "BULLISH" else "STRUCTURE BREAK",
                 "direction": "BEARISH", "level": level, "confirmed_by": "completed candle close",
             })
     return events
