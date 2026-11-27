@@ -36,7 +36,7 @@ class AdvancedSMCEngineTests(unittest.TestCase):
 
     def test_no_automatic_execution_claim(self):
         result = AdvancedSMCEngine().analyze(sample_candles())
-        self.assertTrue(any("not a win probability" in item for item in advanced["limitations"]))
+        self.assertTrue(any("not a win probability" in item for item in result["advanced_smc"]["limitations"]))
 
 
 if __name__ == "__main__":
