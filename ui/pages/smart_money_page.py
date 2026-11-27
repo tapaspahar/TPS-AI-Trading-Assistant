@@ -4,7 +4,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (QComboBox, QGridLayout, QGroupBox, QLabel, QPushButton,
                                QScrollArea, QVBoxLayout, QWidget)
 
-from engine.smart_money_engine import SmartMoneyEngine
+from engine.advanced_smc_engine import AdvancedSMCEngine
 from services.live_session import LiveSession
 from services.smart_money_data_service import SmartMoneyDataService
 
@@ -38,6 +38,7 @@ class SmartMoneyPage(QWidget):
         self.market = self._section(layout, "Liquidity, Structure and Traps")
         self.zones = self._section(layout, "ICT-style Context, FVG, Supply / Demand and Candle Volume Profile")
         self.patterns = self._section(layout, "Candle Patterns and Full Evidence")
+        self.advanced = self._section(layout, "Advanced SMC: Confirmed Structure, Liquidity and Zone Lifecycle")
         self.caution = self._section(layout, "Important Limits")
         layout.addStretch()
         self.analysis_loaded.connect(self.show_result); self.analysis_failed.connect(self.show_error)
@@ -58,7 +59,7 @@ class SmartMoneyPage(QWidget):
     def _worker(self, symbol, timeframe):
         try:
             data = SmartMoneyDataService(LiveSession.client).load(symbol, timeframe)
-            data["analysis"] = SmartMoneyEngine().analyze(data["candles"])
+            data["analysis"] = AdvancedSMCEngine().analyze(data["candles"])
             data.pop("candles", None); self.analysis_loaded.emit(data)
         except (RuntimeError, ValueError, KeyError, TypeError) as error:
             self.analysis_failed.emit(str(error))
@@ -91,7 +92,23 @@ class SmartMoneyPage(QWidget):
             f"VAL {profile['value_area_low']:,.2f} | VAH {profile['value_area_high']:,.2f}\n{profile['method']}"
         )
         self.patterns.setText("Patterns: " + ", ".join(result["patterns"]) + "\n\n" + "\n".join("• " + item for item in result["evidence"]))
-        self.caution.setText("\n".join("• " + item for item in result["warnings"]))
+        advanced = result.get("advanced_smc", {})
+        sequence = ", ".join(item["type"] for item in advanced.get("swing_sequence", [])[-8:]) or "Insufficient confirmed swings"
+        breaks = "; ".join(item["event"] + " " + item["direction"] + " @ " + format(item["level"], ",.2f") for item in advanced.get("confirmed_breaks", [])[-3:]) or "No new close-confirmed break"
+        sweeps = "; ".join(item["side"] + " @ " + format(item["level"], ",.2f") for item in advanced.get("liquidity_sweeps", [])) or "None confirmed"
+        fvg_zones = advanced.get("fvg_zones", [])[-3:]
+        fvg_summary = "; ".join(z["side"] + " " + format(z["low"], ",.2f") + "-" + format(z["high"], ",.2f") + " [" + z["status"] + "]" for z in fvg_zones) or "No recent FVG"
+        ob_zones = advanced.get("order_blocks", [])[-3:]
+        ob_summary = "; ".join(z["side"] + " " + format(z["low"], ",.2f") + "-" + format(z["high"], ",.2f") + " [" + z["status"] + "]" for z in ob_zones) or "No displacement OB proxy"
+        self.advanced.setText(
+            "Structure trend: " + advanced.get("structure_trend", "N/A") + " | MTF: " + advanced.get("timeframe_alignment", "NOT PROVIDED") + "\n"
+            + "Swing sequence: " + sequence + "\n"
+            + "Confirmed breaks: " + breaks + "\nLiquidity sweeps: " + sweeps + "\n"
+            + "FVG lifecycle: " + fvg_summary + "\nOrder-block lifecycle: " + ob_summary + "\n"
+            + "Confluence: " + str(advanced.get("confluence_score", 0)) + "/100 | " + advanced.get("setup_state", "WATCH") + "\n"
+            + "\n".join("• " + item for item in advanced.get("confluence_reasons", []))
+        )
+        self.caution.setText("\n".join("• " + item for item in advanced.get("limitations", result["warnings"])))
         self._unlock()
 
     def show_error(self, message):
